@@ -502,3 +502,54 @@ dialog.wizard { min-height: 380px; }
 
 .tr-act { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .tr-act .btn { flex: none; }
+
+/* ---- density: html[data-density="compact" | "mini"]; without the attribute everything is as designed ---- */
+html[data-density] body { font-size: 13px; }
+html[data-density] .i:not(.big) { width: 16px; height: 16px; }
+html[data-density] .topbar { padding: 6px 12px; gap: 4px 8px; }
+html[data-density] .actions { gap: 4px; }
+html[data-density] .sep { height: 18px; }
+html[data-density] .btn { height: 28px; padding: 0 10px; font-size: 13px; gap: 6px; border-radius: 7px; }
+html[data-density] .btn.icon { width: 28px; padding: 0; }
+html[data-density] .btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
+html[data-density] .search input[type="search"] { height: 28px; }
+html[data-density] .search select { height: 28px; font-size: 12.5px; }
+html[data-density] thead th { padding: 5px 8px; font-size: 11.5px; }
+html[data-density] tbody td { padding: 0 8px; height: 30px; }
+html[data-density] td.c-name .nm { font-weight: 550; }
+html[data-density] .badge { font-size: 10.5px; padding: 0 5px; }
+html[data-density] .pbar { height: 18px; border-radius: 5px; }
+html[data-density] .pbar .lb { font-size: 11px; padding: 0 6px; }
+html[data-density] #side { padding: 4px; }
+html[data-density] .side-title { padding: 8px 8px 4px; font-size: 10.5px; }
+html[data-density] .side-item { height: 28px; padding: 0 8px; gap: 8px; border-radius: 6px; font-size: 13px; }
+html[data-density] .side-item .i { width: 15px; height: 15px; }
+html[data-density] .details { height: min(220px, 38vh); }
+html[data-density] .tabs button { padding: 7px 12px 5px; font-size: 13px; }
+html[data-density] .details-head .btn { margin-bottom: 3px; }
+html[data-density] table.mini td { padding: 3px 10px; }
+html[data-density] table.mini th { padding: 4px 10px; }
+html[data-density] .kv { padding: 6px 12px 8px; gap: 3px 14px; }
+html[data-density] .file { padding: 3px 12px; gap: 10px; }
+html[data-density] .pt .pbar { height: 16px; }
+html[data-density] .pt .pbar .lb { font-size: 10.5px; }
+html[data-density] .statusbar { padding: 4px 12px; font-size: 12px; gap: 14px; }
+html[data-density] .ctx button { height: 28px; }
+
+/* mini: no left panel (the state and label filters move to the top bar), progress is a thin coloured line */
+html[data-density="mini"] body { font-size: 12.5px; }
+html[data-density="mini"] .topbar { padding: 4px 10px; }
+html[data-density="mini"] .btn { height: 26px; padding: 0 8px; }
+html[data-density="mini"] .btn.icon { width: 26px; padding: 0; }
+html[data-density="mini"] .btn span { display: none; }
+html[data-density="mini"] .search input[type="search"], html[data-density="mini"] .search select { height: 26px; }
+html[data-density="mini"] .narrow-only { display: inline-block; }
+html[data-density="mini"] #side, html[data-density="mini"] #side-split { display: none; }
+html[data-density="mini"] thead th { padding: 4px 6px; font-size: 11px; }
+html[data-density="mini"] tbody td { padding: 0 6px; height: 24px; }
+html[data-density="mini"] #rows .pbar, html[data-density="mini"] .pt .pbar { height: 8px; border-radius: 4px; }
+html[data-density="mini"] #rows .pbar .lb, html[data-density="mini"] .pt .pbar .lb { display: none; }
+html[data-density="mini"] .details { height: min(200px, 36vh); }
+html[data-density="mini"] table.mini td { padding: 2px 8px; }
+html[data-density="mini"] .statusbar { padding: 3px 10px; }
+html[data-density="mini"] .file { padding: 2px 10px; }

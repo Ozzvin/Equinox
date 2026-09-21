@@ -690,11 +690,12 @@
   let fitPx = {}, fitKey = "";
   function updateFit() {
     const cs = getComputedStyle(document.body), fam = cs.fontFamily, out = {};
+    const fs = parseFloat(cs.fontSize) || 14, th = document.querySelector("thead th"), hfs = (th && parseFloat(getComputedStyle(th).fontSize)) || 12;
     for (const id of colIds) {
       const c = COL[id]; if (!c.fit) continue;
       // the header, with room for its sort arrow only while the list is sorted by this column
-      let w = textWidth(c.title, `600 12px ${fam}`) + (sortBy.key === id ? 14 : 0);
-      for (const t of torrents) w = Math.max(w, textWidth(c.fit.text(t), `14px ${fam}`));
+      let w = textWidth(c.title, `600 ${hfs}px ${fam}`) + (sortBy.key === id ? 14 : 0);
+      for (const t of torrents) w = Math.max(w, textWidth(c.fit.text(t), `${fs}px ${fam}`));
       out[id] = Math.ceil(w) + c.fit.pad + 2;
     }
     const key = JSON.stringify(out);
@@ -787,6 +788,28 @@
   renderHead();
 
   const colCtx = $("ctx");
+  // ---------- density: normal, compact, mini (no left panel, like Transmission) ----------
+  const DENSITIES = [["normal", "Обычный", "как сейчас"], ["compact", "Компактный", "плотнее строки и отступы"], ["mini", "Мини", "без левой панели, прогресс линией"]];
+  let density = document.documentElement.dataset.density || "normal";
+  function setDensity(d) {
+    if (!DENSITIES.some((x) => x[0] === d)) d = "normal";
+    density = d;
+    if (d === "normal") delete document.documentElement.dataset.density; else document.documentElement.dataset.density = d;
+    try { localStorage.setItem("density", d); } catch (_) {}
+    render(); // columns sized by their text are measured again in the new font
+    dispatchEvent(new Event("resize"));
+  }
+  function densityMenu() {
+    const menu = $("ctx"), b = $("btn-density").getBoundingClientRect();
+    menu.innerHTML = `<div class="ctx-head">Плотность интерфейса</div>` + DENSITIES.map(([k, name, hint]) =>
+      `<button role="menuitemradio" aria-checked="${density === k}" data-density="${k}"><span class="ck">${density === k ? "✓" : ""}</span>${name}<span class="muted small" style="margin-left:auto;padding-left:14px">${hint}</span></button>`).join("");
+    menu.hidden = false;
+    menu.style.left = Math.max(8, Math.min(b.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8)) + "px";
+    menu.style.top = (b.bottom + 6) + "px";
+  }
+  $("btn-density").onclick = (e) => { e.stopPropagation(); const m = $("ctx"); if (!m.hidden && m.querySelector("[data-density]")) m.hidden = true; else densityMenu(); };
+  $("ctx").addEventListener("click", (e) => { const b = e.target.closest("[data-density]"); if (b) setDensity(b.dataset.density); }); // the click then closes the menu
+
   // right-click on the header: which columns to show
   function colMenu(x, y) {
     const items = COLS.map((c) => `<button role="menuitemcheckbox" aria-checked="${colIds.includes(c.id)}" data-col="${c.id}" ${c.always ? "disabled" : ""}><span class="ck">${colIds.includes(c.id) ? "✓" : ""}</span>${c.menu || c.title}</button>`);
@@ -1120,6 +1143,7 @@
     if (tag === "input" || tag === "textarea" || tag === "select") { if (e.key === "Escape") e.target.blur(); return; }
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); shownHashes.forEach((h) => sel.add(h)); render(); }
+    else if (mod && e.shiftKey && e.key.toLowerCase() === "d") { e.preventDefault(); setDensity(DENSITIES[(DENSITIES.findIndex((x) => x[0] === density) + 1) % DENSITIES.length][0]); }
     else if ((mod && e.key.toLowerCase() === "f") || e.key === "/") { e.preventDefault(); openSearch(true); }
     else if (e.key === "Escape") { sel.clear(); anchor = null; render(); }
     else if (e.key === "Delete") { if (chosen().length) { e.preventDefault(); $("btn-remove").click(); } }
