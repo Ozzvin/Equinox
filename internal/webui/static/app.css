@@ -563,3 +563,63 @@ html[data-density="compact"] .file { padding: 2px 10px; }
 .side-item[data-view="s:checking"] .i { color: var(--warn); }
 .side-item[data-view="s:paused"] .i { color: var(--muted); }
 .side-item[data-view="s:queued"] .i { color: #2bb3c7; }
+
+/* three-way switch (density in the settings) */
+.seg.seg3 { grid-template-columns: repeat(3, 1fr); width: min(100%, 540px); }
+.seg.seg3 .seg-pill { width: calc((100% - 6px) / 3); }
+.seg.seg3:has(#dn-standard:checked) .seg-pill { transform: translateX(100%); }
+.seg.seg3:has(#dn-compact:checked) .seg-pill { transform: translateX(200%); }
+
+/* dialogs follow the density: standard is denser than the base rules, compact denser still */
+html:not([data-density="large"]) dialog { padding: 16px 18px; border-radius: 12px; }
+html:not([data-density="large"]) dialog h2 { font-size: 15px; margin: 0 0 10px; }
+html:not([data-density="large"]) dialog label { margin: 7px 0; font-size: 12.5px; }
+html:not([data-density="large"]) input:not([type=checkbox]):not([type=file]), html:not([data-density="large"]) select { height: 30px; margin-top: 4px; padding: 0 9px; font-size: 13px; border-radius: 7px; }
+html:not([data-density="large"]) textarea { font-size: 12.5px; padding: 6px 9px; }
+html:not([data-density="large"]) fieldset { margin: 8px 0; padding: 2px 12px 6px; border-radius: 8px; }
+html:not([data-density="large"]) legend { font-size: 13px; padding: 0 6px; }
+html:not([data-density="large"]) .row-end { margin-top: 12px; }
+html:not([data-density="large"]) .grid2 { gap: 0 12px; }
+html:not([data-density="large"]) dialog.wide { width: min(640px, calc(100vw - 32px)); }
+html:not([data-density="large"]) #dlg-settings.settings { width: min(780px, calc(100vw - 32px)); }
+html:not([data-density="large"]) .set-layout { gap: 14px; }
+html:not([data-density="large"]) .set-nav { width: 156px; padding-right: 10px; }
+html:not([data-density="large"]) .set-nav button { height: 30px; padding: 0 10px; border-radius: 6px; font-size: 13px; }
+html:not([data-density="large"]) .set-panes { height: min(440px, 62vh); }
+html:not([data-density="large"]) .seg label { padding: 5px 8px; }
+html:not([data-density="large"]) .seg label small { font-size: 11px; }
+html:not([data-density="large"]) .days span { height: 28px; min-width: 36px; }
+html:not([data-density="large"]) #dlg-picker.picker { width: min(760px, calc(100vw - 32px)); }
+html:not([data-density="large"]) .pk-body { height: min(340px, 52vh); }
+html:not([data-density="large"]) .pk-places { width: 176px; }
+html:not([data-density="large"]) .pk-places button { height: 28px; }
+html:not([data-density="large"]) .pk-row { height: 28px; }
+html:not([data-density="large"]) .pk-head { height: 26px; }
+html:not([data-density="large"]) dialog.wizard { min-height: 320px; }
+html:not([data-density="large"]) .wz-body { min-height: 200px; }
+html:not([data-density="large"]) .wz-lead { font-size: 14px; }
+html:not([data-density="large"]) .kpi b { font-size: 18px; }
+html:not([data-density="large"]) #chart { height: 150px; }
+
+html[data-density="compact"] dialog { padding: 12px 14px; border-radius: 10px; font-size: 12.5px; }
+html[data-density="compact"] dialog h2 { font-size: 14px; margin: 0 0 8px; }
+html[data-density="compact"] dialog label { margin: 5px 0; font-size: 12px; }
+html[data-density="compact"] input:not([type=checkbox]):not([type=file]), html[data-density="compact"] select { height: 26px; margin-top: 3px; padding: 0 8px; font-size: 12.5px; border-radius: 6px; }
+html[data-density="compact"] fieldset { margin: 6px 0; padding: 0 10px 4px; }
+html[data-density="compact"] legend { font-size: 12.5px; padding: 0 5px; }
+html[data-density="compact"] .row-end { margin-top: 10px; }
+html[data-density="compact"] dialog.wide { width: min(600px, calc(100vw - 24px)); }
+html[data-density="compact"] #dlg-settings.settings { width: min(700px, calc(100vw - 24px)); }
+html[data-density="compact"] .set-nav { width: 138px; padding-right: 8px; }
+html[data-density="compact"] .set-nav button { height: 26px; padding: 0 8px; font-size: 12.5px; }
+html[data-density="compact"] .set-panes { height: min(400px, 62vh); }
+html[data-density="compact"] .seg label { padding: 4px 6px; }
+html[data-density="compact"] .days span { height: 24px; min-width: 32px; }
+html[data-density="compact"] #dlg-picker.picker { width: min(680px, calc(100vw - 24px)); }
+html[data-density="compact"] .pk-body { height: min(300px, 52vh); }
+html[data-density="compact"] .pk-places { width: 150px; }
+html[data-density="compact"] .pk-places button, html[data-density="compact"] .pk-row { height: 24px; }
+html[data-density="compact"] .pk-head { height: 22px; }
+html[data-density="compact"] dialog.wizard { min-height: 280px; }
+html[data-density="compact"] .wz-body { min-height: 170px; }
+html[data-density="compact"] #chart { height: 130px; }

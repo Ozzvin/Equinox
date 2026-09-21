@@ -35,7 +35,6 @@
     <input id="f-q" type="search" placeholder="Поиск по названию" aria-label="Поиск по названию" autocomplete="off" tabindex="-1">
     <button class="btn icon" id="btn-search" title="Поиск (Ctrl+F или /)" aria-label="Поиск" aria-expanded="false"><svg class="i"><use href="#i-search"/></svg></button>
   </div>
-  <button class="btn icon" id="btn-density" title="Плотность интерфейса (Ctrl+Shift+D)" aria-haspopup="menu"><svg class="i"><use href="#i-density"/></svg></button>
   <button class="btn icon" id="btn-stats" title="Статистика"><svg class="i"><use href="#i-chart"/></svg></button>
   <button class="btn icon" id="btn-settings" title="Настройки"><svg class="i"><use href="#i-gear"/></svg></button>
 </header>
@@ -293,6 +292,7 @@
         <button type="button" role="tab" data-sec="labels" aria-selected="false">Метки</button>
         <button type="button" role="tab" data-sec="queue" aria-selected="false">Очередь и раздача</button>
         <button type="button" role="tab" data-sec="network" aria-selected="false">Сеть</button>
+        <button type="button" role="tab" data-sec="view" aria-selected="false">Интерфейс</button>
         <button type="button" role="tab" data-sec="system" aria-selected="false" hidden id="sn-system">Системные</button>
       </nav>
       <div class="set-panes">
@@ -416,6 +416,19 @@
           <label class="check"><input type="checkbox" id="st-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: демон сам открывает порт на роутере и следит, чтобы он не пропал</span></span></label>
           <p id="st-port" class="small"></p>
           <button type="button" class="btn" id="st-port-refresh">Проверить порт сейчас</button>
+        </fieldset>
+      </section>
+      <section class="set-pane" role="tabpanel" data-sec="view" hidden>
+        <fieldset>
+          <legend>Плотность интерфейса</legend>
+          <div class="seg seg3" role="radiogroup" aria-label="Плотность интерфейса">
+            <input type="radio" name="dn" id="dn-large" value="large"><label for="dn-large">Увеличенный <small>крупные строки</small></label>
+            <input type="radio" name="dn" id="dn-standard" value="standard"><label for="dn-standard">Стандартный <small>по умолчанию</small></label>
+            <input type="radio" name="dn" id="dn-compact" value="compact"><label for="dn-compact">Компактный <small>без левой панели</small></label>
+            <i class="seg-pill" aria-hidden="true"></i>
+          </div>
+          <p class="muted small">Меняет размер строк, шрифтов и отступов во всём интерфейсе, в том числе в этих окнах. Применяется сразу. В компактном режиме левой панели нет, а фильтры по состоянию и меткам стоят в верхней панели, прогресс показан тонкой линией. Быстро переключить режим можно клавишами Ctrl+Shift+D.</p>
+          <button type="button" class="btn" id="st-resetwin" hidden>Сбросить размер окна</button>
         </fieldset>
       </section>
       <section class="set-pane" role="tabpanel" data-sec="system" hidden>

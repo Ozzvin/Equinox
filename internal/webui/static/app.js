@@ -794,27 +794,18 @@
   function setDensity(d) {
     if (!DENSITIES.some((x) => x[0] === d)) d = "standard";
     density = d;
+    for (const r of document.querySelectorAll('input[name="dn"]')) r.checked = r.value === d; // the switch in the settings follows the hotkey
     if (d === "standard") delete document.documentElement.dataset.density; else document.documentElement.dataset.density = d;
     try { localStorage.setItem("uiDensity", d); } catch (_) {}
     if (typeof window.windowDensity === "function") window.windowDensity(d); // the app window takes the size of this density
     render(); // columns sized by their text are measured again in the new font
     dispatchEvent(new Event("resize"));
   }
+  for (const r of document.querySelectorAll('input[name="dn"]')) r.checked = r.value === density;
   if (typeof window.windowDensity === "function") window.windowDensity(density); // tell the app window which density the page starts in
-  function densityMenu() {
-    const menu = $("ctx"), b = $("btn-density").getBoundingClientRect();
-    menu.innerHTML = `<div class="ctx-head">Плотность интерфейса</div>` + DENSITIES.map(([k, name, hint]) =>
-      `<button role="menuitemradio" aria-checked="${density === k}" data-density="${k}"><span class="ck">${density === k ? "✓" : ""}</span>${name}<span class="muted small" style="margin-left:auto;padding-left:14px">${hint}</span></button>`).join("") +
-      (typeof window.resetWindowSize === "function" ? `<hr><button role="menuitem" data-resetwin="1">Сбросить размер окна</button>` : "");
-    menu.hidden = false;
-    menu.style.left = Math.max(8, Math.min(b.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8)) + "px";
-    menu.style.top = (b.bottom + 6) + "px";
-  }
-  $("btn-density").onclick = (e) => { e.stopPropagation(); const m = $("ctx"); if (!m.hidden && m.querySelector("[data-density]")) m.hidden = true; else densityMenu(); };
-  $("ctx").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-density]"); if (b) setDensity(b.dataset.density);
-    else if (e.target.closest("[data-resetwin]")) window.resetWindowSize();
-  }); // the click then closes the menu
+  $("st-resetwin").hidden = typeof window.resetWindowSize !== "function";
+  $("st-resetwin").onclick = () => { window.resetWindowSize(); toast("Размер окна сброшен"); };
+  for (const r of document.querySelectorAll('input[name="dn"]')) r.addEventListener("change", () => { if (r.checked) setDensity(r.value); });
 
   // right-click on the header: which columns to show
   function colMenu(x, y) {
