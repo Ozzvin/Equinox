@@ -405,6 +405,15 @@
 
   const when = (s) => (s && !s.startsWith("0001") ? new Date(s).toLocaleString("ru-RU") : "—");
   const SOURCES = { tracker: "Трекер", dht: "DHT", pex: "PEX", incoming: "Входящий", other: "—" };
+  // what each source means, for the tooltips of the "Источник" column
+  const SOURCE_TIPS = {
+    tracker: "Адрес этого пира сообщил трекер раздачи.",
+    dht: "Адрес нашёлся через DHT, распределённую сеть поиска пиров без трекера.",
+    pex: "Адрес сообщил другой пир, с которым вы уже связаны (обмен пирами, PEX).",
+    incoming: "Пир сам подключился к вам. Значит, ваш порт доступен снаружи.",
+    other: "Источник неизвестен (например, пир добавлен вручную).",
+  };
+  const SOURCES_TIP = Object.keys(SOURCE_TIPS).filter((k) => k !== "other").map((k) => SOURCES[k] + " — " + SOURCE_TIPS[k]).join("\n");
 
   // ---------- the peers table: columns, order, widths and sorting are the user's, like in the main list ----------
   // The peer's progress is a bar like the torrents' own: blue for a peer that has everything (a seed), green for one that is still downloading.
@@ -415,7 +424,7 @@
   const PCOLS = [
     { id: "addr", title: "Адрес", always: true, w: 240, sort: (x) => x.addr, cell: (x) => `${x.incoming ? "←" : "→"} ${esc(x.addr)}`, tipOf: (x) => (x.incoming ? "входящее подключение" : "исходящее подключение") },
     { id: "client", title: "Клиент", w: 190, sort: (x) => (x.client || "").toLowerCase(), cell: (x) => esc(x.client || "—") },
-    { id: "source", title: "Источник", w: 120, sort: (x) => SOURCES[x.source] || "", cell: (x) => SOURCES[x.source] || "—" },
+    { id: "source", title: "Источник", tip: "Откуда взялся пир:\n" + SOURCES_TIP, w: 120, tipOf: (x) => SOURCE_TIPS[x.source] || SOURCE_TIPS.other, sort: (x) => SOURCES[x.source] || "", cell: (x) => SOURCES[x.source] || "—" },
     { id: "dir", title: "Направление", w: 120, sort: (x) => (x.incoming ? 0 : 1), cell: (x) => (x.incoming ? "Входящее" : "Исходящее") },
     { id: "network", title: "Сеть", w: 80, sort: (x) => x.network || "", cell: (x) => esc(x.network || "—") },
     { id: "progress", title: "Прогресс", w: 130, sort: (x) => x.progress, cell: (x) => peerBar(x) },
@@ -445,7 +454,7 @@
       rows = [...rows].sort((a, b) => { const x = f(a), y = f(b); return (typeof x === "string" ? x.localeCompare(y) : x - y) * pSort.dir; });
     }
     box.innerHTML = `<table class="mini pt"><colgroup>${cols.map((c) => `<col style="width:${(pWidth(c) / total * 100).toFixed(3)}%">`).join("")}</colgroup>` +
-      `<thead><tr>${cols.map((c) => `<th class="${c.r ? "r" : ""}" data-pcol="${c.id}" aria-sort="${pSort.key === c.id ? (pSort.dir > 0 ? "ascending" : "descending") : "none"}">${c.title}<i class="rs" data-prs="${c.id}" title="Потяните, чтобы изменить ширину; двойной клик — по умолчанию"></i></th>`).join("")}</tr></thead><tbody>` +
+      `<thead><tr>${cols.map((c) => `<th class="${c.r ? "r" : ""}" data-pcol="${c.id}"${c.tip ? ` title="${esc(c.tip)}"` : ""} aria-sort="${pSort.key === c.id ? (pSort.dir > 0 ? "ascending" : "descending") : "none"}">${c.title}<i class="rs" data-prs="${c.id}" title="Потяните, чтобы изменить ширину; двойной клик — по умолчанию"></i></th>`).join("")}</tr></thead><tbody>` +
       rows.map((x) => "<tr>" + cols.map((c) => `<td class="${c.r ? "r" : ""}"${c.tipOf ? ` title="${c.tipOf(x)}"` : ""}>${c.cell(x)}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
   }
   const pApplyWidths = () => {
