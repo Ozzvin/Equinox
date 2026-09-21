@@ -91,3 +91,45 @@ func TestSkippedFilesCostNothingAndProgressUsesSelection(t *testing.T) {
 		t.Fatal("out-of-range file index must be rejected")
 	}
 }
+
+// A low-priority file waits until the normal and high ones are complete, then starts.
+func TestLowPriorityWaitsForTheOtherFiles(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	mi := namedTwoFileTorrent(t, dir, "lowpack")
+	hash, err := m.AddMetaInfo(mi, WithPaused())
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { l := m.List(); return len(l) == 1 && l[0].HasMeta })
+	tor, _ := m.get(hash)
+
+	if err := m.SetFilePriorities(hash, []int{0}, PrioLow); err != nil { // a.bin low, b.bin normal
+		t.Fatal(err)
+	}
+	if got := tor.Files()[0].Priority(); got != 0 { // torrent.PiecePriorityNone
+		t.Fatalf("the low file must not be requested while b.bin is incomplete, priority %v", got)
+	}
+	if files, _ := m.Files(hash); files[0].Priority != "low" {
+		t.Fatalf("the priority is reported as %q", files[0].Priority)
+	}
+
+	// b.bin is skipped: nothing else is left to wait for, so the low file starts.
+	if err := m.SetFilePriorities(hash, []int{1}, PrioSkip); err != nil {
+		t.Fatal(err)
+	}
+	if got := tor.Files()[0].Priority(); got == 0 {
+		t.Fatal("with no other file to wait for, the low file must be requested")
+	}
+
+	// b.bin is wanted again and incomplete: the low file goes back to waiting (refreshLow notices).
+	if err := m.SetFilePriorities(hash, []int{1}, PrioNormal); err != nil {
+		t.Fatal(err)
+	}
+	if got := tor.Files()[0].Priority(); got != 0 {
+		t.Fatalf("the low file must wait again, priority %v", got)
+	}
+	if _, err := ParsePriority("low"); err != nil {
+		t.Fatal(err)
+	}
+}

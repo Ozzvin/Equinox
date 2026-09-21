@@ -315,7 +315,7 @@
   // The file list is built once per torrent and then updated in place, so an open
   // priority menu is not destroyed by the periodic refresh.
   let filesKey = "";
-  const PRIO = [["skip", "Не скачивать"], ["normal", "Обычный"], ["high", "Высокий"]];
+  const PRIO = [["skip", "Не скачивать"], ["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]];
 
   function fileRowHTML(f) {
     const opts = PRIO.map(([v, n]) => `<option value="${v}">${n}</option>`).join("");

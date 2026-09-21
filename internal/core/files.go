@@ -12,6 +12,9 @@ const (
 	PrioSkip   int8 = -1
 	PrioNormal int8 = 0
 	PrioHigh   int8 = 1
+	// PrioLow files are downloaded after all the normal and high ones are complete. The engine has no
+	// priority below normal, so they are simply not requested until then (see applyFiles and refreshLow).
+	PrioLow int8 = -2
 )
 
 // ParsePriority converts the API names to a priority.
@@ -19,6 +22,8 @@ func ParsePriority(s string) (int8, error) {
 	switch s {
 	case "skip":
 		return PrioSkip, nil
+	case "low":
+		return PrioLow, nil
 	case "normal":
 		return PrioNormal, nil
 	case "high":
@@ -54,18 +59,67 @@ func (m *Manager) applyFiles(t *torrent.Torrent, hash string) {
 		return
 	}
 	prios := m.filePrios(hash)
+	lowOn := othersDone(t, prios)
+	m.lowMu.Lock()
+	m.lowOn[t.InfoHash()] = lowOn
+	m.lowMu.Unlock()
 	for i, f := range t.Files() {
 		switch prioAt(prios, i) {
 		case PrioSkip:
 			f.SetPriority(torrent.PiecePriorityNone)
 		case PrioHigh:
 			f.SetPriority(torrent.PiecePriorityHigh)
+		case PrioLow:
+			if lowOn {
+				f.SetPriority(torrent.PiecePriorityNormal)
+			} else {
+				f.SetPriority(torrent.PiecePriorityNone) // not yet: the normal files come first
+			}
 		default:
 			f.SetPriority(torrent.PiecePriorityNormal)
 		}
 	}
 	if rec, ok := m.record(hash); ok {
 		m.keepEdges(t, rec)
+	}
+}
+
+// othersDone reports whether every normal and high file is complete: then the low ones may start.
+func othersDone(t *torrent.Torrent, prios []int8) bool {
+	for i, f := range t.Files() {
+		if p := prioAt(prios, i); (p == PrioNormal || p == PrioHigh) && f.BytesCompleted() < f.Length() {
+			return false
+		}
+	}
+	return true
+}
+
+// refreshLow starts the low-priority files of the torrents whose other files have just been completed
+// (and stops them again if a normal file was reopened). It is cheap for torrents without low files.
+func (m *Manager) refreshLow(ts []*torrent.Torrent) {
+	for _, t := range ts {
+		if t.Info() == nil {
+			continue
+		}
+		hash := t.InfoHash().HexString()
+		prios := m.filePrios(hash)
+		hasLow := false
+		for _, p := range prios {
+			if p == PrioLow {
+				hasLow = true
+				break
+			}
+		}
+		if !hasLow {
+			continue
+		}
+		on := othersDone(t, prios)
+		m.lowMu.Lock()
+		was, known := m.lowOn[t.InfoHash()]
+		m.lowMu.Unlock()
+		if !known || was != on {
+			m.applyFiles(t, hash)
+		}
 	}
 }
 

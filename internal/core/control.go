@@ -298,6 +298,8 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 			name = "skip"
 		case PrioHigh:
 			name = "high"
+		case PrioLow:
+			name = "low"
 		}
 		out[i] = FileStatus{Index: i, Path: f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
 	}
@@ -591,6 +593,7 @@ func (m *Manager) loop(ctx context.Context) {
 			m.syncCounters()
 		}
 		m.updateChecks(ts)
+		m.refreshLow(ts)
 		m.runGate()
 		m.applySchedule(time.Now())
 		if tickN++; tickN%5 == 0 {

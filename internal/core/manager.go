@@ -54,7 +54,9 @@ type Manager struct {
 	seenDown, seenUp map[metainfo.Hash]int64
 	rates            map[metainfo.Hash][2]int64  // bytes/s: down, up (averaged over a few seconds)
 	activeAt         map[metainfo.Hash]time.Time // when each torrent last moved data
-	peerRates        map[string]*peerRate        // smoothed speeds of connections, by torrent and address
+	lowMu            sync.Mutex
+	lowOn            map[metainfo.Hash]bool // per torrent: were the low-priority files allowed to download at the last apply
+	peerRates        map[string]*peerRate   // smoothed speeds of connections, by torrent and address
 	peerSeen         map[string]time.Time
 	perm             map[metainfo.Hash]permState // what the engine was last told each torrent may do
 	queued           map[metainfo.Hash]int       // waiting torrents: 1 = next in line
@@ -114,6 +116,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		perm:       map[metainfo.Hash]permState{},
 		queued:     map[metainfo.Hash]int{},
 		activeAt:   map[metainfo.Hash]time.Time{},
+		lowOn:      map[metainfo.Hash]bool{},
 		peerRates:  map[string]*peerRate{},
 		peerSeen:   map[string]time.Time{},
 		moves:      map[string]*moveJob{},

@@ -33,7 +33,7 @@ type record struct {
 	SeedTimeLimit  int      `json:"seedTimeLimit,omitempty"` // minutes of seeding after which it stops, 0 = the global default
 	SeedSeconds    int64    `json:"seedSeconds,omitempty"`   // time spent seeding, adds up across restarts
 
-	// Per-file priority (see PrioSkip/PrioNormal/PrioHigh); missing entries mean normal.
+	// Per-file priority (see PrioSkip/PrioLow/PrioNormal/PrioHigh); missing entries mean normal.
 	FilePrios []int8 `json:"filePrios,omitempty"`
 
 	// Lifetime traffic, accumulated across daemon restarts (payload bytes).

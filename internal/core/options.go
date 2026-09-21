@@ -19,7 +19,7 @@ type TorrentOptions struct {
 	MoveDone    string   `json:"moveDone"`    // move here when finished, "" = the global setting
 	Preallocate *bool    `json:"preallocate"` // reserve the disk space at once, nil = the global setting
 	MaxConns    int      `json:"maxConns"`    // peer connections, 0 = the global setting
-	Files       []string `json:"files"`       // per file: "skip", "normal" or "high" (torrent files only)
+	Files       []string `json:"files"`       // per file: "skip", "low", "normal" or "high" (torrent files only)
 }
 
 // WithOptions applies all the options to the record of a torrent being added. The values are
