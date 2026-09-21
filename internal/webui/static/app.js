@@ -803,8 +803,7 @@
   }
   for (const r of document.querySelectorAll('input[name="dn"]')) r.checked = r.value === density;
   if (typeof window.windowDensity === "function") window.windowDensity(density); // tell the app window which density the page starts in
-  $("st-resetwin").hidden = typeof window.resetWindowSize !== "function";
-  $("st-resetwin").onclick = () => { window.resetWindowSize(); toast("Размер окна сброшен"); };
+  $("st-resetwin").onclick = () => { if (typeof window.resetWindowSize === "function") window.resetWindowSize(); toast("Размер окна сброшен"); };
   for (const r of document.querySelectorAll('input[name="dn"]')) r.addEventListener("change", () => { if (r.checked) setDensity(r.value); });
 
   // right-click on the header: which columns to show
@@ -1613,7 +1612,7 @@
       $("st-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`; }
 
     fillNetwork(settings.network || {});
-    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("sn-system").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
+    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
     if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {}); $("st-copy").value = settings.copyRemovePolicy;
     $("st-data").value = settings.dataDir; $("st-movedone").value = settings.moveCompletedDir || ""; $("st-watch").value = settings.watchDir || ""; $("st-copydir").value = settings.torrentCopyDir || "";
     openLabelRows();

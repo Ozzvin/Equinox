@@ -428,7 +428,11 @@
             <i class="seg-pill" aria-hidden="true"></i>
           </div>
           <p class="muted small">Меняет размер строк, шрифтов и отступов во всём интерфейсе, в том числе в этих окнах. Применяется сразу. В компактном режиме левой панели нет, а фильтры по состоянию и меткам стоят в верхней панели, прогресс показан тонкой линией. Быстро переключить режим можно клавишами Ctrl+Shift+D.</p>
-          <button type="button" class="btn" id="st-resetwin" hidden>Сбросить размер окна</button>
+        </fieldset>
+        <fieldset id="fs-window" hidden>
+          <legend>Окно</legend>
+          <label class="check"><input type="checkbox" id="st-remwin"><span>Сохранять положение и размер окна<br><span class="muted small">Окно откроется там и такого размера, как вы его оставили (отдельно для каждого режима плотности). Если выключено, оно открывается по центру со стандартным размером режима.</span></span></label>
+          <button type="button" class="btn" id="st-resetwin">Сбросить размер окна</button>
         </fieldset>
       </section>
       <section class="set-pane" role="tabpanel" data-sec="system" hidden>
@@ -441,7 +445,6 @@
           <legend>Окно</legend>
           <label class="check"><input type="checkbox" id="st-closetray"><span>Прятать в трей при закрытии окна<br><span class="muted small">Если выключить, закрытие окна завершит программу и остановит раздачи</span></span></label>
           <label class="check"><input type="checkbox" id="st-mintray"><span>Прятать в трей при сворачивании</span></label>
-          <label class="check"><input type="checkbox" id="st-remwin"><span>Сохранять положение и размер окна<br><span class="muted small">Окно откроется там и такого размера, как вы его оставили (отдельно для каждого режима плотности). Если выключено, оно открывается по центру со стандартным размером режима.</span></span></label>
         </fieldset>
         <fieldset>
           <legend>Программа по умолчанию</legend>
