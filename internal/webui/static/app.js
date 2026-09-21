@@ -270,8 +270,6 @@
     for (const id of ["btn-toggle", "btn-remove", "btn-up", "btn-down", "btn-label"]) $(id).disabled = !has || busy;
     $("btn-move").disabled = !has || busy || noMeta;
     $("btn-open").disabled = n !== 1;
-    $("btn-seq").disabled = !has || busy || noMeta;
-    $("btn-seq").classList.toggle("on", has && list.every((t) => t.sequential));
     if (has) {
       const allPaused = list.every((t) => t.paused), s = n > 1 ? ` (${n})` : "";
       $("btn-toggle").querySelector("use").setAttribute("href", allPaused ? "#i-resume" : "#i-pause");
@@ -886,11 +884,6 @@
   // Queue moves keep the relative order of the selection: going up, the first goes first.
   $("btn-up").onclick = () => each(chosen(), (t) => post(t, "queue", { move: "up" }));
   $("btn-down").onclick = () => each(chosen().reverse(), (t) => post(t, "queue", { move: "down" }));
-  $("btn-seq").onclick = () => {
-    const list = chosen(); if (!list.length) return;
-    const on = !list.every((t) => t.sequential);
-    each(list, (t) => post(t, "sequential", { enabled: on }));
-  };
 
   // Copy a stream link for an external player (VLC, mpv). Sequential mode is switched on
   // so the pieces are fetched in playback order.
