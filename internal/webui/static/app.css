@@ -632,3 +632,6 @@ html[data-density="compact"] .seg .seg-pill { top: 2px; bottom: 2px; left: 2px; 
 html[data-density="compact"] .seg.seg3 .seg-pill { width: calc((100% - 4px) / 3); }
 html[data-density="compact"] .seg.seg3 label small { display: none; }
 html[data-density="compact"] .seg-note { display: none; }
+
+/* the move button is not on the toolbar any more; the right-click menu still uses it */
+.btn[hidden] { display: none; }
