@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Equinox</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6fed'/%3E%3Cpath d='M16 7v13m0 0l-5-5m5 5l5-5M9 25h14' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="actions" role="toolbar" aria-label="Действия">
+    <button class="btn primary" id="btn-add"><svg class="i"><use href="#i-plus"/></svg><span>Добавить</span></button>
+    <button class="btn icon" id="btn-create" title="Создать .torrent из файла или папки"><svg class="i"><use href="#i-newfile"/></svg></button>
+    <span class="sep"></span>
+    <button class="btn icon" id="btn-toggle" title="Пауза / продолжить" disabled><svg class="i"><use href="#i-pause"/></svg></button>
+    <button class="btn icon" id="btn-seq" title="Смотреть по ходу загрузки (последовательно)" disabled><svg class="i"><use href="#i-seq"/></svg></button>
+    <button class="btn icon" id="btn-up" title="Выше в очереди" disabled><svg class="i"><use href="#i-up"/></svg></button>
+    <button class="btn icon" id="btn-down" title="Ниже в очереди" disabled><svg class="i"><use href="#i-down"/></svg></button>
+    <button class="btn icon" id="btn-move" title="Переместить в другую папку…" disabled><svg class="i"><use href="#i-folder"/></svg></button>
+    <button class="btn icon" id="btn-open" title="Показать файлы в Проводнике" disabled><svg class="i"><use href="#i-reveal"/></svg></button>
+    <button class="btn icon" id="btn-label" title="Метка" disabled><svg class="i"><use href="#i-tag"/></svg></button>
+    <button class="btn icon danger" id="btn-remove" title="Удалить" disabled><svg class="i"><use href="#i-trash"/></svg></button>
+  </div>
+
+  <div class="grow"></div>
+
+  <div class="search" id="search" role="search">
+    <select id="f-state" class="narrow-only" aria-label="Состояние">
+      <option value="">Все раздачи</option><option value="active">Активные</option><option value="downloading">Загружаются</option><option value="seeding">Раздаются</option><option value="checking">Проверяются</option>
+      <option value="paused">На паузе</option><option value="queued">В очереди</option>
+    </select>
+    <select id="f-label" class="narrow-only" aria-label="Метка"><option value="">Все метки</option></select>
+    <input id="f-q" type="search" placeholder="Поиск по названию" aria-label="Поиск по названию" autocomplete="off" tabindex="-1">
+    <button class="btn icon" id="btn-search" title="Поиск (Ctrl+F или /)" aria-label="Поиск" aria-expanded="false"><svg class="i"><use href="#i-search"/></svg></button>
+  </div>
+  <button class="btn icon" id="btn-stats" title="Статистика"><svg class="i"><use href="#i-chart"/></svg></button>
+  <button class="btn icon" id="btn-settings" title="Настройки"><svg class="i"><use href="#i-gear"/></svg></button>
+</header>
+<div id="restart-bar" class="notice" hidden role="status">
+  <span id="restart-text"></span>
+  <button class="btn small primary" id="btn-restart" hidden>Перезапустить</button>
+</div>
+
+<div class="layout">
+<nav id="side" aria-label="Разделы">
+  <div class="side-title">Раздачи</div>
+  <div id="side-states"></div>
+  <div class="side-title" id="side-labels-title" hidden>Метки</div>
+  <div id="side-labels"></div>
+</nav>
+<div class="vsplit" id="side-split" role="separator" aria-orientation="vertical" aria-label="Ширина левой панели" tabindex="0" title="Потяните, чтобы изменить ширину; двойной клик — по умолчанию"></div>
+<div class="content">
+
+
+<main>
+  <section class="list" aria-label="Раздачи">
+    <table id="tbl">
+      <colgroup id="cols"></colgroup>
+      <thead><tr id="head-row"></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" class="empty" hidden>
+      <svg class="i big"><use href="#i-download"/></svg>
+      <p>Раздач пока нет</p>
+      <p class="muted">Перетащите .torrent файл сюда или нажмите «Добавить»</p>
+    </div>
+    <div id="none" class="empty" hidden><p class="muted">Ничего не найдено — измените фильтр</p></div>
+  </section>
+
+
+</main>
+</div>
+</div>
+
+<!-- Подробности: фиксированной высоты, на всю ширину окна (под списком и боковой панелью) -->
+<div class="splitter" id="splitter" role="separator" aria-orientation="horizontal" aria-label="Высота панели подробностей" tabindex="0" title="Потяните, чтобы изменить высоту; двойной клик — по умолчанию"></div>
+<section class="details" id="details" aria-label="Подробности раздачи">
+  <div class="details-head">
+    <div class="tabs" id="tabs" role="tablist" aria-label="Подробности">
+      <button role="tab" data-tab="files" aria-selected="true">Файлы</button>
+      <button role="tab" data-tab="general" aria-selected="false">Общее</button>
+      <button role="tab" data-tab="peers" aria-selected="false">Пиры</button>
+      <button role="tab" data-tab="trackers" aria-selected="false">Трекеры</button>
+    </div>
+    <span class="grow"></span>
+    <span id="file-actions">
+      <span id="file-sel" class="file-sel" hidden>
+        <span class="muted small" id="fs-info"></span>
+        <select id="f-prio" aria-label="Приоритет выбранных файлов" title="Задать приоритет всем выбранным файлам">
+          <option value="">Приоритет выбранных…</option><option value="skip">Не скачивать</option><option value="normal">Обычный</option><option value="high">Высокий</option>
+        </select>
+        <button type="button" class="btn small danger" id="f-del" title="Удалить выбранные файлы с диска (Delete)">Удалить…</button>
+      </span>
+      <button class="btn small" id="f-all" title="Скачивать все файлы">Все</button>
+      <button class="btn small" id="f-none" title="Не скачивать ни один файл">Ничего</button>
+    </span>
+    <button class="btn small" id="btn-recheck" title="Пересчитать хэши всех данных и найти повреждённые части">Проверить файлы</button>
+  </div>
+  <div class="details-body">
+  <div id="d-empty" class="pane none" hidden></div>
+  <div id="files" class="pane" tabindex="0" aria-label="Файлы раздачи: Ctrl и Shift выделяют несколько"></div>
+  <div id="pane-general" class="pane" hidden></div>
+  <div id="pane-peers" class="pane" hidden></div>
+  <div id="pane-trackers" class="pane" hidden>
+    <div id="tr-list"></div>
+    <form id="tr-form" class="tr-form">
+      <input id="tr-input" placeholder="udp://tracker.example.org:6969/announce" autocomplete="off" aria-label="Адрес трекера">
+      <button class="btn small primary" type="submit">Добавить трекер</button>
+    </form>
+    <p class="muted small" style="padding:0 16px 10px">Состояние трекеров движок не сообщает, поэтому показан только список адресов.</p>
+  </div>
+  </div>
+</section>
+
+<footer class="statusbar">
+  <span id="s-port" class="pill tip-host" tabindex="0" role="status" aria-live="polite"><i class="dot"></i><span class="sr">порт…</span></span>
+  <button type="button" id="s-turtle" class="sturtle tip-host" aria-pressed="false" aria-label="Режим «черепаха»"><svg class="i"><use href="#i-turtle"/></svg></button>
+  <span class="grow"></span>
+  <span title="Скорость загрузки">↓ <b id="s-down">0</b></span>
+  <span title="Скорость отдачи">↑ <b id="s-up">0</b></span>
+  <span title="Общий рейтинг за всё время">Рейтинг <b id="s-ratio">0.00</b></span>
+</footer>
+
+<!-- Добавить -->
+<dialog id="dlg-add" class="wide add">
+  <div class="dlg-head"><h2 id="ad-title">Добавить раздачи</h2><button class="btn icon" data-close aria-label="Закрыть"><svg class="i"><use href="#i-x"/></svg></button></div>
+
+  <div class="ad-list" id="ad-list" role="listbox" aria-label="Раздачи, которые будут добавлены"></div>
+  <div class="ad-buttons">
+    <button type="button" class="btn" id="ad-file"><svg class="i"><use href="#i-newfile"/></svg><span>Файлы .torrent…</span></button>
+    <button type="button" class="btn" id="ad-links"><svg class="i"><use href="#i-tag"/></svg><span>Magnet / infohash…</span></button>
+    <button type="button" class="btn" id="ad-remove" disabled>Убрать из списка</button>
+    <input type="file" id="ad-fileinput" accept=".torrent,application/x-bittorrent" multiple hidden>
+  </div>
+
+  <div class="tabs ad-tabs" id="ad-tabs" role="tablist">
+    <button type="button" role="tab" data-tab="files" aria-selected="true">Файлы</button>
+    <button type="button" role="tab" data-tab="opts" aria-selected="false">Параметры</button>
+  </div>
+
+  <div id="ad-files" class="ad-pane"></div>
+
+  <div id="ad-opts" class="ad-pane" hidden>
+    <label>Папка загрузки
+      <span class="pick"><input id="ao-save" autocomplete="off"><button type="button" class="btn small" data-pick="ao-save">Обзор…</button></span>
+    </label>
+    <label class="check"><input type="checkbox" id="ao-movedone-on"><span>Переместить завершённую раздачу в:</span></label>
+    <span class="pick"><input id="ao-movedone" autocomplete="off" aria-label="Папка для завершённых"><button type="button" class="btn small" data-pick="ao-movedone">Обзор…</button></span>
+    <label>Метка<input id="ao-label" list="lb-list" maxlength="40" placeholder="например, Фильмы" autocomplete="off"></label>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="ao-paused"><span>Добавить в паузе</span></label>
+      <label class="check"><input type="checkbox" id="ao-edges"><span>Приоритет первым и последним частям</span></label>
+      <label class="check"><input type="checkbox" id="ao-seq"><span>Последовательная загрузка</span></label>
+      <label class="check"><input type="checkbox" id="ao-skip"><span>Не проверять локальные файлы<br><span class="muted small">Файлы, уже лежащие в папке, считаются целыми без сверки хэшей</span></span></label>
+      <label class="check"><input type="checkbox" id="ao-prealloc"><span>Заранее выделить место на диске</span></label>
+    </div>
+    <label>Подключений (0 — как в настройках)<input type="number" min="0" max="1000" id="ao-conns"></label>
+    <p class="muted small">Скорость для отдельной раздачи ограничить нельзя (движок не умеет): используйте общий лимит и режим «черепаха».</p>
+    <div class="row-end ao-buttons">
+      <button type="button" class="btn small" id="ao-reset" title="Вернуть параметры этой раздачи к значениям по умолчанию">Сбросить</button>
+      <button type="button" class="btn small" id="ao-all" title="Скопировать параметры этой раздачи всем остальным в списке">Применить ко всем</button>
+      <button type="button" class="btn small" id="ao-save-defaults" title="Запомнить эти значения для следующих добавлений">Сохранить как умолчание</button>
+    </div>
+  </div>
+
+  <p class="err" id="ad-err" hidden></p>
+  <div class="row-end">
+    <button type="button" class="btn" data-close id="ad-cancel">Отмена</button>
+    <button type="button" class="btn primary" id="ad-go" disabled>Добавить</button>
+  </div>
+</dialog>
+
+<!-- Ссылки и infohash -->
+<dialog id="dlg-links">
+  <h2>Magnet-ссылки и infohash</h2>
+  <label>По одной в строке
+    <textarea id="lk-text" rows="6" spellcheck="false" placeholder="magnet:?xt=urn:btih:…&#10;0123456789abcdef0123456789abcdef01234567"></textarea>
+  </label>
+  <p class="err" id="lk-err" hidden></p>
+  <div class="row-end">
+    <button type="button" class="btn" data-close>Отмена</button>
+    <button type="button" class="btn primary" id="lk-ok">В список</button>
+  </div>
+</dialog>
+<!-- Создать торрент -->
+<dialog id="dlg-create" class="wide">
+  <form method="dialog" id="f-create">
+    <h2>Создать .torrent</h2>
+    <label>Файл или папка с данными
+      <span class="pick"><input id="cr-src" placeholder="например, D:\Фильмы\Мой фильм" autocomplete="off"><button type="button" class="btn small" data-pick="cr-src">Обзор…</button></span>
+    </label>
+    <label>Куда сохранить .torrent (пусто — рядом с данными)
+      <span class="pick"><input id="cr-out" autocomplete="off"><button type="button" class="btn small" data-pick="cr-out">Обзор…</button></span>
+    </label>
+    <label>Трекеры — по одному в строке
+      <textarea id="cr-trackers" rows="3" spellcheck="false" placeholder="udp://tracker.example.org:6969/announce"></textarea>
+    </label>
+    <div class="grid2">
+      <label>Комментарий<input id="cr-comment" maxlength="500" autocomplete="off"></label>
+      <label>Размер части
+        <select id="cr-piece">
+          <option value="0">выбрать автоматически</option><option value="262144">256 КиБ</option><option value="524288">512 КиБ</option>
+          <option value="1048576">1 МиБ</option><option value="2097152">2 МиБ</option><option value="4194304">4 МиБ</option>
+          <option value="8388608">8 МиБ</option><option value="16777216">16 МиБ</option>
+        </select>
+      </label>
+    </div>
+    <label class="check"><input type="checkbox" id="cr-seed" checked><span>Сразу раздавать<br><span class="muted small">Добавить в список: клиент сверит данные и начнёт раздачу из этой папки</span></span></label>
+    <label class="check"><input type="checkbox" id="cr-private"><span>Приватный торрент<br><span class="muted small">Без DHT и обмена пирами: только через указанные трекеры</span></span></label>
+    <p class="err" id="cr-err" hidden></p>
+    <p class="muted" id="cr-status" hidden></p>
+    <div class="row-end">
+      <button type="button" class="btn" data-close id="cr-cancel">Закрыть</button>
+      <button class="btn primary" value="ok" id="cr-go">Создать</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Статистика -->
+<dialog id="dlg-stats" class="wide">
+  <div class="dlg-head"><h2>Статистика</h2><button class="btn icon" data-close aria-label="Закрыть"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="kpis">
+    <div class="kpi"><span class="muted small">Скачано за всё время</span><b id="k-down">—</b></div>
+    <div class="kpi"><span class="muted small">Отдано за всё время</span><b id="k-up">—</b></div>
+    <div class="kpi"><span class="muted small">Общий рейтинг</span><b id="k-ratio">—</b></div>
+    <div class="kpi"><span class="muted small">Раздач</span><b id="k-count">—</b></div>
+  </div>
+  <div class="chart-head"><strong>Скорость</strong>
+    <span class="legend"><i class="sw sw-down"></i>загрузка <b id="c-down">0</b></span>
+    <span class="legend"><i class="sw sw-up"></i>отдача <b id="c-up">0</b></span>
+    <span class="grow"></span><span class="muted small" id="c-scale"></span><span class="muted small" id="c-span"></span></div>
+  <svg id="chart" viewBox="0 0 640 170" preserveAspectRatio="none" role="img" aria-label="График скорости загрузки и отдачи"></svg>
+  <p class="muted small">График строится, пока открыта эта страница; данные за последние минуты.</p>
+  <div id="k-top-wrap" hidden><strong>Больше всего отдано</strong><div id="k-top"></div></div>
+</dialog>
+
+<!-- Метка -->
+<dialog id="dlg-label">
+  <form method="dialog" id="f-label-form">
+    <h2>Метка</h2>
+    <p id="lb-name" class="muted"></p>
+    <label>Название метки<input id="lb-input" list="lb-list" maxlength="40" placeholder="например, Фильмы" autocomplete="off"></label>
+    <datalist id="lb-list"></datalist>
+    <p class="muted small">Оставьте поле пустым, чтобы убрать метку.</p>
+    <div class="row-end">
+      <button type="button" class="btn" data-close>Отмена</button>
+      <button class="btn primary" value="ok">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Переместить -->
+<dialog id="dlg-move">
+  <form method="dialog" id="f-move">
+    <h2>Переместить раздачу</h2>
+    <p id="mv-name" class="muted"></p>
+    <label>Новая папка
+      <span class="pick"><input id="mv-input" autocomplete="off" placeholder="например, D:\Фильмы"><button type="button" class="btn small" data-pick="mv-input">Обзор…</button></span>
+    </label>
+    <p class="muted small">Файлы переносятся вместе с раздачей, она продолжает раздаваться из новой папки. Если что-то пойдёт не так, файлы останутся на старом месте.</p>
+    <p class="err" id="mv-err" hidden></p>
+    <div class="row-end">
+      <button type="button" class="btn" data-close>Отмена</button>
+      <button class="btn primary" value="ok">Переместить</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Удалить -->
+<dialog id="dlg-remove">
+  <form method="dialog" id="f-remove">
+    <h2 id="rm-title">Удалить раздачу?</h2>
+    <p id="rm-name" class="muted"></p>
+    <label class="check"><input type="checkbox" id="rm-data"><span>Удалить скачанные файлы<br><span class="muted small">Вместе с ними удалится и сохранённая копия .torrent</span></span></label>
+    <div class="row-end">
+      <button type="button" class="btn" data-close>Отмена</button>
+      <button class="btn danger-fill" value="ok">Удалить</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Настройки -->
+<dialog id="dlg-settings" class="wide settings">
+  <form method="dialog" id="f-settings">
+    <h2>Настройки</h2>
+    <div class="set-layout">
+      <nav class="set-nav" id="set-nav" role="tablist" aria-orientation="vertical" aria-label="Разделы настроек">
+        <button type="button" role="tab" data-sec="speed" aria-selected="false">Скорость</button>
+        <button type="button" role="tab" data-sec="folders" aria-selected="false">Загрузки</button>
+        <button type="button" role="tab" data-sec="labels" aria-selected="false">Метки</button>
+        <button type="button" role="tab" data-sec="queue" aria-selected="false">Очередь и раздача</button>
+        <button type="button" role="tab" data-sec="network" aria-selected="false">Сеть</button>
+        <button type="button" role="tab" data-sec="system" aria-selected="false" hidden id="sn-system">Системные</button>
+      </nav>
+      <div class="set-panes">
+      <section class="set-pane" role="tabpanel" data-sec="speed" hidden>
+        <fieldset>
+          <legend>Единицы скорости</legend>
+          <div class="seg" role="radiogroup" aria-label="Единицы скорости">
+            <input type="radio" name="st-unit" id="st-unit-bytes" value="bytes"><label for="st-unit-bytes">Байты <small>КБ/с, МБ/с</small></label>
+            <input type="radio" name="st-unit" id="st-unit-bits" value="bits"><label for="st-unit-bits">Биты <small>Кбит/с, Мбит/с</small></label>
+            <i class="seg-pill" aria-hidden="true"></i>
+          </div>
+          <p class="muted small">Так показываются скорости в списке, таблице пиров, строке состояния, графике и в трее.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend id="st-speed-legend">Ограничения скорости (0 — без ограничения)</legend>
+          <div class="grid2">
+            <label>Загрузка<input type="number" min="0" id="st-down"></label>
+            <label>Отдача<input type="number" min="0" id="st-up"></label>
+            <label>Загрузка в режиме ограничения<input type="number" min="0" id="st-altdown"></label>
+            <label>Отдача в режиме ограничения<input type="number" min="0" id="st-altup"></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Расписание режима ограничения</legend>
+          <label class="check"><input type="checkbox" id="sc-on"><span>Включать ограничение по расписанию<br><span class="muted small">Ручное переключение «черепахи» остаётся в силе до ближайшей границы расписания</span></span></label>
+          <div class="grid2">
+            <label>С<input type="time" id="sc-from"></label>
+            <label>До<input type="time" id="sc-to"></label>
+          </div>
+          <div class="days" id="sc-days" role="group" aria-label="Дни недели"></div>
+        </fieldset>
+      </section>
+      <section class="set-pane" role="tabpanel" data-sec="folders" hidden>
+        <fieldset>
+          <legend>Папки</legend>
+          <label>Сохранять новые раздачи в
+            <span class="pick"><input id="st-data" autocomplete="off"><button type="button" class="btn small" data-pick="st-data">Обзор…</button></span>
+          </label>
+          <label>Переносить завершённые загрузки в (пусто — не переносить)
+            <span class="pick"><input id="st-movedone" autocomplete="off"><button type="button" class="btn small" data-pick="st-movedone">Обзор…</button></span>
+          </label>
+          <label>Папка автодобавления: .torrent из неё добавляются сами (пусто — выключено)
+            <span class="pick"><input id="st-watch" autocomplete="off"><button type="button" class="btn small" data-pick="st-watch">Обзор…</button></span>
+          </label>
+          <label>Копии .torrent файлов (пусто — не сохранять)
+            <span class="pick"><input id="st-copydir" autocomplete="off"><button type="button" class="btn small" data-pick="st-copydir">Обзор…</button></span>
+          </label>
+          <label class="check"><input type="checkbox" id="st-prealloc"><span>Резервировать место на диске при добавлении</span></label>
+          <label class="check"><input type="checkbox" id="st-addpaused"><span>Добавлять торренты на паузе<br><span class="muted small">Раздача не начнёт скачиваться сама: можно сначала выбрать файлы и папку. Относится и к папке автодобавления, magnet-ссылкам и запуску из командной строки; в окне добавления для каждой раздачи это можно поменять.</span></span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Копии .torrent файлов</legend>
+          <label>Удалять копию
+            <select id="st-copy">
+              <option value="with_data">только при удалении раздачи вместе с файлами</option>
+              <option value="always">при любом удалении раздачи</option>
+              <option value="never">никогда</option>
+            </select>
+          </label>
+        </fieldset>
+      </section>
+      <section class="set-pane" role="tabpanel" data-sec="labels" hidden>
+        <fieldset>
+          <legend>Метки</legend>
+          <p class="muted small">Метка собирает раздачи в группу в левом меню. Для метки можно задать папку: новые раздачи с этой меткой сохраняются туда (без папки — в общую папку загрузок). Уже добавленные раздачи остаются в своих папках.</p>
+          <div id="lb-rows" class="lb-rows"></div>
+          <div class="lb-add">
+            <input id="lb-new" placeholder="Название новой метки" maxlength="40" autocomplete="off" aria-label="Название новой метки">
+            <button type="button" class="btn small primary" id="lb-add">Добавить метку</button>
+          </div>
+          <p class="err small" id="lb-err" hidden></p>
+        </fieldset>
+      </section>
+      <section class="set-pane" role="tabpanel" data-sec="queue" hidden>
+        <fieldset>
+          <legend>Очередь</legend>
+          <label>Одновременных загрузок (0 — без ограничения)<input type="number" min="0" id="st-maxactive"></label>
+          <label>Одновременных проверок локальных файлов (0 — без ограничения)<input type="number" min="0" max="64" id="st-maxchecks"></label>
+          <p class="muted small">Остальные раздачи ждут своей очереди. Порядок меняют кнопки со стрелками на панели.</p>
+          <p class="muted small">Проверка идёт, когда добавленная раздача уже лежит на диске, и при кнопке «Проверить файлы». Лишние проверки ждут очереди («Ждёт проверки»): так диск не разрывается между несколькими проверками сразу. Для одного жёсткого диска лучше 1.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Раздача</legend>
+          <label>Остановить раздачу при рейтинге (0 — не останавливать)<input type="number" min="0" step="0.1" id="st-ratio"></label>
+          <label>Остановить раздачу после, часов (0 — не останавливать)<input type="number" min="0" step="0.5" id="st-seedtime"></label>
+          <p class="muted small">Раздача останавливается по тому лимиту, который достигнут раньше. Время считается, пока раздача завершена и не на паузе.</p>
+        </fieldset>
+      </section>
+      <section class="set-pane" role="tabpanel" data-sec="network" hidden>
+        <fieldset>
+          <legend>Соединения</legend>
+          <div class="grid2">
+            <label>Подключений на раздачу<input type="number" min="1" max="1000" id="nw-conns"></label>
+            <label>Одновременных попыток соединения<input type="number" min="1" max="500" id="nw-half"></label>
+          </div>
+          <label>Шифрование трафика
+            <select id="nw-enc">
+              <option value="prefer">использовать, если поддерживает пир</option>
+              <option value="require">требовать (пиры без шифрования отсекаются)</option>
+              <option value="off">не использовать</option>
+            </select>
+          </label>
+          <div class="checks">
+            <label class="check"><input type="checkbox" id="nw-dht"><span>DHT — поиск пиров без трекера</span></label>
+            <label class="check"><input type="checkbox" id="nw-pex"><span>PEX — обмен списками пиров</span></label>
+            <label class="check"><input type="checkbox" id="nw-utp"><span>uTP</span></label>
+            <label class="check"><input type="checkbox" id="nw-tcp"><span>TCP</span></label>
+            <label class="check"><input type="checkbox" id="nw-ipv6"><span>IPv6</span></label>
+            <label class="check"><input type="checkbox" id="nw-web"><span>Веб-сиды (загрузка с HTTP-серверов)</span></label>
+            <label class="check"><input type="checkbox" id="nw-in"><span>Принимать входящие соединения</span></label>
+          </div>
+          <p class="muted small">Число подключений на раздачу применяется сразу, остальные настройки — после перезапуска. Лимит для отдельной раздачи задаётся на вкладке «Общее».</p>
+        </fieldset>
+        <fieldset>
+          <legend>Порт</legend>
+          <label>Порт для входящих соединений<input type="number" min="1" max="65535" id="st-port-num"></label>
+          <p class="muted small" id="st-port-note" hidden>Новый порт вступит в силу после перезапуска приложения.</p>
+          <label class="check"><input type="checkbox" id="st-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: демон сам открывает порт на роутере и следит, чтобы он не пропал</span></span></label>
+          <p id="st-port" class="small"></p>
+          <button type="button" class="btn" id="st-port-refresh">Проверить порт сейчас</button>
+        </fieldset>
+      </section>
+      <section class="set-pane" role="tabpanel" data-sec="system" hidden>
+        <fieldset>
+          <legend>Запуск</legend>
+          <label class="check"><input type="checkbox" id="st-autostart"><span>Запускать вместе с Windows<br><span class="muted small">Программа стартует при входе в систему</span></span></label>
+          <label class="check"><input type="checkbox" id="st-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small">Тихий запуск: окно не открывается, раздачи работают. Действует на запуск вместе с Windows</span></span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Окно</legend>
+          <label class="check"><input type="checkbox" id="st-closetray"><span>Прятать в трей при закрытии окна<br><span class="muted small">Если выключить, закрытие окна завершит программу и остановит раздачи</span></span></label>
+          <label class="check"><input type="checkbox" id="st-mintray"><span>Прятать в трей при сворачивании</span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Программа по умолчанию</legend>
+          <p class="muted small">Чтобы magnet-ссылки и файлы .torrent открывались в Equinox, выберите его в списке приложений Windows.</p>
+          <button type="button" class="btn" id="st-assoc">Открыть magnet и .torrent в Equinox…</button>
+        </fieldset>
+        <fieldset id="fs-notify">
+          <legend>Уведомления</legend>
+          <label class="check"><input type="checkbox" id="st-notify"><span>Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label>
+        </fieldset>
+      </section>
+      </div>
+    </div>
+    <p class="err" id="st-err" hidden></p>
+    <div class="row-end">
+      <button type="button" class="btn" data-close>Отмена</button>
+      <button class="btn primary" value="ok">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Токен -->
+<dialog id="dlg-token">
+  <form method="dialog" id="f-token">
+    <h2>Нужен ключ доступа</h2>
+    <p class="muted">Откройте ссылку, которую напечатал демон при запуске, или вставьте ключ из файла <code>data/api-token</code>.</p>
+    <input id="in-token" placeholder="ключ" autocomplete="off">
+    <div class="row-end"><button class="btn primary" value="ok">Войти</button></div>
+  </form>
+</dialog>
+
+<!-- Выбор папки: собственное окно вместо системного -->
+<dialog id="dlg-picker" class="picker">
+  <div class="dlg-head"><h2 id="pk-title">Выбор папки</h2><button class="btn icon" data-close aria-label="Закрыть"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="pk-top">
+    <button type="button" class="btn icon" id="pk-up" title="На уровень выше" aria-label="На уровень выше"><svg class="i"><use href="#i-up"/></svg></button>
+    <nav class="pk-crumbs" id="pk-crumbs" aria-label="Путь"></nav>
+    <button type="button" class="btn small" id="pk-newbtn" title="Создать папку здесь"><svg class="i"><use href="#i-plus"/></svg><span>Новая папка</span></button>
+  </div>
+  <div class="pk-newrow" id="pk-newrow" hidden>
+    <input id="pk-newname" placeholder="Имя новой папки" autocomplete="off" aria-label="Имя новой папки">
+    <button type="button" class="btn small primary" id="pk-newok">Создать</button>
+    <button type="button" class="btn small" id="pk-newcancel">Отмена</button>
+  </div>
+  <div class="pk-body">
+    <nav class="pk-places" id="pk-places" aria-label="Быстрые ссылки"></nav>
+    <div class="pk-main">
+      <div class="pk-head"><span>Имя</span><span class="r">Размер</span><span>Изменён</span></div>
+      <div class="pk-list" id="pk-list" tabindex="0" role="listbox" aria-label="Содержимое папки"></div>
+    </div>
+  </div>
+  <p class="err" id="pk-err" hidden></p>
+  <label class="pk-path">Выбранная папка<input id="pk-path" autocomplete="off" spellcheck="false" placeholder="Введите путь или выберите папку в списке"></label>
+  <div class="row-end">
+    <button type="button" class="btn" data-close>Отмена</button>
+    <button type="button" class="btn primary" id="pk-ok">Выбрать</button>
+  </div>
+</dialog>
+
+<!-- Удаление метки, назначенной раздачам -->
+<dialog id="dlg-lbdel">
+  <form method="dialog" id="f-lbdel">
+    <h2>Удалить метку?</h2>
+    <p id="lbdel-text"></p>
+    <p class="muted small">Сами раздачи и их файлы не затрагиваются. Метка снимется, когда вы сохраните настройки; если закрыть настройки без сохранения, всё останется как было.</p>
+    <div class="row-end">
+      <button type="button" class="btn" data-close>Отмена</button>
+      <button class="btn danger-fill" value="ok">Удалить метку</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Быстрая настройка ограничения скорости (правый клик по черепахе) -->
+<div id="limits-pop" class="pop" hidden role="dialog" aria-label="Ограничение скорости">
+  <form id="f-limits">
+    <div class="pop-title">Ограничение скорости, <span id="lp-unit">КБ/с</span> <span class="muted small">(0 — без ограничения)</span></div>
+    <div class="pop-grid">
+      <span></span><b>Обычно</b><b>«Черепаха»</b>
+      <label for="lp-down">Загрузка</label><input type="number" min="0" id="lp-down"><input type="number" min="0" id="lp-adown">
+      <label for="lp-up">Отдача</label><input type="number" min="0" id="lp-up"><input type="number" min="0" id="lp-aup">
+    </div>
+    <label class="check"><input type="checkbox" id="lp-on"><span>Режим «черепаха» включён</span></label>
+    <p class="err small" id="lp-err" hidden></p>
+    <div class="row-end">
+      <button type="button" class="btn small" id="lp-more">Все настройки…</button>
+      <button class="btn small primary" type="submit">Применить</button>
+    </div>
+  </form>
+</div>
+
+<!-- Удаление файлов раздачи с диска -->
+<dialog id="dlg-filedel">
+  <form method="dialog" id="f-filedel">
+    <h2>Удалить файлы с диска?</h2>
+    <p id="filedel-text"></p>
+    <p class="muted small">Файлы будут удалены с диска и отмечены «Не скачивать», чтобы клиент не докачал их снова. Отменить это нельзя. Сама раздача останется в списке.</p>
+    <div class="row-end">
+      <button type="button" class="btn" data-close>Отмена</button>
+      <button class="btn danger-fill" value="ok">Удалить файлы</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="ctx" class="ctx" hidden role="menu"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="push" aria-live="polite" aria-label="Уведомления"></div>
+<div id="drop" hidden>Отпустите .torrent файл, чтобы добавить</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-resume" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor"/></symbol>
+  <symbol id="i-seq" viewBox="0 0 24 24"><path d="M4 7h10M4 12h14M4 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17 15l3 2-3 2z" fill="currentColor"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V6m0 0l-5 5m5-5l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v13m0 0l-5-5m5 5l5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1a1 1 0 0 1 .7.3l7.4 7.4a1 1 0 0 1 0 1.4l-7.6 7.6a1 1 0 0 1-1.4 0l-7.9-7.9a1 1 0 0 1-.3-.7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="8.3" cy="8.3" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 6.5a1 1 0 0 1 1-1h4.2l2 2.3h8.8a1 1 0 0 1 1 1v9.2a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-all" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-newfile" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5zM14 3v4.5h4.5M12 11v6M9 14h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-reveal" viewBox="0 0 24 24"><path d="M3.5 6.5a1 1 0 0 1 1-1h4.2l2 2.3h8.8a1 1 0 0 1 1 1v9.2a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 15l2-2 2 2M12 13v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" transform="rotate(90 12 15)"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15.5 15.5L21 21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="15" cy="7" r="2.2" fill="var(--panel)" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="17" r="2.2" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-turtle" viewBox="0 0 24 24"><path d="M3 15c0-4.4 3.6-8 8-8s8 3.6 8 8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 15c0-2.5 1.3-5 3-8m3 8c0-2.5-.8-5-2-8M19 13.5c1.7-.4 2.7.3 2.7 1.5H19M5 15v2.2M9 15v2.2M14 15v2.2M17.5 15v2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+</svg>
+<script src="app.js"></script>
+</body>
+</html>

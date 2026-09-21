@@ -1,0 +1,98 @@
+package core
+
+import (
+	"fmt"
+	"net/netip"
+	"time"
+
+	"github.com/Ozzvin/equinox/internal/config"
+	"github.com/Ozzvin/equinox/internal/portmap"
+)
+
+// Verdicts of the port report.
+const (
+	PortOpen     = "open"     // a peer from the internet connected to us
+	PortMapped   = "mapped"   // router mapping is in place, no inbound peer seen yet
+	PortCGNAT    = "cgnat"    // the router itself has a non-public address: forwarding is impossible
+	PortClosed   = "closed"   // automatic forwarding is on but the router does not cooperate
+	PortManual   = "manual"   // automatic forwarding is off
+	PortChecking = "checking" // first check in progress
+)
+
+// inboundFresh is how long an inbound connection counts as proof of reachability.
+const inboundFresh = 24 * time.Hour
+
+// PortReport combines the router mapping with real inbound evidence.
+type PortReport struct {
+	portmap.Status
+	Verdict     string    `json:"verdict"`
+	Advice      string    `json:"advice"`
+	Inbound     int64     `json:"inbound"`     // inbound connections from the internet since start
+	LastInbound time.Time `json:"lastInbound"` // zero if none yet
+	WantedPort  int       `json:"wantedPort"`  // the configured port when the engine had to use another one, else 0
+}
+
+// PortReport returns the current reachability verdict with advice for the user.
+func (m *Manager) PortReport() PortReport {
+	_, public, last, unknown := m.inbound.snapshot()
+	return makeReport(m.PortStatus(), public, last, unknown, time.Now(), m.wantedPort)
+}
+
+func makeReport(st portmap.Status, public int64, last time.Time, unknown bool, now time.Time, wanted int) PortReport {
+	r := PortReport{Status: st, Inbound: public, LastInbound: last}
+	if wanted != 0 && wanted != st.Port {
+		r.WantedPort = wanted
+	}
+
+	switch {
+	case public > 0 && now.Sub(last) < inboundFresh:
+		r.Verdict = PortOpen
+		r.Advice = "К вам подключаются пиры из интернета — порт доступен."
+	case st.ExternalIP != "" && externalIPNotPublic(st.ExternalIP):
+		r.Verdict = PortCGNAT
+		r.Advice = fmt.Sprintf("Внешний адрес роутера %s не публичный: провайдер использует общий адрес (CGNAT). "+
+			"Проброс порта в таком случае невозможен. Попросите у провайдера «белый» IP или используйте VPN с пробросом порта.", st.ExternalIP)
+	case !st.Enabled:
+		r.Verdict = PortManual
+		r.Advice = "Автопроброс выключен. Включите его или пробросьте порт на роутере вручную."
+	case st.Mapped:
+		r.Verdict = PortMapped
+		r.Advice = "Порт проброшен на роутере. Ждём первого входящего подключения — при малом числе раздач это может занять время."
+		if unknown {
+			r.Advice = "Порт проброшен на роутере (входящие подключения определить не удалось)."
+		}
+	case st.Failures > 0:
+		r.Verdict = PortClosed
+		r.Advice = "Роутер не отвечает на запросы проброса. Включите UPnP или NAT-PMP в настройках роутера либо пробросьте порт вручную."
+		if st.LastError != "" {
+			r.Advice += " Ответ: " + st.LastError
+		}
+	default:
+		r.Verdict = PortChecking
+		r.Advice = "Проверяем роутер…"
+	}
+	return r
+}
+
+func externalIPNotPublic(s string) bool {
+	ip, err := netip.ParseAddr(s)
+	return err == nil && !isPublicIP(ip)
+}
+
+// SetPortMapping turns automatic router forwarding on or off without a restart.
+func (m *Manager) SetPortMapping(on bool) error {
+	if err := m.cfg.Update(func(s *config.Settings) { s.PortMapping = on }); err != nil {
+		return err
+	}
+	m.portMu.Lock()
+	defer m.portMu.Unlock()
+	switch {
+	case on && m.ports == nil:
+		m.ports = portmap.New(m.cl.LocalPort(), portmap.Options{})
+		m.ports.Start()
+	case !on && m.ports != nil:
+		m.ports.Stop()
+		m.ports = nil
+	}
+	return nil
+}

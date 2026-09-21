@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        shell: bash
+        run: test -z "$(gofmt -l cmd internal)"
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+      - run: go build -ldflags "-H windowsgui -s -w" -o Equinox.exe ./cmd/equinox
+      - run: go build -ldflags "-s -w" -o Equinox-server.exe ./cmd/equinox-server

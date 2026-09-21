@@ -1,0 +1,4 @@
+* text=auto
+*.syso binary
+*.ico binary
+*.png binary

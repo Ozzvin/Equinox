@@ -1,0 +1,4 @@
+/data/
+*.exe
+/data-test/
+/dist/
