@@ -320,7 +320,7 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 .set-panes { flex: 1; min-width: 0; height: min(520px, 62vh); overflow: auto; padding-right: 6px; }
 .set-pane[hidden] { display: none; }
 .set-pane > fieldset:first-child { margin-top: 0; }
-@media (max-width: 640px) { .set-layout { flex-direction: column; } .set-nav { width: auto; flex-direction: row; flex-wrap: wrap; border-right: 0; padding: 0 0 8px; border-bottom: 1px solid var(--line); } }
+@media (max-width: 520px) { .set-layout { flex-direction: column; } .set-nav { width: auto; flex-direction: row; flex-wrap: wrap; border-right: 0; padding: 0 0 8px; border-bottom: 1px solid var(--line); } }
 .pane.none#d-empty { padding: 18px 16px; }
 /* labels in the settings */
 .lb-rows { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
@@ -371,7 +371,7 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 .pk-msg { padding: 14px 16px; color: var(--muted); }
 .pk-path { display: block; margin-top: 10px; }
 .pk-path input { margin-top: 4px; }
-@media (max-width: 640px) { .pk-places { display: none; } .pk-head, .pk-row { grid-template-columns: minmax(0, 1fr) 80px; } .pk-head span:last-child, .pk-row .dt:last-child { display: none; } }
+@media (max-width: 520px) { .pk-places { display: none; } .pk-head, .pk-row { grid-template-columns: minmax(0, 1fr) 80px; } .pk-head span:last-child, .pk-row .dt:last-child { display: none; } }
 
 /* colours of labels: none of them is a state colour (green, blue, yellow, grey, red) */
 :root { --lc-violet: #7b5ce6; --lc-purple: #b03fc4; --lc-pink: #d6408f; --lc-cyan: #0e9fb0; --lc-brown: #8d6440; }
@@ -623,3 +623,12 @@ html[data-density="compact"] .pk-head { height: 22px; }
 html[data-density="compact"] dialog.wizard { min-height: 280px; }
 html[data-density="compact"] .wz-body { min-height: 170px; }
 html[data-density="compact"] #chart { height: 130px; }
+
+/* compact: the switches are slim, one line each */
+html[data-density="compact"] .seg { margin: 4px 0 6px; padding: 2px; border-radius: 8px; }
+html[data-density="compact"] .seg label { flex-direction: row; gap: 6px; padding: 3px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; }
+html[data-density="compact"] .seg label small { font-size: 10.5px; }
+html[data-density="compact"] .seg .seg-pill { top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: 6px; }
+html[data-density="compact"] .seg.seg3 .seg-pill { width: calc((100% - 4px) / 3); }
+html[data-density="compact"] .seg.seg3 label small { display: none; }
+html[data-density="compact"] .seg-note { display: none; }
