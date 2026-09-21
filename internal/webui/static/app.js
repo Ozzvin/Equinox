@@ -1922,6 +1922,11 @@
     limitRefit(["wz-down", "wz-up"], wz.bits, bits); wz.bits = bits;
     $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
   });
+  // a random port from the range the system keeps for private use, away from well-known services
+  const randomPort = () => 49152 + Math.floor(Math.random() * (65535 - 49152 + 1));
+  for (const [btn, field] of [["wz-port-rnd", "wz-port"], ["st-port-rnd", "st-port-num"]]) {
+    $(btn).onclick = () => { $(field).value = randomPort(); $(field).dispatchEvent(new Event("input", { bubbles: true })); };
+  }
   $("wz-port").addEventListener("input", () => { $("wz-port-note").hidden = !(wz.port && Number($("wz-port").value) !== wz.port.port); });
   $("wz-assoc").onclick = async () => {
     if (typeof window.registerHandlers !== "function") return;
