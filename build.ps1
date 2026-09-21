@@ -34,11 +34,11 @@ if (-not $SkipTests) {
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 
 Step "Equinox.exe (версия для ПК: окно и трей)"
-go build -ldflags "-H windowsgui -s -w" -o dist\Equinox.exe .\cmd\equinox
+go build -ldflags "-H windowsgui -s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$Version" -o dist\Equinox.exe .\cmd\equinox
 Check "сборка Equinox.exe"
 
 Step "Equinox-server.exe (серверная версия: без окна)"
-go build -ldflags "-s -w" -o dist\Equinox-server.exe .\cmd\equinox-server
+go build -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$Version" -o dist\Equinox-server.exe .\cmd\equinox-server
 Check "сборка Equinox-server.exe"
 
 Step "установщик (Inno Setup)"

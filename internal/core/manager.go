@@ -19,6 +19,7 @@ import (
 	"github.com/anacrolix/torrent/storage"
 	"golang.org/x/time/rate"
 
+	"github.com/Ozzvin/equinox/internal/buildinfo"
 	"github.com/Ozzvin/equinox/internal/config"
 	"github.com/Ozzvin/equinox/internal/portmap"
 	"github.com/Ozzvin/equinox/internal/store"
@@ -130,6 +131,11 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	newConfig := func(port int) *torrent.ClientConfig {
 		cc := torrent.NewDefaultClientConfig()
 		cc.ListenPort = port
+		// What other clients see: our own name instead of the engine's module path.
+		cc.ExtendedHandshakeClientVersion = buildinfo.ClientVersion()
+		cc.Bep20 = buildinfo.PeerIDPrefix()
+		cc.HTTPUserAgent = buildinfo.Name + "/" + buildinfo.Version
+		cc.UpnpID = buildinfo.ClientVersion()
 		cc.Seed = true
 		cc.NoDefaultPortForwarding = true // portmap does it, with renewal and verification
 		cc.Callbacks.CompletedHandshake = m.inbound.onHandshake

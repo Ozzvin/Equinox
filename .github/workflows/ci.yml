@@ -18,5 +18,8 @@ jobs:
         run: test -z "$(gofmt -l cmd internal)"
       - run: go vet ./...
       - run: go test -count=1 ./...
-      - run: go build -ldflags "-H windowsgui -s -w" -o Equinox.exe ./cmd/equinox
-      - run: go build -ldflags "-s -w" -o Equinox-server.exe ./cmd/equinox-server
+      - name: build
+        run: |
+          $v = (Get-Content VERSION).Trim()
+          go build -ldflags "-H windowsgui -s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o Equinox.exe ./cmd/equinox
+          go build -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o Equinox-server.exe ./cmd/equinox-server
