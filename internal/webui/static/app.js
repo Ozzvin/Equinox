@@ -788,14 +788,14 @@
   renderHead();
 
   const colCtx = $("ctx");
-  // ---------- density: normal, compact, mini (no left panel, like Transmission) ----------
-  const DENSITIES = [["normal", "Обычный", "как сейчас"], ["compact", "Компактный", "плотнее строки и отступы"], ["mini", "Мини", "без левой панели, прогресс линией"]];
-  let density = document.documentElement.dataset.density || "normal";
+  // ---------- density: large, standard (the default), compact (no left panel, like Transmission) ----------
+  const DENSITIES = [["large", "Увеличенный", "крупные строки и отступы"], ["standard", "Стандартный", "по умолчанию"], ["compact", "Компактный", "без левой панели, прогресс линией"]];
+  let density = document.documentElement.dataset.density || "standard";
   function setDensity(d) {
-    if (!DENSITIES.some((x) => x[0] === d)) d = "normal";
+    if (!DENSITIES.some((x) => x[0] === d)) d = "standard";
     density = d;
-    if (d === "normal") delete document.documentElement.dataset.density; else document.documentElement.dataset.density = d;
-    try { localStorage.setItem("density", d); } catch (_) {}
+    if (d === "standard") delete document.documentElement.dataset.density; else document.documentElement.dataset.density = d;
+    try { localStorage.setItem("uiDensity", d); } catch (_) {}
     render(); // columns sized by their text are measured again in the new font
     dispatchEvent(new Event("resize"));
   }
