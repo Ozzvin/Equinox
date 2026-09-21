@@ -128,6 +128,9 @@ type Settings struct {
 	CloseToTray    bool `json:"closeToTray"`
 	MinimizeToTray bool `json:"minimizeToTray"`
 
+	// SetupDone is set once the first-run setup guide was finished or skipped.
+	SetupDone bool `json:"setupDone"`
+
 	// Streaming: how many pieces at each end of a file get top priority.
 	EdgePieces int `json:"edgePieces"`
 	// Streaming: size of the sliding window (in pieces) for sequential mode.

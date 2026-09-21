@@ -409,3 +409,34 @@ func TestDetailsPeersTrackersRecheckEndpoints(t *testing.T) {
 		}
 	}
 }
+
+// The first-run guide marks itself done through the settings; other saves leave the mark alone.
+func TestSetupDoneIsStoredAndKept(t *testing.T) {
+	e := setup(t)
+	put := func(body string) {
+		r := e.do(t, "PUT", "/api/settings", bytes.NewReader([]byte(body)), nil)
+		if r.StatusCode != 200 {
+			t.Fatalf("put %s: %d", body, r.StatusCode)
+		}
+	}
+	done := func() bool {
+		var s struct {
+			SetupDone bool `json:"setupDone"`
+		}
+		r := e.do(t, "GET", "/api/settings", nil, nil)
+		_ = json.NewDecoder(r.Body).Decode(&s)
+		return s.SetupDone
+	}
+	base := `"downLimitKBps":0,"upLimitKBps":0,"altDownLimitKBps":0,"altUpLimitKBps":0,"ratioLimit":0,"maxActiveDownloads":0,"copyRemovePolicy":"with_data"`
+	if done() {
+		t.Fatal("a new installation has not been through the guide")
+	}
+	put(`{` + base + `,"setupDone":true}`)
+	if !done() {
+		t.Fatal("setupDone was not stored")
+	}
+	put(`{` + base + `}`) // the ordinary settings form does not know the flag
+	if !done() {
+		t.Fatal("a save without the flag must keep it")
+	}
+}

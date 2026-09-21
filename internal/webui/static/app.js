@@ -1870,6 +1870,100 @@
 
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
 
+  // ---------- first-run guide ("Быстрая настройка") ----------
+  const wz = { steps: [], i: 0, cur: null, port: null, bits: false };
+  const wzDesktop = () => !!window.__equinoxDesktop;
+  const wzSections = () => [...document.querySelectorAll("#dlg-wizard [data-wz]")];
+  function wzShow() {
+    const sec = wz.steps[wz.i];
+    for (const s of wzSections()) s.hidden = s !== sec;
+    $("wz-title").textContent = sec.dataset.title;
+    $("wz-count").textContent = wz.i > 0 && wz.i < wz.steps.length - 1 ? `Шаг ${wz.i} из ${wz.steps.length - 2}` : "";
+    $("wz-dots").innerHTML = wz.steps.map((_, k) => `<i class="${k === wz.i ? "on" : k < wz.i ? "past" : ""}"></i>`).join("");
+    const last = wz.i === wz.steps.length - 1;
+    $("wz-back").hidden = wz.i === 0;
+    $("wz-skip").hidden = last;
+    $("wz-next").textContent = last ? "Готово" : wz.i === 0 ? "Начать" : "Далее";
+    $("wz-err").hidden = true;
+    if (last) wzSummary();
+  }
+  const wzUnit = () => $("wz-unit-bits").checked;
+  function wzSummary() {
+    const bits = wzUnit(), li = [];
+    const lim = (id) => (limitRead(id, bits) ? `${$(id).value} ${limitUnit(bits)}` : "без ограничения");
+    li.push(`Папка загрузок: ${$("wz-data").value.trim() || "—"}`);
+    li.push($("wz-watch").value.trim() ? `Папка автодобавления: ${$("wz-watch").value.trim()}` : "Папка автодобавления: выключена");
+    li.push(`Скорость: загрузка ${lim("wz-down")}, отдача ${lim("wz-up")}`);
+    li.push(`Порт ${Number($("wz-port").value) || "—"}, автоматический проброс: ${$("wz-mapping").checked ? "включён" : "выключен"}`);
+    if (wzDesktop()) li.push(`Запуск вместе с Windows: ${$("wz-autostart").checked ? ($("wz-starthidden").checked ? "да, в трее" : "да") : "нет"}; закрытие окна ${$("wz-closetray").checked ? "прячет в трей" : "завершает программу"}`);
+    $("wz-sum").innerHTML = li.map((t) => `<li>${esc(t)}</li>`).join("");
+  }
+  async function openWizard() {
+    if ($("dlg-wizard").open) return;
+    try { wz.cur = await api("GET", "/api/settings"); wz.port = await api("GET", "/api/port"); } catch (e) { return toast(e.message, true); }
+    const s = wz.cur, bits = s.speedUnit === "bits";
+    wz.bits = bits;
+    $("wz-data").value = s.dataDir || ""; $("wz-watch").value = s.watchDir || ""; $("wz-paused").checked = !!(s.add && s.add.paused);
+    $("wz-unit-bits").checked = bits; $("wz-unit-bytes").checked = !bits;
+    limitFill("wz-down", s.downLimitKBps, bits); limitFill("wz-up", s.upLimitKBps, bits);
+    $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
+    $("wz-port").value = s.listenPort; $("wz-mapping").checked = !!wz.port.enabled; $("wz-port-note").hidden = true;
+    $("wz-starthidden").checked = s.startHidden !== false; $("wz-closetray").checked = s.closeToTray !== false; $("wz-notify").checked = s.notifyOnComplete !== false;
+    $("wz-autostart").checked = false;
+    if (wzDesktop() && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("wz-autostart").checked = !!on; }).catch(() => {});
+    wz.steps = wzSections().filter((x) => x.dataset.wz !== "system" || wzDesktop());
+    wz.i = 0; wzShow();
+    $("dlg-wizard").showModal();
+  }
+  limitFieldsDirty(["wz-down", "wz-up"]);
+  for (const r of [$("wz-unit-bytes"), $("wz-unit-bits")]) r.addEventListener("change", () => {
+    const bits = wzUnit();
+    if (bits === wz.bits) return;
+    limitRefit(["wz-down", "wz-up"], wz.bits, bits); wz.bits = bits;
+    $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
+  });
+  $("wz-port").addEventListener("input", () => { $("wz-port-note").hidden = !(wz.port && Number($("wz-port").value) !== wz.port.port); });
+  $("wz-assoc").onclick = async () => {
+    if (typeof window.registerHandlers !== "function") return;
+    const err = await window.registerHandlers();
+    if (err) { $("wz-err").textContent = "Не удалось зарегистрировать приложение: " + err; $("wz-err").hidden = false; }
+  };
+  // The fields that are not optional in the settings request keep what they are now.
+  const wzBase = (s) => ({ downLimitKBps: s.downLimitKBps, upLimitKBps: s.upLimitKBps, altDownLimitKBps: s.altDownLimitKBps, altUpLimitKBps: s.altUpLimitKBps,
+    ratioLimit: s.ratioLimit, maxActiveDownloads: s.maxActiveDownloads, copyRemovePolicy: s.copyRemovePolicy });
+  async function wzSkip() { // leave the defaults, but do not ask again
+    try { settings = await api("PUT", "/api/settings", { ...wzBase(wz.cur), setupDone: true }); } catch (_) {}
+    if ($("dlg-wizard").open) $("dlg-wizard").close();
+  }
+  async function wzFinish() {
+    const bits = wzUnit(), n = (id) => Number($(id).value) || 0;
+    const port = n("wz-port");
+    if (!$("wz-data").value.trim()) { $("wz-err").textContent = "Укажите папку для загрузок."; $("wz-err").hidden = false; return; }
+    if (port < 1 || port > 65535) { $("wz-err").textContent = "Порт должен быть от 1 до 65535."; $("wz-err").hidden = false; return; }
+    const body = { ...wzBase(wz.cur), setupDone: true,
+      dataDir: $("wz-data").value.trim(), watchDir: $("wz-watch").value.trim(), addPaused: $("wz-paused").checked,
+      speedUnit: bits ? "bits" : "bytes", downLimitKBps: limitRead("wz-down", bits), upLimitKBps: limitRead("wz-up", bits), listenPort: port };
+    if (wzDesktop()) Object.assign(body, { startHidden: $("wz-starthidden").checked, closeToTray: $("wz-closetray").checked, notifyOnComplete: $("wz-notify").checked });
+    $("wz-next").disabled = true;
+    try {
+      settings = await api("PUT", "/api/settings", body);
+      if ($("wz-mapping").checked !== !!wz.port.enabled) await api("POST", "/api/port/mapping", { enabled: $("wz-mapping").checked });
+      if (wzDesktop() && typeof window.setAutostart === "function") {
+        const err = await window.setAutostart($("wz-autostart").checked);
+        if (err) toast("Не удалось изменить автозапуск: " + err, true);
+      }
+      $("dlg-wizard").close(); toast("Настройка сохранена"); refresh(); checkRestart();
+    } catch (x) { $("wz-err").textContent = x.message; $("wz-err").hidden = false; }
+    finally { $("wz-next").disabled = false; }
+  }
+  $("wz-next").onclick = () => { if (wz.i < wz.steps.length - 1) { wz.i++; wzShow(); } else wzFinish(); };
+  $("wz-back").onclick = () => { if (wz.i > 0) { wz.i--; wzShow(); } };
+  $("wz-skip").onclick = wzSkip;
+  $("dlg-wizard").addEventListener("cancel", (e) => { e.preventDefault(); wzSkip(); }); // Esc counts as "skip"
+  $("st-wizard").onclick = () => { $("dlg-settings").close(); openWizard(); };
+  // the first start: offer the guide once
+  (async () => { if (!token) return; try { const s = await api("GET", "/api/settings"); if (!s.setupDone) openWizard(); } catch (_) {} })();
+
   if (!token) askToken();
   loop();
   checkRestart(); setInterval(checkRestart, 20000);

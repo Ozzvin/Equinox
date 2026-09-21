@@ -487,3 +487,15 @@ table.mini.pt th.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
 .pt .pbar { height: 20px; border-radius: 5px; }
 .pt .pbar .lb { font-size: 11.5px; }
 .pt td:has(> .pbar) { padding-top: 2px; padding-bottom: 2px; }
+
+/* first-run guide */
+.seg:has(#wz-unit-bits:checked) .seg-pill { transform: translateX(100%); }
+dialog.wizard { min-height: 380px; }
+.wz-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.wz-dots { display: flex; gap: 6px; margin: 2px 0 16px; }
+.wz-dots i { height: 4px; flex: 1; border-radius: 99px; background: var(--line); transition: background .2s; }
+.wz-dots i.past { background: var(--accent); opacity: .55; } .wz-dots i.on { background: var(--accent); }
+.wz-body { min-height: 230px; }
+.wz-lead { font-size: 15px; line-height: 1.5; margin: 6px 0 12px; }
+.wz-sum { margin: 8px 0 14px; padding-left: 20px; line-height: 1.7; font-size: 13.5px; overflow-wrap: anywhere; }
+.wz-foot { align-items: center; }

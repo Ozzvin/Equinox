@@ -591,6 +591,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		SeedTimeLimit    *int                `json:"seedTimeLimitMinutes"` // optional: omitted = unchanged
 		NotifyOnComplete *bool               `json:"notifyOnComplete"`     // optional
 		StartHidden      *bool               `json:"startHidden"`          // optional
+		SetupDone        *bool               `json:"setupDone"`            // optional
 		CloseToTray      *bool               `json:"closeToTray"`          // optional
 		MinimizeToTray   *bool               `json:"minimizeToTray"`       // optional
 		MaxChecks        *int                `json:"maxConcurrentChecks"`  // optional
@@ -702,6 +703,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.StartHidden != nil {
 			c.StartHidden = *b.StartHidden
+		}
+		if b.SetupDone != nil {
+			c.SetupDone = *b.SetupDone
 		}
 		if b.CloseToTray != nil {
 			c.CloseToTray = *b.CloseToTray

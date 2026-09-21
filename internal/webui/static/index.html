@@ -439,8 +439,87 @@
     </div>
     <p class="err" id="st-err" hidden></p>
     <div class="row-end">
+      <button type="button" class="btn" id="st-wizard" title="Пошаговая помощь: папки, скорость, порт, запуск с Windows" style="margin-right:auto">Быстрая настройка</button>
       <button type="button" class="btn" data-close>Отмена</button>
       <button class="btn primary" value="ok">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Быстрая настройка -->
+<dialog id="dlg-wizard" class="wide wizard" aria-labelledby="wz-title">
+  <form method="dialog" id="f-wizard">
+    <div class="wz-head"><h2 id="wz-title">Быстрая настройка</h2><span class="muted small" id="wz-count"></span></div>
+    <div class="wz-dots" id="wz-dots" aria-hidden="true"></div>
+    <div class="wz-body">
+      <section data-wz="welcome" data-title="Добро пожаловать в Equinox">
+        <p class="wz-lead">Несколько вопросов, и клиент готов к работе: куда качать, какую скорость использовать, как соединяться с другими и как вести себя в Windows.</p>
+        <p class="muted">Всё можно изменить позже в «Настройках». Если сейчас не до этого, нажмите «Пропустить»: останутся значения по умолчанию.</p>
+      </section>
+      <section data-wz="folders" data-title="Загрузки" hidden>
+        <fieldset>
+          <legend>Куда и откуда</legend>
+          <label>Сохранять новые раздачи в
+            <span class="pick"><input id="wz-data" autocomplete="off"><button type="button" class="btn small" data-pick="wz-data">Обзор…</button></span>
+          </label>
+          <label>Папка автодобавления: файлы .torrent из неё добавляются сами (пусто — выключено)
+            <span class="pick"><input id="wz-watch" autocomplete="off"><button type="button" class="btn small" data-pick="wz-watch">Обзор…</button></span>
+          </label>
+          <label class="check"><input type="checkbox" id="wz-paused"><span>Добавлять торренты на паузе<br><span class="muted small">Раздача не начнёт скачиваться сама: можно сначала выбрать файлы и папку.</span></span></label>
+        </fieldset>
+      </section>
+      <section data-wz="speed" data-title="Скорость" hidden>
+        <fieldset>
+          <legend>Единицы скорости</legend>
+          <div class="seg" role="radiogroup" aria-label="Единицы скорости">
+            <input type="radio" name="wz-unit" id="wz-unit-bytes" value="bytes"><label for="wz-unit-bytes">Байты <small>КБ/с, МБ/с</small></label>
+            <input type="radio" name="wz-unit" id="wz-unit-bits" value="bits"><label for="wz-unit-bits">Биты <small>Кбит/с, Мбит/с</small></label>
+            <i class="seg-pill" aria-hidden="true"></i>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend id="wz-speed-legend">Ограничения скорости (0 — без ограничения)</legend>
+          <div class="grid2">
+            <label>Загрузка<input type="number" min="0" id="wz-down"></label>
+            <label>Отдача<input type="number" min="0" id="wz-up"></label>
+          </div>
+          <p class="muted small">Если интернет нужен и другим, ограничьте отдачу примерно до 80% от вашей исходящей скорости. Режим «черепаха» с расписанием настраивается в «Настройках».</p>
+        </fieldset>
+      </section>
+      <section data-wz="network" data-title="Соединения" hidden>
+        <fieldset>
+          <legend>Порт для входящих соединений</legend>
+          <label>Порт<input type="number" min="1" max="65535" id="wz-port"></label>
+          <label class="check"><input type="checkbox" id="wz-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: программа сама откроет порт на роутере. Без открытого порта вам подключаются реже, а скорость раздачи ниже.</span></span></label>
+          <p class="muted small" id="wz-port-note" hidden>Новый порт вступит в силу после перезапуска приложения.</p>
+        </fieldset>
+      </section>
+      <section data-wz="system" data-title="Windows" hidden>
+        <fieldset>
+          <legend>Запуск и окно</legend>
+          <label class="check"><input type="checkbox" id="wz-autostart"><span>Запускать вместе с Windows</span></label>
+          <label class="check"><input type="checkbox" id="wz-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small">Тихий запуск: окно не открывается, раздачи работают</span></span></label>
+          <label class="check"><input type="checkbox" id="wz-closetray"><span>Прятать в трей при закрытии окна<br><span class="muted small">Если выключить, закрытие окна завершит программу</span></span></label>
+          <label class="check"><input type="checkbox" id="wz-notify"><span>Показывать уведомления Windows о завершённых загрузках</span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Magnet-ссылки и файлы .torrent</legend>
+          <p class="muted small">Чтобы они открывались в Equinox, выберите его в списке приложений Windows.</p>
+          <button type="button" class="btn" id="wz-assoc">Открыть magnet и .torrent в Equinox…</button>
+        </fieldset>
+      </section>
+      <section data-wz="done" data-title="Готово" hidden>
+        <p class="wz-lead">Настройка завершена.</p>
+        <ul class="wz-sum" id="wz-sum"></ul>
+        <p class="muted small">Всё это можно изменить в «Настройках». Там же кнопка «Быстрая настройка», чтобы пройти шаги ещё раз.</p>
+      </section>
+    </div>
+    <p class="err" id="wz-err" hidden></p>
+    <div class="row-end wz-foot">
+      <button type="button" class="btn ghost" id="wz-skip">Пропустить</button>
+      <span class="grow"></span>
+      <button type="button" class="btn" id="wz-back">Назад</button>
+      <button type="button" class="btn primary" id="wz-next">Далее</button>
     </div>
   </form>
 </dialog>
