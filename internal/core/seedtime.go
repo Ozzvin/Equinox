@@ -51,6 +51,7 @@ func (m *Manager) addSeedTime(hash string, r record, dt time.Duration) int64 {
 
 // flushSeedTime moves the counted time into the persisted records.
 func (m *Manager) flushSeedTime() {
+	m.flushActiveTime()
 	m.mu.Lock()
 	whole := map[string]int64{}
 	for h, d := range m.seedPend {
@@ -76,6 +77,7 @@ func (m *Manager) flushSeedTime() {
 func (m *Manager) forgetSeedTime(hash string) {
 	m.mu.Lock()
 	delete(m.seedPend, hash)
+	delete(m.activePend, hash)
 	m.mu.Unlock()
 }
 

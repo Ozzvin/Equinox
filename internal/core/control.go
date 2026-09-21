@@ -635,6 +635,7 @@ func (m *Manager) enforce(ts []*torrent.Torrent) {
 		if r.Paused || t.Info() == nil {
 			continue
 		}
+		m.addActiveTime(hash, dt)
 		if r.Sequential {
 			m.prioritise(t, true)
 		}

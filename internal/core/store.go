@@ -32,6 +32,7 @@ type record struct {
 	RatioLimit     float64  `json:"ratioLimit"`              // 0 = use the global default
 	SeedTimeLimit  int      `json:"seedTimeLimit,omitempty"` // minutes of seeding after which it stops, 0 = the global default
 	SeedSeconds    int64    `json:"seedSeconds,omitempty"`   // time spent seeding, adds up across restarts
+	ActiveSeconds  int64    `json:"activeSeconds,omitempty"` // time the torrent has been running (not paused), adds up across restarts
 
 	// Per-file priority (see PrioSkip/PrioLow/PrioNormal/PrioHigh); missing entries mean normal.
 	FilePrios []int8 `json:"filePrios,omitempty"`

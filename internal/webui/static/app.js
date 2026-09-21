@@ -317,22 +317,68 @@
   let filesKey = "";
   const PRIO = [["skip", "Не скачивать"], ["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]];
 
-  function fileRowHTML(f) {
-    const opts = PRIO.map(([v, n]) => `<option value="${v}">${n}</option>`).join("");
-    return `<div class="file" data-i="${f.index}">
-      <div class="fn" title="${esc(f.path)}">${esc(f.path.split("/").slice(1).join("/") || f.path)}</div>
+  // ---- the files as a tree: the root folder of a torrent made from a folder is shown, folders open and close
+  const dirClosed = new Map(); // hash -> Set of folder paths ("Root/sub/") that are closed
+  const closedOf = (hash) => { let s = dirClosed.get(hash); if (!s) dirClosed.set(hash, (s = new Set())); return s; };
+  let fileOrder = [];        // indexes of the files that are on screen, in the order they are shown
+  let dirIdx = new Map();    // folder path -> indexes of all the files below it
+  const prioOptions = PRIO.map(([v, n]) => `<option value="${v}">${n}</option>`).join("");
+
+  function buildFileTree(list) {
+    const root = { name: "", path: "", depth: -1, dirs: new Map(), files: [] };
+    for (const f of list) {
+      const parts = f.path.split("/");
+      let n = root;
+      for (let k = 0; k < parts.length - 1; k++) {
+        const p = parts[k];
+        if (!n.dirs.has(p)) n.dirs.set(p, { name: p, path: n.path + p + "/", depth: k, dirs: new Map(), files: [] });
+        n = n.dirs.get(p);
+      }
+      n.files.push({ f, name: parts[parts.length - 1], depth: parts.length - 1 });
+    }
+    return root;
+  }
+  const treeFiles = (n) => [...n.files.map((x) => x.f), ...[...n.dirs.values()].flatMap(treeFiles)];
+
+  // the rows on screen, in order: folders first (by name), then the files as the torrent lists them
+  function treeRows(n, closed, out) {
+    for (const d of [...n.dirs.values()].sort((a, b) => a.name.localeCompare(b.name, "ru", { numeric: true }))) {
+      out.push({ kind: "dir", node: d });
+      if (!closed.has(d.path)) treeRows(d, closed, out);
+    }
+    for (const x of n.files) out.push({ kind: "file", ...x });
+    return out;
+  }
+  const rowPad = (depth) => `style="--d:${Math.max(0, depth)}"`;
+  function dirRowHTML(d, closed) {
+    const all = treeFiles(d), size = all.reduce((a, f) => a + f.size, 0), open = !closed.has(d.path);
+    return `<div class="file dir" data-dir="${esc(d.path)}" ${rowPad(d.depth)}>
+      <div class="fn" title="${esc(d.path.replace(/\/$/, ""))}"><button type="button" class="chev" data-toggle="${esc(d.path)}" aria-expanded="${open}" aria-label="${open ? "Свернуть" : "Развернуть"} папку">${open ? "▾" : "▸"}</button><svg class="i"><use href="#i-folder"/></svg>${esc(d.name)}</div>
+      <div class="fs">${bytes(size)}</div>
+      <div class="bar"><i></i></div>
+      <select data-dprio="${esc(d.path)}" aria-label="Приоритет всех файлов папки"><option value="" disabled hidden>Разный</option>${prioOptions}</select>
+      <span></span></div>`;
+  }
+  function fileRowHTML(x) {
+    const f = x.f;
+    return `<div class="file" data-i="${f.index}" ${rowPad(x.depth)}>
+      <div class="fn" title="${esc(f.path)}">${esc(x.name)}</div>
       <div class="fs">${bytes(f.size)}</div>
       <div class="bar"><i></i></div>
-      <select data-prio="${f.index}" aria-label="Приоритет файла">${opts}</select>
+      <select data-prio="${f.index}" aria-label="Приоритет файла">${prioOptions}</select>
       <button class="btn icon" data-play="${f.index}" title="Скопировать ссылку для плеера (VLC, mpv)"><svg class="i"><use href="#i-play"/></svg></button></div>`;
   }
+  const FILE_HEAD = '<div class="fhead"><span>Имя</span><span class="r">Размер</span><span>Прогресс</span><span>Приоритет</span><span></span></div>';
 
   // ---- several files at once: click selects, Ctrl+click adds or removes, Shift+click takes a range, Ctrl+A takes all
   const fileSel = new Set();
   let fileAnchor = null;
   function renderFileSel() {
     const box = $("files");
-    for (const row of box.querySelectorAll(".file")) row.classList.toggle("sel", fileSel.has(Number(row.dataset.i)));
+    for (const row of box.querySelectorAll(".file")) {
+      if (row.dataset.dir !== undefined) { const idx = dirIdx.get(row.dataset.dir) || []; row.classList.toggle("sel", idx.length > 0 && idx.every((i) => fileSel.has(i))); }
+      else row.classList.toggle("sel", fileSel.has(Number(row.dataset.i)));
+    }
     const n = fileSel.size;
     $("file-sel").hidden = n === 0;
     if (n) {
@@ -343,15 +389,24 @@
   }
   function fileClick(e, index) {
     if (e.shiftKey && fileAnchor !== null) {
-      const a = files.findIndex((f) => f.index === fileAnchor), b = files.findIndex((f) => f.index === index);
+      const a = fileOrder.indexOf(fileAnchor), b = fileOrder.indexOf(index);
       if (!e.ctrlKey && !e.metaKey) fileSel.clear();
-      for (let i = Math.min(a, b); i <= Math.max(a, b); i++) fileSel.add(files[i].index);
+      if (a >= 0 && b >= 0) for (let i = Math.min(a, b); i <= Math.max(a, b); i++) fileSel.add(fileOrder[i]);
+      else fileSel.add(index);
     } else if (e.ctrlKey || e.metaKey) {
       fileSel.has(index) ? fileSel.delete(index) : fileSel.add(index);
       fileAnchor = index;
     } else {
       fileSel.clear(); fileSel.add(index); fileAnchor = index;
     }
+    renderFileSel();
+  }
+  // a click on a folder takes all its files
+  function dirClick(e, path) {
+    const idx = dirIdx.get(path) || []; if (!idx.length) return;
+    if (e.ctrlKey || e.metaKey) { const all = idx.every((i) => fileSel.has(i)); for (const i of idx) all ? fileSel.delete(i) : fileSel.add(i); }
+    else { fileSel.clear(); idx.forEach((i) => fileSel.add(i)); }
+    fileAnchor = idx[0];
     renderFileSel();
   }
   const filesForAction = () => [...fileSel].sort((x, y) => x - y);
@@ -362,9 +417,21 @@
     if (!t.hasMetadata) { $("files").innerHTML = '<p class="muted" style="padding:6px 16px">Ждём метаданные…</p>'; filesKey = ""; return; }
     try { files = await api("GET", `/api/torrents/${t.hash}/files`) || []; } catch (_) { return; }
     if (!cur() || cur().hash !== t.hash) return;
-    const box = $("files"), key = t.hash + ":" + files.length;
-    if (key !== filesKey) { box.innerHTML = files.map(fileRowHTML).join(""); filesKey = key; fileSel.clear(); fileAnchor = null; }
+    const box = $("files"), closed = closedOf(t.hash);
+    const tree = buildFileTree(files);
+    const key = t.hash + ":" + files.length + ":" + [...closed].sort().join("|");
+    // folders and their files, for the selection and the priority of a whole folder
+    dirIdx = new Map();
+    (function walk(n) { for (const d of n.dirs.values()) { dirIdx.set(d.path, treeFiles(d).map((f) => f.index)); walk(d); } })(tree);
+    if (key !== filesKey) {
+      const rows = treeRows(tree, closed, []);
+      box.innerHTML = FILE_HEAD + rows.map((r) => (r.kind === "dir" ? dirRowHTML(r.node, closed) : fileRowHTML(r))).join("");
+      fileOrder = rows.filter((r) => r.kind === "file").map((r) => r.f.index);
+      if (!filesKey.startsWith(t.hash + ":")) { fileSel.clear(); fileAnchor = null; }
+      filesKey = key;
+    }
     for (const i of [...fileSel]) if (!files.some((f) => f.index === i)) fileSel.delete(i);
+    const byIdx = new Map(files.map((f) => [f.index, f]));
     for (const f of files) {
       const row = box.querySelector(`.file[data-i="${f.index}"]`); if (!row) continue;
       row.classList.toggle("skip", f.priority === "skip");
@@ -373,6 +440,17 @@
       bar.firstElementChild.style.width = (f.progress * 100).toFixed(1) + "%";
       const sel = row.querySelector("select");
       if (document.activeElement !== sel) sel.value = f.priority;
+    }
+    for (const [path, idxs] of dirIdx) {
+      const row = box.querySelector(`.file.dir[data-dir="${CSS.escape(path)}"]`); if (!row) continue;
+      const all = idxs.map((i) => byIdx.get(i)).filter(Boolean);
+      const size = all.reduce((a, f) => a + f.size, 0), done = all.reduce((a, f) => a + f.size * f.progress, 0);
+      row.classList.toggle("skip", all.length > 0 && all.every((f) => f.priority === "skip"));
+      const bar = row.querySelector(".bar");
+      bar.classList.toggle("done", size > 0 && done >= size);
+      bar.firstElementChild.style.width = (size ? (done / size) * 100 : 0).toFixed(1) + "%";
+      const sel = row.querySelector("select"), same = all.length && all.every((f) => f.priority === all[0].priority);
+      if (document.activeElement !== sel) sel.value = same ? all[0].priority : "";
     }
     renderFileSel();
   }
@@ -384,10 +462,10 @@
     refresh();
   }
   // ---------- details tabs ----------
-  let tab = "files";
-  try { tab = localStorage.getItem("tab") || "files"; } catch (_) {}
-  const PANES = { files: "files", general: "pane-general", peers: "pane-peers", trackers: "pane-trackers" };
-  if (!(tab in PANES)) tab = "files";
+  let tab = "status";
+  try { tab = localStorage.getItem("tab") || "status"; } catch (_) {}
+  const PANES = { status: "pane-status", general: "pane-general", options: "pane-options", files: "files", peers: "pane-peers", trackers: "pane-trackers" };
+  if (!(tab in PANES)) tab = "status";
 
   function showTab() {
     for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", b.dataset.tab === tab);
@@ -527,6 +605,91 @@
     pSave(); drawPeers(); peerColMenu();
   });
 
+  // ---------- the Status tab: the numbers of the torrent as a table, like in Deluge ----------
+  const fmtDur = (sec) => {
+    const s = Math.max(0, Math.floor(sec)), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d >= 7) return `${Math.floor(d / 7)} нед. ${d % 7} дн.`;
+    if (d > 0) return `${d} дн. ${h} ч`;
+    if (h > 0) return `${h} ч ${m} мин`;
+    if (m > 0) return `${m} мин ${s % 60} с`;
+    return `${s} с`;
+  };
+  const stRow = (label, value, title) => `<div class="st-row"${title ? ` title="${esc(title)}"` : ""}><dt>${label}</dt><dd>${value}</dd></div>`;
+  async function renderStatus(t, same) {
+    let x = { activeSeconds: 0, lastTransfer: -1, availability: 0 };
+    if (t.hasMetadata) { try { x = (await api("GET", `/api/torrents/${t.hash}/status`)) || x; } catch (_) { /* the numbers of the list are enough */ } }
+    if (!same()) return;
+    const eta = t.progress >= 1 || !t.hasMetadata ? "—" : fmtEta(etaOf(t));
+    const totalDone = t.hasMetadata ? `${bytes(t.done)} из ${bytes(t.size)}` : "—";
+    $("pane-status").innerHTML = `<div class="st-bar">${progressBar(t)}</div>
+      ${t.error ? `<p class="err" style="padding:0 16px">${esc(t.error)}</p>` : ""}
+      <div class="st-cols">
+        <dl class="st-col">
+          ${stRow("Скорость загрузки", speed(t.downRate))}
+          ${stRow("Скорость отдачи", speed(t.upRate))}
+          ${stRow("Скачано", bytes(t.downloaded), "Скачано за всё время, вместе с проверенными повторно частями")}
+          ${stRow("Отдано", bytes(t.uploaded))}
+        </dl>
+        <dl class="st-col">
+          ${stRow("Сиды", t.seeds, "Подключённые сиды")}
+          ${stRow("Пиры", t.peers, "Все подключённые пиры")}
+          ${stRow("Рейтинг", t.ratio.toFixed(3))}
+          ${stRow("Доступность", t.hasMetadata ? x.availability.toFixed(3) : "—", "Сколько полных копий раздачи есть у подключённых пиров и у вас")}
+        </dl>
+        <dl class="st-col">
+          ${stRow("Осталось", eta)}
+          ${stRow("Время активности", fmtDur(x.activeSeconds), "Сколько раздача работала, не на паузе")}
+          ${stRow("Время раздачи", fmtDur(t.seedSeconds || 0))}
+          ${stRow("Последняя передача", x.lastTransfer < 0 ? "—" : x.lastTransfer < 2 ? "сейчас" : fmtDur(x.lastTransfer) + " назад", "Когда в последний раз шёл обмен данными (с запуска программы)")}
+        </dl>
+        <dl class="st-col">
+          ${stRow("Размер", t.hasMetadata ? bytes(t.totalSize) : "—")}
+          ${stRow("Готово", totalDone, "Скачано из выбранных файлов")}
+          ${stRow("Добавлена", when(t.added))}
+        </dl>
+      </div>`;
+  }
+
+  // ---------- the Options tab: settings of this torrent ----------
+  let optHash = "", optDirty = false;
+  const optForm = () => $("opt-form");
+  function fillOptions(t, d) {
+    const focused = optForm().contains(document.activeElement);
+    if (optHash !== t.hash) { optHash = t.hash; optDirty = false; }
+    if (!optDirty && !focused) {
+      $("op-conns").value = d.maxConns; $("op-ratio").value = d.ratioLimit; $("op-seedtime").value = d.seedTimeLimit / 60;
+      $("op-movedone-on").checked = !!d.moveDone; $("op-movedone").value = d.moveDone || ""; $("op-movedone").disabled = !d.moveDone;
+      $("op-movedone-pick").disabled = !d.moveDone;
+    }
+    if (document.activeElement !== $("op-seq")) $("op-seq").checked = !!d.sequential;
+    if (document.activeElement !== $("op-edge")) $("op-edge").checked = !!d.edgePieces;
+    const sel = $("op-label");
+    if (document.activeElement !== sel) {
+      sel.innerHTML = '<option value="">Без метки</option>' + allLabels().map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
+      sel.value = d.label || "";
+    }
+    $("op-path").textContent = d.savePath || "—";
+    $("op-path").title = d.savePath || "";
+    $("op-move").disabled = !!t.moving;
+  }
+  for (const id of ["op-conns", "op-ratio", "op-seedtime", "op-movedone-on", "op-movedone"]) $(id).addEventListener("input", () => { optDirty = true; });
+  $("op-movedone-on").addEventListener("change", (e) => { $("op-movedone").disabled = !e.target.checked; $("op-movedone-pick").disabled = !e.target.checked; optDirty = true; });
+  $("op-seq").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "sequential", { enabled: e.target.checked }); refresh(); } catch (x) { toast(x.message, true); } });
+  $("op-edge").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "edge-pieces", { enabled: e.target.checked }); } catch (x) { toast(x.message, true); } });
+  $("op-label").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "label", { label: e.target.value }); refresh(); } catch (x) { toast(x.message, true); } });
+  $("op-move").onclick = () => $("btn-move").click();
+  $("op-apply").onclick = async () => {
+    const t = cur(); if (!t) return;
+    const num = (id) => Number($(id).value) || 0;
+    try {
+      await post(t, "max-connections", { limit: Math.round(num("op-conns")) });
+      await post(t, "ratio-limit", { limit: num("op-ratio") });
+      await post(t, "seed-time-limit", { minutes: Math.round(num("op-seedtime") * 60) });
+      await post(t, "move-done", { path: $("op-movedone-on").checked ? $("op-movedone").value.trim() : "" });
+      optDirty = false; toast("Параметры раздачи сохранены"); renderDetails();
+    } catch (x) { toast(x.message, true); }
+  };
+
   async function renderDetails() {
     const t = cur();
     showTab();
@@ -535,7 +698,7 @@
       $("btn-recheck").disabled = true;
       $("file-actions").hidden = true;
       filesKey = "";
-      for (const id of ["files", "pane-general", "pane-peers", "tr-list"]) $(id).innerHTML = "";
+      for (const id of ["files", "pane-status", "pane-general", "pane-peers", "tr-list"]) $(id).innerHTML = "";
       for (const id of Object.values(PANES)) $(id).hidden = true; // the address form of the trackers belongs to one torrent
       $("d-empty").textContent = n > 1 ? `Выбрано раздач: ${n}. Подробности показываются, когда выбрана одна.` : "Выберите раздачу, чтобы увидеть подробности.";
       $("d-empty").hidden = false;
@@ -543,6 +706,13 @@
     }
     $("btn-recheck").disabled = !t.hasMetadata || t.checking || !!t.moving;
     if (tab === "files") return renderFiles();
+    if (tab === "status") return renderStatus(t, () => cur() && cur().hash === t.hash);
+    if (tab === "options") {
+      $("opt-none").hidden = t.hasMetadata; optForm().hidden = !t.hasMetadata;
+      if (!t.hasMetadata) return;
+      try { const d = await api("GET", `/api/torrents/${t.hash}/details`); if (cur() && cur().hash === t.hash) fillOptions(t, d); } catch (_) { /* retried on the next tick */ }
+      return;
+    }
     if (!t.hasMetadata) { $(PANES[tab]).innerHTML = '<p class="none">Ждём метаданные…</p>'; return; }
     const same = () => cur() && cur().hash === t.hash; // the selection may change while a request is out
     if (tab === "general" && $("pane-general").contains(document.activeElement)) return; // do not rebuild under the cursor
@@ -560,22 +730,7 @@
           <dt>Создана</dt><dd>${when(d.createdAt)}${d.createdBy ? " · " + esc(d.createdBy) : ""}</dd>
           <dt>Тип</dt><dd>${d.private ? "Приватная" : "Публичная"}</dd>
           ${d.comment ? `<dt>Комментарий</dt><dd>${esc(d.comment)}</dd>` : ""}
-          <dt>Лимит подключений</dt><dd><input type="number" id="mc-input" min="0" max="1000" value="${d.maxConns}" style="width:84px;margin:0;height:28px"> <button class="btn small" id="mc-save">Применить</button> <span class="muted small">0 — как в настройках (сейчас ${d.connLimit})</span></dd>
-          <dt>Лимит рейтинга</dt><dd><input type="number" id="rl-input" min="0" step="0.1" value="${d.ratioLimit}" style="width:84px;margin:0;height:28px"> <button class="btn small" id="rl-save">Применить</button> <span class="muted small">0 — как в настройках (сейчас ${d.ratioInForce ? d.ratioInForce : "без лимита"}); при достижении раздача останавливается</span></dd>
-          <dt>Время раздачи</dt><dd><input type="number" id="sl-input" min="0" step="0.5" value="${d.seedTimeLimit / 60}" style="width:84px;margin:0;height:28px"> ч <button class="btn small" id="sl-save">Применить</button> <span class="muted small">0 — как в настройках (сейчас ${d.seedTimeInForce ? fmtHours(d.seedTimeInForce) : "без лимита"}); уже раздаётся ${fmtDuration(d.seedSeconds)}</span></dd>
           <dt>Magnet-ссылка</dt><dd><button class="btn small" id="copy-magnet">Скопировать</button></dd></dl>`;
-        $("rl-save").onclick = async () => {
-          try { await post(t, "ratio-limit", { limit: Number($("rl-input").value) || 0 }); toast("Лимит рейтинга сохранён"); $("rl-input").blur(); renderDetails(); }
-          catch (x) { toast(x.message, true); }
-        };
-        $("sl-save").onclick = async () => {
-          try { await post(t, "seed-time-limit", { minutes: Math.round((Number($("sl-input").value) || 0) * 60) }); toast("Лимит времени раздачи сохранён"); $("sl-input").blur(); renderDetails(); }
-          catch (x) { toast(x.message, true); }
-        };
-        $("mc-save").onclick = async () => {
-          try { await post(t, "max-connections", { limit: Number($("mc-input").value) || 0 }); toast("Лимит подключений сохранён"); $("mc-input").blur(); renderDetails(); }
-          catch (x) { toast(x.message, true); }
-        };
         $("copy-magnet").onclick = () => navigator.clipboard.writeText(d.magnet).then(() => toast("Magnet-ссылка скопирована"), () => toast("Не удалось скопировать", true));
       } else if (tab === "peers") {
         const p = await api("GET", `/api/torrents/${t.hash}/peers`); if (!same()) return;
@@ -899,10 +1054,15 @@
   $("files").addEventListener("change", (e) => {
     const sel = e.target.closest("[data-prio]");
     if (sel) { const i = Number(sel.dataset.prio); setPriority(fileSel.has(i) && fileSel.size > 1 ? filesForAction() : [i], sel.value); }
+    const ds = e.target.closest("[data-dprio]");
+    if (ds && ds.value) setPriority(dirIdx.get(ds.dataset.dprio) || [], ds.value);
   });
   $("files").addEventListener("click", (e) => {
+    const chev = e.target.closest("[data-toggle]");
+    if (chev) { const t = cur(); if (!t) return; const c = closedOf(t.hash), p = chev.dataset.toggle; c.has(p) ? c.delete(p) : c.add(p); renderFiles(); return; }
     if (e.target.closest("select, button, option")) return;
-    const row = e.target.closest(".file"); if (row) fileClick(e, Number(row.dataset.i));
+    const row = e.target.closest(".file"); if (!row) return;
+    if (row.dataset.dir !== undefined) dirClick(e, row.dataset.dir); else fileClick(e, Number(row.dataset.i));
   });
   $("f-prio").addEventListener("change", () => {
     const v = $("f-prio").value; if (!v || !fileSel.size) return;
@@ -922,8 +1082,8 @@
   $("files").addEventListener("contextmenu", (e) => {
     const row = e.target.closest(".file"); if (!row) return;
     e.preventDefault();
-    const i = Number(row.dataset.i);
-    if (!fileSel.has(i)) { fileSel.clear(); fileSel.add(i); fileAnchor = i; renderFileSel(); }
+    const own = row.dataset.dir !== undefined ? dirIdx.get(row.dataset.dir) || [] : [Number(row.dataset.i)], i = own[0];
+    if (own.length && !own.every((x) => fileSel.has(x))) { fileSel.clear(); own.forEach((x) => fileSel.add(x)); fileAnchor = i; renderFileSel(); }
     const menu = $("ctx"), n = fileSel.size;
     menu.innerHTML = `<div class="ctx-head">${n > 1 ? `Выбрано файлов: ${n}` : "Файл"}</div>` +
       PRIO.map(([v, name]) => `<button role="menuitem" data-fprio="${v}">${name}</button>`).join("") +

@@ -635,3 +635,42 @@ html[data-density="compact"] .seg-note { display: none; }
 
 /* the move button is not on the toolbar any more; the right-click menu still uses it */
 .btn[hidden] { display: none; }
+
+/* files as a tree */
+.fhead { display: grid; grid-template-columns: 1fr 70px 100px 132px 34px; gap: 12px; align-items: center; padding: 5px 16px; position: sticky; top: 0; z-index: 1; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.fhead .r { text-align: right; }
+.file .fn { padding-left: calc(var(--d, 0) * 18px); display: flex; align-items: center; min-width: 0; }
+.file .fn > span, .file:not(.dir) .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.file.dir .fn { font-weight: 600; white-space: nowrap; overflow: hidden; }
+.file.dir .fn .i { width: 16px; height: 16px; flex: none; margin: 0 7px 0 2px; color: var(--warn); }
+.chev { flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; }
+.chev:hover { background: var(--hover); color: var(--text); }
+.file.dir { background: color-mix(in srgb, var(--panel-2) 60%, transparent); }
+.file.dir.sel { background: var(--accent-soft); }
+@media (max-width: 820px) { .fhead { grid-template-columns: 1fr 120px 34px; } .fhead span:nth-child(2), .fhead span:nth-child(3) { display: none; } }
+
+/* status tab */
+.st-bar { padding: 12px 16px 8px; }
+.st-bar .pbar { height: 22px; }
+.st-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 28px; padding: 4px 16px 12px; }
+.st-col { margin: 0; }
+.st-row { display: flex; justify-content: space-between; gap: 14px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.st-row dt { color: var(--muted); font-weight: 600; }
+.st-row dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+
+/* options tab */
+.opt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 16px; padding: 4px 16px 12px; }
+.opt-form fieldset { margin: 8px 0; }
+.opt-form label:not(.check) { display: grid; grid-template-columns: 1fr 96px; gap: 2px 10px; align-items: center; }
+.opt-form label:not(.check) > .muted { grid-column: 1 / -1; margin-top: -4px; }
+.opt-form label:not(.check) select { grid-column: 2; }
+.opt-form input[type=number] { margin-top: 0; }
+.opt-form label:not(.check) > input, .opt-form label:not(.check) > select { grid-column: 2; grid-row: 1; margin-top: 0; }
+.opt-form label:not(.check) { font-weight: 550; font-size: 13px; }
+.op-path { margin: 8px 0; }
+.op-pathval { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font-size: 12.5px; }
+.opt-form label.check { display: flex; gap: 9px; align-items: flex-start; margin: 8px 0; font-weight: 500; font-size: 13px; }
+.opt-form label.check input { width: auto; height: auto; margin-top: 3px; }
+.opt-form .pick { margin-bottom: 6px; }
+.opt-form .row-end { margin-top: 8px; }
+.file.dir.skip .fn, .file.dir.skip .fs { text-decoration: none; opacity: .6; }

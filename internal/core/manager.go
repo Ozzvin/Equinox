@@ -74,6 +74,7 @@ type Manager struct {
 	gateActive       map[string]bool          // released torrents that are still in their first check
 	rechecking       map[string]bool          // rechecks the user asked for that hold a slot
 	seedPend         map[string]time.Duration // seeding time counted but not yet written to the records
+	activePend       map[string]time.Duration // running time counted but not yet written to the records
 	lastEnforce      time.Time
 	evMu             sync.Mutex
 	onEvent          func(Event)
@@ -128,6 +129,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		phase:      map[string]*checkPhase{},
 		checkProg:  map[string]float64{},
 		seedPend:   map[string]time.Duration{},
+		activePend: map[string]time.Duration{},
 		held:       map[string]*heldInfo{},
 		gateActive: map[string]bool{},
 		rechecking: map[string]bool{},

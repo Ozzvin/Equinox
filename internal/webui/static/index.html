@@ -78,8 +78,10 @@
 <section class="details" id="details" aria-label="Подробности раздачи">
   <div class="details-head">
     <div class="tabs" id="tabs" role="tablist" aria-label="Подробности">
-      <button role="tab" data-tab="files" aria-selected="true">Файлы</button>
-      <button role="tab" data-tab="general" aria-selected="false">Общее</button>
+      <button role="tab" data-tab="status" aria-selected="true">Статус</button>
+      <button role="tab" data-tab="general" aria-selected="false">Подробности</button>
+      <button role="tab" data-tab="options" aria-selected="false">Параметры</button>
+      <button role="tab" data-tab="files" aria-selected="false">Файлы</button>
       <button role="tab" data-tab="peers" aria-selected="false">Пиры</button>
       <button role="tab" data-tab="trackers" aria-selected="false">Трекеры</button>
     </div>
@@ -99,8 +101,34 @@
   </div>
   <div class="details-body">
   <div id="d-empty" class="pane none" hidden></div>
-  <div id="files" class="pane" tabindex="0" aria-label="Файлы раздачи: Ctrl и Shift выделяют несколько"></div>
+  <div id="pane-status" class="pane" hidden></div>
+  <div id="files" class="pane" tabindex="0" aria-label="Файлы раздачи: Ctrl и Shift выделяют несколько" hidden></div>
   <div id="pane-general" class="pane" hidden></div>
+  <div id="pane-options" class="pane" hidden>
+    <p id="opt-none" class="none" hidden>Ждём метаданные…</p>
+    <div id="opt-form" class="opt-form">
+      <fieldset>
+        <legend>Ограничения раздачи</legend>
+        <label>Лимит подключений<input type="number" id="op-conns" min="0" max="1000"><span class="muted small">0 — как в настройках</span></label>
+        <label>Остановить раздачу при рейтинге<input type="number" id="op-ratio" min="0" step="0.1"><span class="muted small">0 — как в настройках</span></label>
+        <label>Остановить раздачу через, ч<input type="number" id="op-seedtime" min="0" step="0.5"><span class="muted small">0 — как в настройках</span></label>
+        <p class="muted small">Лимиты скорости для отдельной раздачи движок не поддерживает: они задаются общие, в настройках.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Загрузка</legend>
+        <label class="check"><input type="checkbox" id="op-seq"><span>Последовательная загрузка<br><span class="muted small">Части качаются по порядку: удобно смотреть по ходу загрузки</span></span></label>
+        <label class="check"><input type="checkbox" id="op-edge"><span>Первые и последние части файлов в первую очередь</span></label>
+        <label class="check"><input type="checkbox" id="op-movedone-on"><span>Переместить завершённую раздачу в:</span></label>
+        <span class="pick"><input id="op-movedone" autocomplete="off" disabled><button type="button" class="btn small" id="op-movedone-pick" data-pick="op-movedone" disabled>Обзор…</button></span>
+      </fieldset>
+      <fieldset>
+        <legend>Раздача</legend>
+        <label>Метка<select id="op-label"></select></label>
+        <div class="op-path"><span class="muted small">Папка загрузки</span><div class="pick"><span id="op-path" class="op-pathval"></span><button type="button" class="btn small" id="op-move">Переместить…</button></div></div>
+        <div class="row-end"><button type="button" class="btn primary small" id="op-apply">Применить</button></div>
+      </fieldset>
+    </div>
+  </div>
   <div id="pane-peers" class="pane" hidden></div>
   <div id="pane-trackers" class="pane" hidden>
     <div id="tr-list"></div>

@@ -33,6 +33,11 @@ type Details struct {
 	SeedTimeLimit   int       `json:"seedTimeLimit"`   // this torrent's own seeding time limit in minutes, 0 = the global setting
 	SeedTimeInForce int       `json:"seedTimeInForce"` // the seeding time limit actually in force, 0 = none
 	SeedSeconds     int64     `json:"seedSeconds"`
+	// options of the torrent
+	Sequential bool   `json:"sequential"`
+	EdgePieces bool   `json:"edgePieces"`
+	MoveDone   string `json:"moveDone"` // this torrent's own "move when finished" folder, "" = the global setting
+	Label      string `json:"label"`
 }
 
 // Tracker is one announce URL. The engine does not report tracker health, so there is no
@@ -66,6 +71,7 @@ func (m *Manager) Details(hash string) (Details, error) {
 		MaxConns: rec.MaxConns, ConnLimit: m.connLimit(rec),
 		RatioLimit: rec.RatioLimit, RatioInForce: rec.RatioLimit,
 		SeedTimeLimit: rec.SeedTimeLimit, SeedTimeInForce: m.seedLimit(rec), SeedSeconds: m.seedSeconds(hash, rec),
+		Sequential: rec.Sequential, EdgePieces: rec.EdgePieces, MoveDone: rec.MoveDone, Label: rec.Label,
 	}
 	if mi.CreationDate > 0 {
 		d.CreatedAt = time.Unix(mi.CreationDate, 0)
