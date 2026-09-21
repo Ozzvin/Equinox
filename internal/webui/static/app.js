@@ -407,13 +407,18 @@
   const SOURCES = { tracker: "Трекер", dht: "DHT", pex: "PEX", incoming: "Входящий", other: "—" };
 
   // ---------- the peers table: columns, order, widths and sorting are the user's, like in the main list ----------
+  // The peer's progress is a bar like the torrents' own: blue for a peer that has everything (a seed), green for one that is still downloading.
+  function peerBar(x) {
+    const pct = x.progress * 100, text = pct >= 100 ? "100%" : pct.toFixed(1) + "%", label = esc(text);
+    return `<div class="pbar ${pct >= 100 ? "seed" : "down"}" title="${label}"><div class="fill" style="width:${pct.toFixed(1)}%"><span class="lb">${label}</span></div><span class="lb base">${label}</span></div>`;
+  }
   const PCOLS = [
     { id: "addr", title: "Адрес", always: true, w: 240, sort: (x) => x.addr, cell: (x) => `${x.incoming ? "←" : "→"} ${esc(x.addr)}`, tipOf: (x) => (x.incoming ? "входящее подключение" : "исходящее подключение") },
     { id: "client", title: "Клиент", w: 190, sort: (x) => (x.client || "").toLowerCase(), cell: (x) => esc(x.client || "—") },
     { id: "source", title: "Источник", w: 120, sort: (x) => SOURCES[x.source] || "", cell: (x) => SOURCES[x.source] || "—" },
     { id: "dir", title: "Направление", w: 120, sort: (x) => (x.incoming ? 0 : 1), cell: (x) => (x.incoming ? "Входящее" : "Исходящее") },
     { id: "network", title: "Сеть", w: 80, sort: (x) => x.network || "", cell: (x) => esc(x.network || "—") },
-    { id: "progress", title: "Прогресс", r: true, w: 100, sort: (x) => x.progress, cell: (x) => (x.progress * 100).toFixed(0) + "%" },
+    { id: "progress", title: "Прогресс", w: 130, sort: (x) => x.progress, cell: (x) => peerBar(x) },
     { id: "down", title: "Загрузка ↓", menu: "Скорость загрузки", r: true, w: 110, sort: (x) => x.downRate, cell: (x) => speed(x.downRate) },
     { id: "up", title: "Отдача ↑", menu: "Скорость отдачи", r: true, w: 110, sort: (x) => x.upRate, cell: (x) => speed(x.upRate) },
     { id: "downloaded", title: "Скачано", r: true, w: 100, sort: (x) => x.downloaded, cell: (x) => bytes(x.downloaded) },
