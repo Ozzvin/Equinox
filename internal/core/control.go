@@ -27,6 +27,7 @@ type Status struct {
 	DownRate      int64     `json:"downRate"` // bytes/s
 	Added         time.Time `json:"added"`    // when the torrent was added
 	UpRate        int64     `json:"upRate"`
+	Active        bool      `json:"active"`     // moved data in the last few seconds
 	Downloaded    int64     `json:"downloaded"` // lifetime payload bytes
 	Uploaded      int64     `json:"uploaded"`
 	Ratio         float64   `json:"ratio"`
@@ -418,6 +419,10 @@ func (m *Manager) List() []Status {
 	for h, r := range m.rates {
 		rates[h] = r
 	}
+	activeAt := map[metainfo.Hash]time.Time{}
+	for h, at := range m.activeAt {
+		activeAt[h] = at
+	}
 	queued := map[metainfo.Hash]int{}
 	for h, q := range m.queued {
 		queued[h] = q
@@ -464,6 +469,7 @@ func (m *Manager) List() []Status {
 			Hash: h.HexString(), Name: t.Name(), Downloaded: r.Downloaded, Uploaded: r.Uploaded,
 			Added: r.Added, Paused: r.Paused, Sequential: r.Sequential, Label: r.Label, SavePath: m.saveDir(h.HexString()), CopyPath: r.CopyPath,
 			DownRate: rates[h][0], UpRate: rates[h][1], Queued: queued[h],
+			Active: time.Since(activeAt[h]) < activeHold,
 		}
 		if t.Info() != nil {
 			st.HasMeta = true
@@ -539,6 +545,7 @@ func (m *Manager) loop(ctx context.Context) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	lastDown, lastUp := map[metainfo.Hash]int64{}, map[metainfo.Hash]int64{}
+	hist := map[metainfo.Hash]*window{}
 	flush, tickN := 0, 0
 	for {
 		select {
@@ -555,14 +562,29 @@ func (m *Manager) loop(ctx context.Context) {
 		m.mu.Unlock()
 
 		rates := map[metainfo.Hash][2]int64{}
+		moved := map[metainfo.Hash]bool{}
 		for _, t := range ts {
 			h := t.InfoHash()
 			d, u := counters(t)
-			rates[h] = [2]int64{d - lastDown[h], u - lastUp[h]}
+			w := hist[h]
+			if w == nil {
+				w = &window{}
+				hist[h] = w
+			}
+			w.add(d-lastDown[h], u-lastUp[h])
+			moved[h] = d != lastDown[h] || u != lastUp[h]
+			rd, ru := w.mean()
+			rates[h] = [2]int64{rd, ru}
 			lastDown[h], lastUp[h] = d, u
 		}
+		now := time.Now()
 		m.mu.Lock()
 		m.rates = rates
+		for h, ok := range moved {
+			if ok {
+				m.activeAt[h] = now
+			}
+		}
 		m.mu.Unlock()
 
 		if flush++; flush%15 == 0 {

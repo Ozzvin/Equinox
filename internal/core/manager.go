@@ -52,7 +52,10 @@ type Manager struct {
 	torrents map[metainfo.Hash]*torrent.Torrent
 	// counters already folded into the persisted record, per torrent (session-relative).
 	seenDown, seenUp map[metainfo.Hash]int64
-	rates            map[metainfo.Hash][2]int64  // bytes/s: down, up
+	rates            map[metainfo.Hash][2]int64  // bytes/s: down, up (averaged over a few seconds)
+	activeAt         map[metainfo.Hash]time.Time // when each torrent last moved data
+	peerRates        map[string]*peerRate        // smoothed speeds of connections, by torrent and address
+	peerSeen         map[string]time.Time
 	perm             map[metainfo.Hash]permState // what the engine was last told each torrent may do
 	queued           map[metainfo.Hash]int       // waiting torrents: 1 = next in line
 	schedIn          bool                        // last evaluation of the turtle schedule window
@@ -110,6 +113,9 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		seenUp:     map[metainfo.Hash]int64{},
 		perm:       map[metainfo.Hash]permState{},
 		queued:     map[metainfo.Hash]int{},
+		activeAt:   map[metainfo.Hash]time.Time{},
+		peerRates:  map[string]*peerRate{},
+		peerSeen:   map[string]time.Time{},
 		moves:      map[string]*moveJob{},
 		checking:   map[string]bool{},
 		errs:       map[string]torrentError{},

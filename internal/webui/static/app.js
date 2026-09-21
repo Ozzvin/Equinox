@@ -163,7 +163,7 @@
     if (f.label === "none") { if (t.label) return false; }
     else if (f.label.startsWith("l:") && t.label !== f.label.slice(2)) return false;
     switch (f.state) {
-      case "active": return !!t.checking || (!t.paused && (t.downRate > 0 || t.upRate > 0));
+      case "active": return !!t.checking || (!t.paused && (t.active || t.downRate > 0 || t.upRate > 0));
       case "downloading": return !t.paused && t.queued === 0 && !t.checking && !t.checkQueued && (!t.hasMetadata || t.progress < 1);
       case "checking": return !!t.checking || t.checkQueued > 0;
       case "seeding": return !t.paused && t.hasMetadata && t.progress >= 1;

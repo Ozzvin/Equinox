@@ -131,9 +131,9 @@ func (m *Manager) Peers(hash string) ([]Peer, error) {
 		p := Peer{
 			Addr: pc.RemoteAddr.String(), Network: pc.Network,
 			Downloaded: st.BytesReadUsefulData.Int64(), Uploaded: st.BytesWrittenData.Int64(),
-			DownRate: int64(st.DownloadRate), UpRate: int64(st.LastWriteUploadRate),
 			Source: sourceName(pc.Discovery),
 		}
+		p.DownRate, p.UpRate = m.peerSpeed(hash, p.Addr, p.Downloaded, p.Uploaded)
 		if v, ok := pc.PeerClientName.Load().(string); ok {
 			p.Client = v
 		}
