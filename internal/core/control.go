@@ -286,6 +286,11 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 	fs := t.Files()
 	prios := m.filePrios(hash)
 	out := make([]FileStatus, len(fs))
+	// the engine reports the path inside the torrent; a torrent made from a folder keeps that folder as its root
+	root := ""
+	if info := t.Info(); info != nil && info.IsDir() {
+		root = t.Name() + "/"
+	}
 	for i, f := range fs {
 		done := f.BytesCompleted()
 		p := 0.0
@@ -301,7 +306,7 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 		case PrioLow:
 			name = "low"
 		}
-		out[i] = FileStatus{Index: i, Path: f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
+		out[i] = FileStatus{Index: i, Path: root + f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
 	}
 	return out, nil
 }

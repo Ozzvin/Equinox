@@ -74,6 +74,9 @@ func TestSkippedFilesCostNothingAndProgressUsesSelection(t *testing.T) {
 		t.Fatalf("size must cover the selection only: total=%d selected=%d", l.TotalSize, l.Size)
 	}
 	files, _ := m.Files(hash)
+	if files[0].Path != "pack/a.bin" || files[1].Path != "pack/b.bin" {
+		t.Fatalf("a torrent made from a folder must report the folder as the root of every path: %+v", files)
+	}
 	if files[0].Priority != "skip" || files[1].Priority != "normal" {
 		t.Fatalf("priorities not reported: %+v", files)
 	}
