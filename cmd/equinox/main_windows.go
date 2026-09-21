@@ -86,7 +86,7 @@ func main() {
 	_ = os.WriteFile(filepath.Join(*stateDir, "ui-url"), []byte(a.URL), 0o600)
 	addArgs(a, args)
 
-	d := &desktop_{app: a, show: make(chan struct{}, 1), quit: make(chan struct{}), stateDir: *stateDir, listen: *listen, place: newPlacer(*stateDir)}
+	d := &desktop_{app: a, show: make(chan struct{}, 1), quit: make(chan struct{}), stateDir: *stateDir, listen: *listen, place: newPlacer(*stateDir, func() bool { return a.Settings.Get().RememberWindow })}
 	go systray.Run(d.onTrayReady, func() {})
 	a.Manager.OnEvent(d.notify)
 	go func() { // a second launch of the program signals this event

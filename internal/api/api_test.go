@@ -440,3 +440,37 @@ func TestSetupDoneIsStoredAndKept(t *testing.T) {
 		t.Fatal("a save without the flag must keep it")
 	}
 }
+
+// The window setting is off by default and is switched through the ordinary settings save.
+func TestRememberWindowSetting(t *testing.T) {
+	e := setup(t)
+	get := func() bool {
+		var s struct {
+			RememberWindow bool `json:"rememberWindow"`
+		}
+		r := e.do(t, "GET", "/api/settings", nil, nil)
+		_ = json.NewDecoder(r.Body).Decode(&s)
+		return s.RememberWindow
+	}
+	put := func(extra string) {
+		body := `{"downLimitKBps":0,"upLimitKBps":0,"altDownLimitKBps":0,"altUpLimitKBps":0,"ratioLimit":0,"maxActiveDownloads":0,"copyRemovePolicy":"with_data"` + extra + `}`
+		if r := e.do(t, "PUT", "/api/settings", bytes.NewReader([]byte(body)), nil); r.StatusCode != 200 {
+			t.Fatalf("put: %d", r.StatusCode)
+		}
+	}
+	if get() {
+		t.Fatal("remembering the window must be off by default")
+	}
+	put(`,"rememberWindow":true`)
+	if !get() {
+		t.Fatal("not stored")
+	}
+	put(``)
+	if !get() {
+		t.Fatal("a save without the field must keep it")
+	}
+	put(`,"rememberWindow":false`)
+	if get() {
+		t.Fatal("not switched off")
+	}
+}

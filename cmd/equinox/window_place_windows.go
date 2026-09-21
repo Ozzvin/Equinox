@@ -52,11 +52,13 @@ type placer struct {
 	at    time.Time // last change of the window's own size or position
 	w     webview2.WebView
 	hwnd  uintptr
+	// remember says whether the setting "Сохранять положение и размер окна" is on
+	remember func() bool
 }
 
-func newPlacer(stateDir string) *placer {
+func newPlacer(stateDir string, remember func() bool) *placer {
 	path := filepath.Join(stateDir, "window.json")
-	return &placer{path: path, prefs: desktop.LoadWindowPrefs(path)}
+	return &placer{path: path, prefs: desktop.LoadWindowPrefs(path), remember: remember}
 }
 
 // startSize is the client size the window is created with: the default of the density it had last.
@@ -70,7 +72,7 @@ func (p *placer) startSize() desktop.Size {
 func (p *placer) hasPos() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.prefs.HasPos && p.visible(p.prefs.X, p.prefs.Y)
+	return p.remember() && p.prefs.HasPos && p.visible(p.prefs.X, p.prefs.Y)
 }
 
 func (p *placer) visible(x, y int) bool {
@@ -85,19 +87,19 @@ func (p *placer) visible(x, y int) bool {
 func (p *placer) attach(w webview2.WebView, hwnd uintptr) {
 	p.mu.Lock()
 	p.w, p.hwnd = w, hwnd
-	d := p.prefs.Density
+	d, keep := p.prefs.Density, p.remember()
 	w.SetSize(desktop.MinSize(d).W, desktop.MinSize(d).H, webview2.HintMin)
-	if s, ok := p.prefs.Saved(d); ok {
+	if s, ok := p.prefs.Saved(d); ok && keep {
 		p.setOuter(s)
 	} else {
 		ds := desktop.DefaultSize(d)
 		w.SetSize(ds.W, ds.H, webview2.HintNone)
 	}
-	if p.prefs.HasPos && p.visible(p.prefs.X, p.prefs.Y) {
+	if keep && p.prefs.HasPos && p.visible(p.prefs.X, p.prefs.Y) {
 		pSetWindowPos.Call(hwnd, 0, uintptr(p.prefs.X), uintptr(p.prefs.Y), 0, 0, swpNoSize|swpNoZOrder|swpNoActivate)
 	}
 	p.keepOnScreen()
-	max := p.prefs.Max
+	max := p.prefs.Max && keep
 	p.mu.Unlock()
 	if max {
 		pShowWindow.Call(hwnd, swMaximize)
@@ -154,7 +156,7 @@ func (p *placer) setDensity(d string) string {
 	p.prefs.Density = d
 	p.w.SetSize(desktop.MinSize(d).W, desktop.MinSize(d).H, webview2.HintMin)
 	if zoomed, _, _ := pIsZoomed.Call(p.hwnd); zoomed == 0 {
-		if s, ok := p.prefs.Saved(d); ok {
+		if s, ok := p.prefs.Saved(d); ok && p.remember() {
 			p.setOuter(s)
 		} else {
 			ds := desktop.DefaultSize(d)
@@ -188,7 +190,7 @@ func (p *placer) resetSize() string {
 // snapshot copies the window's current outer size and position into the preferences. The caller
 // holds the lock. It reports whether anything changed.
 func (p *placer) snapshot() bool {
-	if p.hwnd == 0 {
+	if p.hwnd == 0 || !p.remember() {
 		return false
 	}
 	if iconic, _, _ := pIsIconic.Call(p.hwnd); iconic != 0 {
@@ -229,6 +231,10 @@ func (p *placer) watch(stop <-chan struct{}) {
 			return
 		case <-tick.C:
 			p.mu.Lock()
+			if !p.remember() && (len(p.prefs.Sizes) > 0 || p.prefs.HasPos || p.prefs.Max) { // switched off: forget what was kept
+				p.prefs.Sizes, p.prefs.HasPos, p.prefs.Max = map[string]desktop.Size{}, false, false
+				p.dirty, p.at = true, time.Now()
+			}
 			if p.snapshot() {
 				p.dirty, p.at = true, time.Now()
 			}
@@ -246,7 +252,11 @@ func (p *placer) save() {
 		return
 	}
 	p.dirty = false
-	if err := p.prefs.Save(p.path); err != nil {
+	out := p.prefs
+	if !p.remember() { // only the density is kept, so the next window starts in the right one
+		out = desktop.WindowPrefs{Density: p.prefs.Density}
+	}
+	if err := out.Save(p.path); err != nil {
 		log.Println("window: cannot save its place:", err)
 	}
 }

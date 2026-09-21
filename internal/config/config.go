@@ -127,6 +127,9 @@ type Settings struct {
 	StartHidden    bool `json:"startHidden"`
 	CloseToTray    bool `json:"closeToTray"`
 	MinimizeToTray bool `json:"minimizeToTray"`
+	// RememberWindow: the window opens at the size and place it had when it was closed (off: the default size
+	// of the interface density, in the middle of the screen).
+	RememberWindow bool `json:"rememberWindow"`
 
 	// SetupDone is set once the first-run setup guide was finished or skipped.
 	SetupDone bool `json:"setupDone"`

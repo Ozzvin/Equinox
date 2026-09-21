@@ -594,6 +594,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		SetupDone        *bool               `json:"setupDone"`            // optional
 		CloseToTray      *bool               `json:"closeToTray"`          // optional
 		MinimizeToTray   *bool               `json:"minimizeToTray"`       // optional
+		RememberWindow   *bool               `json:"rememberWindow"`       // optional
 		MaxChecks        *int                `json:"maxConcurrentChecks"`  // optional
 		AddPaused        *bool               `json:"addPaused"`            // optional
 		SpeedUnit        *string             `json:"speedUnit"`            // optional: bytes | bits
@@ -712,6 +713,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.MinimizeToTray != nil {
 			c.MinimizeToTray = *b.MinimizeToTray
+		}
+		if b.RememberWindow != nil {
+			c.RememberWindow = *b.RememberWindow
 		}
 		if b.MaxChecks != nil {
 			c.MaxConcurrentChecks = *b.MaxChecks
