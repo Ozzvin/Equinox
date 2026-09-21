@@ -115,7 +115,7 @@ type Settings struct {
 	// in a line (0 = no limit).
 	MaxConcurrentChecks int `json:"maxConcurrentChecks"`
 
-	// SpeedUnit is how speeds are shown: "bytes" (КБ/с, МБ/с) or "bits" (Кбит/с, Мбит/с).
+	// SpeedUnit is how speeds are shown: "bytes" (КБ/с, МБ/с) or "bits" (Кб/с, Мб/с).
 	SpeedUnit string `json:"speedUnit"`
 
 	// NotifyOnComplete makes the desktop application show a Windows notification when a download finishes.

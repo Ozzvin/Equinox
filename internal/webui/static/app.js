@@ -43,18 +43,18 @@
   // (decimal prefixes, as networks count them).
   const bitsMode = () => !!(typeof settings !== "undefined" && settings && settings.speedUnit === "bits");
   function bitrate(n) {
-    const units = ["бит/с", "Кбит/с", "Мбит/с", "Гбит/с"];
+    const units = ["б/с", "Кб/с", "Мб/с", "Гб/с"];
     let v = n * 8, i = 0;
     while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
     return (i === 0 || v >= 100 ? v.toFixed(0) : v.toFixed(1)) + " " + units[i];
   }
   const speed = (n) => (n > 0 ? (bitsMode() ? bitrate(n) : bytes(n) + "/с") : "—");
-  const speedZero = () => (bitsMode() ? "0 бит/с" : "0 Б/с");
+  const speedZero = () => (bitsMode() ? "0 б/с" : "0 Б/с");
   // Speed limits are stored in KiB/s. They are shown and typed in the unit chosen for speeds: the same КБ/с
   // as in the list, or Кбит/с (1 KiB/s = 8.192 kbit/s). A field that was not touched keeps the stored value
   // as it is, so saving never shifts a limit by rounding.
   const KIB_KBIT = 8.192;
-  const limitUnit = (bits) => (bits ? "Кбит/с" : "КБ/с");
+  const limitUnit = (bits) => (bits ? "Кб/с" : "КБ/с");
   const limitShow = (kib, bits) => (bits ? Math.round(kib * KIB_KBIT) : kib);
   const limitStore = (v, bits) => Math.max(0, bits ? Math.round(v / KIB_KBIT) : Math.floor(v));
   // a limit field remembers the stored value; `dirty` says the person changed what it shows

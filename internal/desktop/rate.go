@@ -3,19 +3,19 @@ package desktop
 import "fmt"
 
 // FormatRate writes a speed given in bytes per second, either as bytes (КБ/с, МБ/с: binary prefixes, like
-// sizes) or as bits (Кбит/с, Мбит/с: decimal prefixes, the way networks are measured).
+// sizes) or as bits (Кб/с, Мб/с: decimal prefixes, the way networks are measured).
 func FormatRate(bytesPerSec int64, bits bool) string {
 	if bits {
 		v := float64(bytesPerSec) * 8
 		switch {
 		case v >= 1e9:
-			return fmt.Sprintf("%.1f Гбит/с", v/1e9)
+			return fmt.Sprintf("%.1f Гб/с", v/1e9)
 		case v >= 1e6:
-			return fmt.Sprintf("%.1f Мбит/с", v/1e6)
+			return fmt.Sprintf("%.1f Мб/с", v/1e6)
 		case v >= 1e3:
-			return fmt.Sprintf("%.0f Кбит/с", v/1e3)
+			return fmt.Sprintf("%.0f Кб/с", v/1e3)
 		}
-		return fmt.Sprintf("%.0f бит/с", v)
+		return fmt.Sprintf("%.0f б/с", v)
 	}
 	switch {
 	case bytesPerSec >= 1<<20:
