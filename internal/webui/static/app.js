@@ -586,8 +586,8 @@
       } else if (tab === "trackers") {
         const d = await api("GET", `/api/torrents/${t.hash}/details`); if (!same()) return;
         $("tr-list").innerHTML = d.trackers.length === 0 ? '<p class="none">У раздачи нет трекеров: пиры ищутся через DHT</p>' :
-          `<table class="mini trk"><colgroup><col><col style="width:84px"><col style="width:140px"></colgroup><thead><tr><th>Адрес</th><th>Уровень</th><th></th></tr></thead><tbody>` +
-          d.trackers.map((x) => `<tr><td><div class="tr-url${trOpen.has(x.url) ? " open" : ""}" role="button" tabindex="0" aria-expanded="${trOpen.has(x.url)}" data-url="${esc(x.url)}" title="${trOpen.has(x.url) ? "Нажмите, чтобы свернуть" : "Нажмите, чтобы показать целиком"}">${esc(x.url)}</div></td><td>${x.tier}</td><td>${x.added ? "добавлен вами" : ""}</td></tr>`).join("") + "</tbody></table>";
+          `<table class="mini trk"><colgroup><col><col style="width:84px"><col style="width:250px"></colgroup><thead><tr><th>Адрес</th><th>Уровень</th><th></th></tr></thead><tbody>` +
+          d.trackers.map((x) => `<tr><td><div class="tr-url${trOpen.has(x.url) ? " open" : ""}" role="button" tabindex="0" aria-expanded="${trOpen.has(x.url)}" data-url="${esc(x.url)}" title="${trOpen.has(x.url) ? "Нажмите, чтобы свернуть" : "Нажмите, чтобы показать целиком"}">${esc(x.url)}</div></td><td>${x.tier}</td><td><div class="tr-act">${x.added ? '<span class="muted small">добавлен вами</span>' : ""}<button type="button" class="btn small tr-copy" data-url="${esc(x.url)}" title="Скопировать адрес трекера">Копировать</button></div></td></tr>`).join("") + "</tbody></table>";
       }
     } catch (_) { /* transient: retried on the next tick */ }
   }
@@ -600,6 +600,11 @@
     el.classList.toggle("open", open); el.setAttribute("aria-expanded", open);
     el.title = open ? "Нажмите, чтобы свернуть" : "Нажмите, чтобы показать целиком";
   }
+  $("tr-list").addEventListener("click", async (e) => {
+    const b = e.target.closest(".tr-copy"); if (!b) return;
+    try { await navigator.clipboard.writeText(b.dataset.url); toast("Адрес трекера скопирован"); }
+    catch (_) { toast("Не удалось скопировать", true); }
+  });
   $("tr-list").addEventListener("click", (e) => { const el = e.target.closest(".tr-url"); if (el && !getSelection().toString()) toggleTracker(el); });
   $("tr-list").addEventListener("keydown", (e) => { const el = e.target.closest(".tr-url"); if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleTracker(el); } });
   $("tr-form").addEventListener("submit", async (e) => {

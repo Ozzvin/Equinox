@@ -499,3 +499,6 @@ dialog.wizard { min-height: 380px; }
 .wz-lead { font-size: 15px; line-height: 1.5; margin: 6px 0 12px; }
 .wz-sum { margin: 8px 0 14px; padding-left: 20px; line-height: 1.7; font-size: 13.5px; overflow-wrap: anywhere; }
 .wz-foot { align-items: center; }
+
+.tr-act { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.tr-act .btn { flex: none; }
