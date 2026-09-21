@@ -553,3 +553,13 @@ html[data-density="compact"] .details { height: min(200px, 36vh); }
 html[data-density="compact"] table.mini td { padding: 2px 8px; }
 html[data-density="compact"] .statusbar { padding: 3px 10px; }
 html[data-density="compact"] .file { padding: 2px 10px; }
+
+/* left panel: the icon of each view has its own colour, like in Deluge */
+.side-item .i { opacity: 1; }
+.side-item[data-view="s:"] .i { color: var(--seed); }
+.side-item[data-view="s:active"] .i { color: #ee8a3a; }
+.side-item[data-view="s:downloading"] .i { color: var(--ok); }
+.side-item[data-view="s:seeding"] .i { color: var(--accent); }
+.side-item[data-view="s:checking"] .i { color: var(--warn); }
+.side-item[data-view="s:paused"] .i { color: var(--muted); }
+.side-item[data-view="s:queued"] .i { color: #2bb3c7; }

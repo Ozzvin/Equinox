@@ -86,7 +86,7 @@ func main() {
 	_ = os.WriteFile(filepath.Join(*stateDir, "ui-url"), []byte(a.URL), 0o600)
 	addArgs(a, args)
 
-	d := &desktop_{app: a, show: make(chan struct{}, 1), quit: make(chan struct{}), stateDir: *stateDir, listen: *listen}
+	d := &desktop_{app: a, show: make(chan struct{}, 1), quit: make(chan struct{}), stateDir: *stateDir, listen: *listen, place: newPlacer(*stateDir)}
 	go systray.Run(d.onTrayReady, func() {})
 	a.Manager.OnEvent(d.notify)
 	go func() { // a second launch of the program signals this event
@@ -119,6 +119,7 @@ type desktop_ struct {
 	quitOnce sync.Once
 	stateDir string
 	listen   string
+	place    *placer
 
 	mu   sync.Mutex
 	view webview2.WebView // current window, nil when hidden in the tray
@@ -137,7 +138,7 @@ func (d *desktop_) window(dataPath string) {
 	log.Println("window: creating")
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		DataPath: dataPath, AutoFocus: true,
-		WindowOptions: webview2.WindowOptions{Title: "Equinox", Width: 1280, Height: 800, Center: true},
+		WindowOptions: webview2.WindowOptions{Title: "Equinox", Width: uint(d.place.startSize().W), Height: uint(d.place.startSize().H), Center: !d.place.hasPos()},
 	})
 	if w == nil {
 		d.mu.Unlock()
@@ -164,8 +165,11 @@ func (d *desktop_) window(dataPath string) {
 		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", "ms-settings:defaultapps").Start()
 		return ""
 	})
+	_ = w.Bind("windowDensity", d.place.setDensity) // the page reports its density; the window gets that density's size
+	_ = w.Bind("resetWindowSize", d.place.resetSize)
 	stopWatch := make(chan struct{})
 	go d.watchMinimize(w, hwnd, stopWatch)
+	go d.place.watch(stopWatch)
 	setWindowIcon(hwnd)
 	// Title bar in the colours of the page: first by the system theme (no white flash), then by what the
 	// page reports about its own top bar.
@@ -178,8 +182,7 @@ func (d *desktop_) window(dataPath string) {
 	// The page gets the access key from here, so the window never depends on the link or on what the
 	// web view remembered. The address is then the plain one, without the key.
 	w.Init("window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true;")
-	w.SetSize(1280, 800, webview2.HintNone)
-	w.SetSize(720, 480, webview2.HintMin)
+	d.place.attach(w, hwnd) // the size, position and state the window had last time
 	w.Navigate(strings.SplitN(d.app.URL, "/#", 2)[0] + "/")
 	w.Run()
 	log.Println("window: closed")
