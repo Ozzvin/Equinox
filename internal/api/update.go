@@ -28,3 +28,9 @@ func (s *Server) updateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, UpdateStatus{Available: true, Version: info.Version, Notes: info.Notes, URL: info.URL})
 }
+
+// updateProgress reports how an install started by the desktop app's installUpdate is going,
+// for the progress dialog to poll while it is open.
+func (s *Server) updateProgress(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, update.CurrentProgress())
+}

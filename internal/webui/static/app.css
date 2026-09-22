@@ -134,6 +134,11 @@ legend { padding: 0 8px; font-weight: 700; font-size: 14px; color: var(--text); 
 .row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .err { color: var(--bad); margin: 8px 0 0; }
 
+.up-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 10px; }
+.up-bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 4px; transition: width .2s ease; }
+.up-bar.indeterminate .up-bar-fill { width: 40% !important; animation: up-indeterminate 1.1s ease-in-out infinite; }
+@keyframes up-indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+
 #toast { position: fixed; left: 50%; bottom: 52px; transform: translate(-50%, 20px); background: #1a1f29; color: #fff; padding: 10px 16px; border-radius: 10px; opacity: 0; pointer-events: none; transition: all .25s; max-width: 90vw; z-index: 20; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 #toast.bad { background: var(--bad); }

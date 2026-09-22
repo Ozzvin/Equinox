@@ -686,6 +686,16 @@
   </form>
 </dialog>
 
+<dialog id="dlg-update-progress">
+  <h2>Обновление Equinox</h2>
+  <p class="muted small" id="up-status">Подготовка…</p>
+  <div class="up-bar" id="up-bar"><div class="up-bar-fill" id="up-bar-fill"></div></div>
+  <p class="err" id="up-err" hidden></p>
+  <div class="row-end">
+    <button type="button" class="btn" id="up-close" hidden>Закрыть</button>
+  </div>
+</dialog>
+
 <div id="ctx" class="ctx" hidden role="menu"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="push" aria-live="polite" aria-label="Уведомления"></div>

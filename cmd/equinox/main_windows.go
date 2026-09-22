@@ -250,21 +250,25 @@ func (d *desktop_) restart() string {
 
 // installUpdate downloads and verifies the latest release's installer and runs it silently;
 // the installer's own InitializeSetup (see installer/equinox.iss) closes this process and,
-// since it is passed /autoupdate=1, reopens the app once the update is in place. It returns
-// an error text (empty on success) for the page.
+// since it is passed /autoupdate=1, reopens the app once the update is in place. The download
+// and install run in the background (GET /api/update-progress reports how far it got, for the
+// page's progress dialog); this only returns an error text (empty on success) once the check
+// that finds the release to install is done.
 func (d *desktop_) installUpdate() string {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	checkCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	info, err := update.Check(ctx, false)
+	info, err := update.Check(checkCtx, false)
 	if err != nil {
 		return err.Error()
 	}
 	if info == nil {
 		return "" // someone else already updated, or a background check just missed it
 	}
-	if err := info.Install(ctx, filepath.Join(d.stateDir, "update"), true); err != nil {
-		return err.Error()
-	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		_ = info.Install(ctx, filepath.Join(d.stateDir, "update"), true)
+	}()
 	return ""
 }
 

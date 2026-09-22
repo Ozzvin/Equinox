@@ -1904,13 +1904,39 @@
     if (available) $("ab-update-link").href = r.url || "#";
     $("ab-update-status").textContent = r ? (available ? "" : "у вас последняя версия") : "Не удалось проверить";
   }
+  let updatePollTimer = null;
+  function stopUpdatePoll() { if (updatePollTimer) { clearInterval(updatePollTimer); updatePollTimer = null; } }
+  const UPDATE_PHASE_LABELS = { downloading: "Скачивание установщика…", verifying: "Проверка контрольной суммы…", installing: "Установка обновления…", error: "Не удалось обновиться" };
+  function renderUpdateProgress(p) {
+    const bar = $("up-bar"), phase = p && p.phase;
+    $("up-status").textContent = (phase && UPDATE_PHASE_LABELS[phase]) || "Подготовка…";
+    if (phase === "downloading") { bar.classList.remove("indeterminate"); $("up-bar-fill").style.width = Math.round((p.percent || 0) * 100) + "%"; }
+    else { bar.classList.add("indeterminate"); }
+    const failed = phase === "error";
+    $("up-err").hidden = !failed;
+    if (failed) $("up-err").textContent = (p && p.error) || "Неизвестная ошибка";
+    $("up-close").hidden = !failed;
+    if (failed) stopUpdatePoll();
+  }
   async function installUpdateNow() {
-    try { toast("Обновление скачивается и устанавливается…"); const err = await window.installUpdate(); if (err) toast("Не удалось установить обновление: " + err, true); }
-    catch (x) { toast("Не удалось установить обновление: " + x, true); }
+    renderUpdateProgress(null);
+    $("dlg-update-progress").showModal();
+    let err;
+    try { err = await window.installUpdate(); }
+    catch (x) { err = String(x); }
+    if (err) { renderUpdateProgress({ phase: "error", error: err }); return; }
+    stopUpdatePoll();
+    updatePollTimer = setInterval(async () => {
+      try { renderUpdateProgress(await api("GET", "/api/update-progress")); }
+      catch (_) { /* the app is about to restart itself; the window closing is feedback enough */ }
+    }, 400);
   }
   $("btn-update-install").onclick = installUpdateNow;
   $("ab-update-install").onclick = installUpdateNow;
   $("ab-check-update").onclick = async () => { $("ab-update-status").textContent = "Проверка…"; await checkUpdate(true); };
+  $("up-close").onclick = () => { stopUpdatePoll(); $("dlg-update-progress").close(); };
+  // No Escape-to-cancel while it is actually doing something (only once it has failed and stopped).
+  $("dlg-update-progress").addEventListener("cancel", (e) => { if ($("up-close").hidden) e.preventDefault(); });
 
   // schedule: weekday chips (values are JS weekdays: 0 = Sunday)
   const DAYS = [[1, "Пн"], [2, "Вт"], [3, "Ср"], [4, "Чт"], [5, "Пт"], [6, "Сб"], [0, "Вс"]];

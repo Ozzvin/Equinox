@@ -55,6 +55,33 @@ var (
 	checked  bool
 )
 
+// Progress describes how an in-progress Install call is going, for a UI to poll.
+type Progress struct {
+	// Phase is one of "downloading", "verifying", "installing", "error" ("" before any
+	// install has been attempted this run).
+	Phase   string  `json:"phase"`
+	Percent float64 `json:"percent"` // 0..1, meaningful only while Phase is "downloading"
+	Err     string  `json:"error,omitempty"`
+}
+
+var (
+	progMu sync.Mutex
+	prog   Progress
+)
+
+// CurrentProgress reports the state of the most recent Install call.
+func CurrentProgress() Progress {
+	progMu.Lock()
+	defer progMu.Unlock()
+	return prog
+}
+
+func setProgress(p Progress) {
+	progMu.Lock()
+	prog = p
+	progMu.Unlock()
+}
+
 // Check reports the latest GitHub release if it is newer than the running version, or nil if
 // not (or if the check fails). A result is cached for an hour unless force is set, so opening
 // the settings repeatedly does not hit GitHub every time.
@@ -143,36 +170,54 @@ func compareVersions(a, b string) int {
 // caller does not need to exit separately. When relaunch is true, the installer reopens
 // Equinox once the update is in place (see the IsAutoUpdate check in equinox.iss).
 func (i *Info) Install(ctx context.Context, dir string, relaunch bool) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	fail := func(err error) error {
+		setProgress(Progress{Phase: "error", Err: err.Error()})
 		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fail(err)
 	}
 	setupPath := filepath.Join(dir, "Equinox-Setup.exe")
-	if err := download(ctx, i.setupURL, setupPath); err != nil {
-		return err
+	setProgress(Progress{Phase: "downloading"})
+	if err := download(ctx, i.setupURL, setupPath, func(done, total int64) {
+		var pct float64
+		if total > 0 {
+			pct = float64(done) / float64(total)
+		}
+		setProgress(Progress{Phase: "downloading", Percent: pct})
+	}); err != nil {
+		return fail(err)
 	}
+	setProgress(Progress{Phase: "verifying"})
 	sums, err := downloadBytes(ctx, i.sumsURL)
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	want, err := findSum(sums, "Equinox-Setup.exe")
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	got, err := sha256File(setupPath)
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	if got != want {
-		return fmt.Errorf("update: checksum mismatch for the downloaded installer")
+		return fail(fmt.Errorf("update: checksum mismatch for the downloaded installer"))
 	}
+	setProgress(Progress{Phase: "installing"})
 	args := []string{"/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"}
 	if relaunch {
 		args = append(args, "/autoupdate=1")
 	}
-	return exec.Command(setupPath, args...).Start()
+	if err := exec.Command(setupPath, args...).Start(); err != nil {
+		return fail(err)
+	}
+	return nil
 }
 
-func download(ctx context.Context, url, path string) error {
+// download saves url to path, calling report(bytesSoFar, totalBytes) as it goes (totalBytes
+// is 0 if the server did not send a Content-Length). report may be nil.
+func download(ctx context.Context, url, path string, report func(done, total int64)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -191,8 +236,38 @@ func download(ctx context.Context, url, path string) error {
 		return err
 	}
 	defer f.Close()
-	_, err = io.Copy(f, res.Body)
-	return err
+	var w io.Writer = f
+	pw := &progressWriter{w: f, total: res.ContentLength, report: report}
+	if report != nil {
+		w = pw
+	}
+	if _, err := io.Copy(w, res.Body); err != nil {
+		return err
+	}
+	if report != nil {
+		report(pw.done, pw.total) // a final call so 100% is always seen, even if throttled
+	}
+	return nil
+}
+
+// progressWriter reports download progress at most a few times a second, so polling stays
+// cheap without the UI missing meaningful updates.
+type progressWriter struct {
+	w        io.Writer
+	done     int64
+	total    int64
+	report   func(done, total int64)
+	lastSent time.Time
+}
+
+func (p *progressWriter) Write(b []byte) (int, error) {
+	n, err := p.w.Write(b)
+	p.done += int64(n)
+	if time.Since(p.lastSent) > 100*time.Millisecond {
+		p.report(p.done, p.total)
+		p.lastSent = time.Now()
+	}
+	return n, err
 }
 
 func downloadBytes(ctx context.Context, url string) ([]byte, error) {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/Ozzvin/equinox/internal/buildinfo"
@@ -55,7 +56,10 @@ func fakeGitHub(t *testing.T, installerBody []byte, tag string) *httptest.Server
 	sumLine := hex.EncodeToString(sum[:]) + "  Equinox-Setup.exe\n"
 
 	var srv *httptest.Server
-	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) { w.Write(installerBody) })
+	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(installerBody))) // real GitHub downloads always send this
+		w.Write(installerBody)
+	})
 	mux.HandleFunc("/sums", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(sumLine)) })
 	mux.HandleFunc("/release", func(w http.ResponseWriter, r *http.Request) {
 		rel := ghRelease{
@@ -123,7 +127,7 @@ func TestInstallVerifiesChecksumBeforeRunning(t *testing.T) {
 	// only check that it downloaded the right bytes and accepted the matching checksum by
 	// verifying the file it wrote before the exec step would fail.
 	setupPath := filepath.Join(dir, "Equinox-Setup.exe")
-	if err := download(context.Background(), info.setupURL, setupPath); err != nil {
+	if err := download(context.Background(), info.setupURL, setupPath, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(setupPath)
@@ -141,6 +145,47 @@ func TestInstallVerifiesChecksumBeforeRunning(t *testing.T) {
 	gotSum, err := sha256File(setupPath)
 	if err != nil || gotSum != want {
 		t.Fatalf("checksum mismatch: got %s, want %s (err %v)", gotSum, want, err)
+	}
+}
+
+func TestDownloadReportsProgress(t *testing.T) {
+	body := make([]byte, 50_000)
+	srv := fakeGitHub(t, body, "v9.9.9")
+	setupPath := filepath.Join(t.TempDir(), "Equinox-Setup.exe")
+
+	var last struct{ done, total int64 }
+	var calls int
+	err := download(context.Background(), srv.URL+"/setup", setupPath, func(done, total int64) {
+		calls++
+		last.done, last.total = done, total
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls == 0 {
+		t.Fatal("report must be called at least once (the final, forced call)")
+	}
+	if last.done != int64(len(body)) || last.total != int64(len(body)) {
+		t.Fatalf("final report = %+v, want done=total=%d", last, len(body))
+	}
+}
+
+func TestInstallLeavesCurrentProgressOnFailure(t *testing.T) {
+	// "fake installer bytes" is not a real executable, so exec.Command(...).Start() fails once
+	// Install reaches the "installing" phase — the point of this test is that CurrentProgress
+	// ends up reporting that failure, not any earlier phase.
+	installerBody := []byte("fake installer bytes")
+	srv := fakeGitHub(t, installerBody, "v9.9.9")
+	info := &Info{Version: "9.9.9", setupURL: srv.URL + "/setup", sumsURL: srv.URL + "/sums"}
+
+	setProgress(Progress{})
+	err := info.Install(context.Background(), t.TempDir(), false)
+	if err == nil {
+		t.Fatal("Install must fail: the downloaded bytes are not a real executable")
+	}
+	p := CurrentProgress()
+	if p.Phase != "error" || p.Err == "" {
+		t.Fatalf("CurrentProgress after a failed Install = %+v, want phase=error with a message", p)
 	}
 }
 

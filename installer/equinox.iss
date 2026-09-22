@@ -73,13 +73,15 @@ end;
 
 // Закрывает программу целиком, включая случай, когда она свёрнута в трей (тогда у неё нет
 // окна, и штатный AppMutex/CloseApplications Inno Setup закрыть её не может — деинсталлятор
-// просто откажется работать, пока процесс жив). taskkill убивает процесс и его дочерние
-// (WebView2) независимо от того, открыто окно или нет.
+// просто откажется работать, пока процесс жив). Без /T: при автообновлении изнутри программы
+// этот установщик — дочерний процесс самого Equinox.exe, и /T убил бы всё дерево процессов,
+// включая себя же, оборвав установку на середине. WebView2 всё равно сам закрывает свои
+// дочерние процессы, когда основной процесс Equinox.exe завершается (job object).
 procedure KillEquinox();
 var
   ResultCode: Integer;
 begin
-  Exec(ExpandConstant('{cmd}'), '/C taskkill /F /IM Equinox.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{cmd}'), '/C taskkill /F /IM Equinox.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 function InitializeSetup(): Boolean;
