@@ -661,12 +661,10 @@ html[data-density="compact"] .seg-note { display: none; }
 /* options tab */
 .opt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 16px; padding: 4px 16px 12px; }
 .opt-form fieldset { margin: 8px 0; }
-.opt-form label:not(.check) { display: grid; grid-template-columns: 1fr 96px; gap: 2px 10px; align-items: center; }
-.opt-form label:not(.check) > .muted { grid-column: 1 / -1; margin-top: -4px; }
-.opt-form label:not(.check) select { grid-column: 2; }
-.opt-form input[type=number] { margin-top: 0; }
-.opt-form label:not(.check) > input, .opt-form label:not(.check) > select { grid-column: 2; grid-row: 1; margin-top: 0; }
-.opt-form label:not(.check) { font-weight: 550; font-size: 13px; }
+/* label above its field, like the rest of the app (a row-based two-column grid looked broken for short
+   numeric fields: a wide gap opened up between a short label and its narrow input) */
+.opt-form label:not(.check) { display: block; margin: 0 0 10px; font-weight: 550; font-size: 13px; }
+.opt-form label:not(.check) > input, .opt-form label:not(.check) > select { margin-top: 4px; }
 .op-path { margin: 8px 0; }
 .op-pathval { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font-size: 12.5px; }
 .opt-form label.check { display: flex; gap: 9px; align-items: flex-start; margin: 8px 0; font-weight: 500; font-size: 13px; }

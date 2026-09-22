@@ -657,7 +657,6 @@
     const focused = optForm().contains(document.activeElement);
     if (optHash !== t.hash) { optHash = t.hash; optDirty = false; }
     if (!optDirty && !focused) {
-      $("op-conns").value = d.maxConns; $("op-ratio").value = d.ratioLimit; $("op-seedtime").value = d.seedTimeLimit / 60;
       $("op-movedone-on").checked = !!d.moveDone; $("op-movedone").value = d.moveDone || ""; $("op-movedone").disabled = !d.moveDone;
       $("op-movedone-pick").disabled = !d.moveDone;
     }
@@ -672,7 +671,7 @@
     $("op-path").title = d.savePath || "";
     $("op-move").disabled = !!t.moving;
   }
-  for (const id of ["op-conns", "op-ratio", "op-seedtime", "op-movedone-on", "op-movedone"]) $(id).addEventListener("input", () => { optDirty = true; });
+  for (const id of ["op-movedone-on", "op-movedone"]) $(id).addEventListener("input", () => { optDirty = true; });
   $("op-movedone-on").addEventListener("change", (e) => { $("op-movedone").disabled = !e.target.checked; $("op-movedone-pick").disabled = !e.target.checked; optDirty = true; });
   $("op-seq").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "sequential", { enabled: e.target.checked }); refresh(); } catch (x) { toast(x.message, true); } });
   $("op-edge").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "edge-pieces", { enabled: e.target.checked }); } catch (x) { toast(x.message, true); } });
@@ -680,11 +679,7 @@
   $("op-move").onclick = () => $("btn-move").click();
   $("op-apply").onclick = async () => {
     const t = cur(); if (!t) return;
-    const num = (id) => Number($(id).value) || 0;
     try {
-      await post(t, "max-connections", { limit: Math.round(num("op-conns")) });
-      await post(t, "ratio-limit", { limit: num("op-ratio") });
-      await post(t, "seed-time-limit", { minutes: Math.round(num("op-seedtime") * 60) });
       await post(t, "move-done", { path: $("op-movedone-on").checked ? $("op-movedone").value.trim() : "" });
       optDirty = false; toast("Параметры раздачи сохранены"); renderDetails();
     } catch (x) { toast(x.message, true); }

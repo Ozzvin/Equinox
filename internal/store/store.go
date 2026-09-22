@@ -27,6 +27,7 @@ const idleClose = 2 * time.Second
 type Storage struct {
 	baseFor func(metainfo.Hash) string
 	comp    storage.PieceCompletion
+	disk    *diskPriority // downloading (writes) goes ahead of seeding (reads) on the same disk
 
 	trustMu sync.Mutex
 	trust   map[metainfo.Hash]bool // torrents whose files on disk are to be taken as complete
@@ -105,7 +106,7 @@ func NewResolver(baseFor func(metainfo.Hash) string, comp storage.PieceCompletio
 	if comp == nil {
 		comp = storage.NewMapPieceCompletion()
 	}
-	return &Storage{baseFor: baseFor, comp: comp}
+	return &Storage{baseFor: baseFor, comp: comp, disk: newDiskPriority()}
 }
 
 // Paths returns the on-disk location of every file of the torrent, in torrent order.
@@ -165,8 +166,13 @@ func (s *Storage) OpenTorrent(_ context.Context, info *metainfo.Info, ih metainf
 		}
 	}
 	t.healStaleCompletion(info)
-	if s.consumeTrust(ih) {
+	switch {
+	case s.consumeTrust(ih):
 		t.trustPresent(info)
+	case filesAbsent(t.files):
+		// A fresh destination: nothing to verify, so skip the hash check and go straight to
+		// downloading instead of hashing pieces that are certainly missing.
+		t.trustAbsent(info)
 	}
 	s.regMu.Lock()
 	if s.reg == nil {
@@ -319,6 +325,12 @@ func (t *torrentStore) close() error {
 
 // io walks the files overlapping [off, off+len(b)) of the torrent.
 func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
+	if write {
+		t.owner.disk.beginWrite()
+		defer t.owner.disk.endWrite()
+	} else {
+		t.owner.disk.waitForWrites()
+	}
 	for _, f := range t.files {
 		if len(b) == 0 {
 			break
@@ -406,6 +418,26 @@ func (t *torrentStore) healStaleCompletion(info *metainfo.Info) {
 		if c, _ := t.comp.Get(key); c.Ok && c.Complete && !t.present(p.Offset(), p.Length()) {
 			_ = t.comp.Set(key, false)
 		}
+	}
+}
+
+// filesAbsent reports whether none of a torrent's non-empty files have any bytes on disk yet: a
+// completely fresh destination with nothing to verify.
+func filesAbsent(files []fileSpan) bool {
+	for _, f := range files {
+		if f.length > 0 && f.size > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// trustAbsent marks every piece as known-incomplete when nothing of this torrent exists on disk:
+// there is nothing to check, so the engine can start downloading right away instead of hashing
+// pieces it already knows are missing.
+func (t *torrentStore) trustAbsent(info *metainfo.Info) {
+	for i := 0; i < info.NumPieces(); i++ {
+		_ = t.comp.Set(metainfo.PieceKey{InfoHash: t.ih, Index: i}, false)
 	}
 }
 

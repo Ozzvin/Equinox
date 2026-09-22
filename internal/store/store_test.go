@@ -149,3 +149,41 @@ func TestHealedRecordDoesNotComeBackWithPreallocatedZeros(t *testing.T) {
 		t.Fatalf("zero-filled file must not read as a finished piece: %+v", c)
 	}
 }
+
+// A torrent going into an empty destination has nothing to verify: every piece is marked
+// known-incomplete straight away, so the engine skips its own hash check.
+func TestFreshDestinationIsMarkedIncompleteWithoutChecking(t *testing.T) {
+	dir := t.TempDir()
+	info := multiFileInfo()
+	s := New(dir, nil)
+	ih := metainfo.Hash{9}
+	if _, err := s.OpenTorrent(context.Background(), info, ih); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < info.NumPieces(); i++ {
+		c, err := s.comp.Get(metainfo.PieceKey{InfoHash: ih, Index: i})
+		if err != nil || !c.Ok || c.Complete {
+			t.Fatalf("piece %d: a fresh destination must be known-incomplete, got %+v (err %v)", i, c, err)
+		}
+	}
+}
+
+// A destination that already has data must still be checked: the piece completion stays unknown.
+func TestExistingDataStaysUncheckedUntilVerified(t *testing.T) {
+	dir := t.TempDir()
+	info := multiFileInfo()
+	if err := os.MkdirAll(filepath.Join(dir, "album", "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "album", "a.bin"), bytes.Repeat([]byte{1}, 10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New(dir, nil)
+	ih := metainfo.Hash{10}
+	if _, err := s.OpenTorrent(context.Background(), info, ih); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := s.comp.Get(metainfo.PieceKey{InfoHash: ih, Index: 0}); err != nil || c.Ok {
+		t.Fatalf("a destination with existing data must be left for the engine to check, got %+v (err %v)", c, err)
+	}
+}

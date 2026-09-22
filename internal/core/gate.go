@@ -9,6 +9,8 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
+
+	"github.com/Ozzvin/equinox/internal/store"
 )
 
 // Limit on simultaneous checks of local files.
@@ -22,6 +24,10 @@ import (
 //
 // A torrent without info would fetch it from the swarm like a magnet link does, and hash behind the
 // gate's back; so while its info is held the torrent gets no connections (see applyConnLimit).
+//
+// Exception: a torrent going into an empty destination (needsCheck false) has nothing to verify, so
+// it skips the gate entirely and starts downloading at once. The store (trustAbsent) skips the
+// engine's own hash check the same way.
 
 // heldInfo is the info of a torrent that waits for a check slot.
 type heldInfo struct {
@@ -36,6 +42,13 @@ func (m *Manager) holdBack(spec *torrent.TorrentSpec) *torrent.TorrentSpec {
 		return spec
 	}
 	hash := spec.InfoHash.HexString()
+	var info metainfo.Info
+	haveInfo := bencode.Unmarshal(spec.InfoBytes, &info) == nil
+	if haveInfo && !m.needsCheck(hash, &info) {
+		// A fresh destination: there is nothing on disk to verify, so skip the check queue
+		// entirely and start downloading right away (the store skips the hash check the same way).
+		return spec
+	}
 	// A free slot and nobody waiting ahead: the torrent goes in with its info at once and takes the slot;
 	// runGate gives it back when the first check is over.
 	m.mu.Lock()
@@ -46,8 +59,7 @@ func (m *Manager) holdBack(spec *torrent.TorrentSpec) *torrent.TorrentSpec {
 	}
 	m.mu.Unlock()
 	var size int64
-	var info metainfo.Info
-	if err := bencode.Unmarshal(spec.InfoBytes, &info); err == nil {
+	if haveInfo {
 		size = info.TotalLength()
 	}
 	m.mu.Lock()
@@ -56,6 +68,25 @@ func (m *Manager) holdBack(spec *torrent.TorrentSpec) *torrent.TorrentSpec {
 	cp := *spec
 	cp.InfoBytes = nil
 	return &cp
+}
+
+// needsCheck reports whether any non-empty file of a torrent already has data at its destination,
+// meaning the torrent actually needs a check when it is added. One going into an empty destination
+// (a brand new download, nothing there yet) does not.
+func (m *Manager) needsCheck(hash string, info *metainfo.Info) bool {
+	paths, err := store.Paths(m.saveDir(hash), info)
+	if err != nil {
+		return true // unsure: check as before
+	}
+	for i, f := range info.UpvertedFiles() {
+		if f.Length == 0 {
+			continue
+		}
+		if fi, err := os.Stat(paths[i]); err == nil && fi.Size() > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // dropHeld forgets a torrent's place in the line and its slot (it was removed, or could not be added).
