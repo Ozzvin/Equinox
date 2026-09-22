@@ -2,6 +2,11 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия для сборки (пусто — взять из файла VERSION)"
+        required: false
+        type: string
 
 jobs:
   build:
@@ -13,13 +18,17 @@ jobs:
           go-version-file: go.mod
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
+      - name: Set version
+        if: inputs.version != ''
+        shell: pwsh
+        run: Set-Content -Path VERSION -Value '${{ inputs.version }}'
       - name: Build (gofmt, vet, tests, exe, installer, archives)
         shell: pwsh
         run: .\build.ps1
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: equinox-${{ github.sha }}
+          name: equinox-${{ inputs.version || github.sha }}
           path: |
             dist/Equinox-Setup.exe
             dist/Equinox-pc.zip
