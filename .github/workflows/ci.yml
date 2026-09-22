@@ -2,24 +2,29 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
-  test:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: gofmt
-        shell: bash
-        run: test -z "$(gofmt -l cmd internal)"
-      - run: go vet ./...
-      - run: go test -count=1 ./...
-      - name: build
-        run: |
-          $v = (Get-Content VERSION).Trim()
-          go build -ldflags "-H windowsgui -s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o Equinox.exe ./cmd/equinox
-          go build -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o Equinox-server.exe ./cmd/equinox-server
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build (gofmt, vet, tests, exe, installer, archives)
+        shell: pwsh
+        run: .\build.ps1
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: equinox-${{ github.sha }}
+          path: |
+            dist/Equinox-Setup.exe
+            dist/Equinox-pc.zip
+            dist/Equinox-server.zip
+            dist/SHA256SUMS.txt
+          retention-days: 30
