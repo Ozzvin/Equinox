@@ -304,6 +304,10 @@
     if (port.wantedPort) more = `Порт ${port.wantedPort} занят другой программой или недоступен, поэтому выбран порт ${port.port}. ${port.advice || ""}`.trim();
     el.lastElementChild.textContent = head; // for screen readers; the page shows only the dot
     el.dataset.tip = more ? head + "\n" + more : head;
+    // Settings keeps its own copy of this text (shown only while the dialog is open), so a
+    // manual "Проверить порт сейчас" — or just time passing — is reflected there too, not
+    // only in the status-bar dot.
+    if (!$("st-port-refresh").disabled) $("st-port").textContent = portDetails(port);
   }
 
   function portDetails(p) {
@@ -1819,7 +1823,20 @@
     try { port = await api("POST", "/api/port/mapping", { enabled: e.target.checked }); $("st-port").textContent = portDetails(port); renderPort(); }
     catch (x) { e.target.checked = !e.target.checked; toast(x.message, true); }
   };
-  $("st-port-refresh").onclick = () => api("POST", "/api/port/refresh").then(() => toast("Проверка запущена")).catch((e) => toast(e.message, true));
+  $("st-port-refresh").onclick = async () => {
+    const btn = $("st-port-refresh");
+    btn.disabled = true;
+    $("st-port").textContent = "Проверяем…";
+    try {
+      await api("POST", "/api/port/refresh");
+      toast("Проверка запущена");
+    } catch (e) { toast(e.message, true); }
+    // The check itself runs in the background on the daemon; the next couple of refresh()
+    // ticks (loop() polls every 1.5s) pick up the result through renderPort() above. A fixed
+    // wait here is a compromise: long enough for a typical router round trip, short enough
+    // that the button does not stay disabled if it takes longer.
+    setTimeout(() => { btn.disabled = false; }, 4000);
+  };
   $("f-settings").addEventListener("submit", async (e) => {
     e.preventDefault();
     const n = (id) => Number($(id).value) || 0;
