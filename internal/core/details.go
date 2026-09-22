@@ -206,8 +206,10 @@ func (m *Manager) reapplyTrackers(t *torrent.Torrent, r record) {
 	}
 }
 
-// Recheck re-hashes all data of a torrent and corrects what the engine believes about it.
-// It runs in the background; Status.Checking is true meanwhile.
+// Recheck re-hashes all data of a torrent and corrects what the engine believes about it. With
+// a limit on simultaneous checks already in use, it waits its turn instead — at the front of
+// that line, ahead of anything else waiting (see acquireRecheck) — and Status.CheckQueued shows
+// its place. It runs in the background; Status.Checking is true only once it actually starts.
 func (m *Manager) Recheck(hash string) error {
 	t, err := m.get(hash)
 	if err != nil {
@@ -217,24 +219,21 @@ func (m *Manager) Recheck(hash string) error {
 		return ErrNoMetadata
 	}
 	m.mu.Lock()
-	if m.checking[hash] {
-		m.mu.Unlock()
+	busy := m.checking[hash] || m.rechecking[hash]
+	if !busy {
+		for _, h := range m.recheckQueue {
+			if h == hash {
+				busy = true
+				break
+			}
+		}
+	}
+	m.mu.Unlock()
+	if busy {
 		return ErrBusy
 	}
-	m.checking[hash] = true
-	m.mu.Unlock()
 
 	go func() {
-		defer func() {
-			m.mu.Lock()
-			delete(m.checking, hash)
-			// The loop only refreshes progress of torrents it watches, which this one no
-			// longer is: without this a last percentage below 100 could stay on the status.
-			if m.phase[hash] == nil {
-				delete(m.checkProg, hash)
-			}
-			m.mu.Unlock()
-		}()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go func() { // stop waiting when the manager shuts down
@@ -244,12 +243,24 @@ func (m *Manager) Recheck(hash string) error {
 			case <-ctx.Done():
 			}
 		}()
-		// With a limit on simultaneous checks this waits its turn behind the torrents that are being checked.
 		release, ok := m.acquireRecheck(hash, ctx.Done())
 		if !ok {
 			return
 		}
-		defer release()
+		m.mu.Lock()
+		m.checking[hash] = true
+		m.mu.Unlock()
+		defer func() {
+			m.mu.Lock()
+			delete(m.checking, hash)
+			// The loop only refreshes progress of torrents it watches, which this one no
+			// longer is: without this a last percentage below 100 could stay on the status.
+			if m.phase[hash] == nil {
+				delete(m.checkProg, hash)
+			}
+			m.mu.Unlock()
+			release()
+		}()
 		_ = t.VerifyDataContext(ctx)
 	}()
 	return nil

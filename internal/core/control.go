@@ -453,6 +453,10 @@ func (m *Manager) List() []Status {
 	for h := range m.checking {
 		checking[h] = true
 	}
+	recheckPos := map[string]int{}
+	for i, h := range m.recheckQueue {
+		recheckPos[h] = i + 1
+	}
 	moves := map[string]moveView{}
 	for h, j := range m.moves {
 		v := moveView{name: j.name, sel: j.selSize, running: j.running, frac: j.fraction(), err: j.err, note: j.warning}
@@ -484,6 +488,10 @@ func (m *Manager) List() []Status {
 			st.Size, st.Done = selection(t, r.FilePrios)
 			if st.Size > 0 {
 				st.Progress = float64(st.Done) / float64(st.Size)
+			}
+			if pos := recheckPos[st.Hash]; pos > 0 {
+				// a recheck the user asked for, waiting its turn behind the check limit
+				st.CheckQueued = pos
 			}
 		} else if pos, size := m.checkQueuePos(st.Hash); pos > 0 {
 			// waiting for a free slot to have its local files checked: the size is known, the info is not handed over yet

@@ -212,12 +212,25 @@ func (m *Manager) nextHeld() (hash string, info []byte, ok bool) {
 }
 
 // acquireRecheck waits for a slot for a check the user asked for; the returned function frees it.
-// It gives up (false) when stop is closed.
+// A fresh request goes to the front of the recheck line — ahead of any recheck still waiting,
+// since asking for one specifically is a more direct request than the passive queue new
+// torrents get (Status.CheckQueued reports the place it waits in meanwhile). It gives up
+// (false) when stop is closed.
 func (m *Manager) acquireRecheck(hash string, stop <-chan struct{}) (release func(), ok bool) {
+	m.mu.Lock()
+	m.recheckQueue = append([]string{hash}, dropString(m.recheckQueue, hash)...)
+	m.mu.Unlock()
+	dequeue := func() {
+		m.mu.Lock()
+		m.recheckQueue = dropString(m.recheckQueue, hash)
+		m.mu.Unlock()
+	}
 	for {
 		limit := m.cfg.Get().MaxConcurrentChecks
 		m.mu.Lock()
-		if limit <= 0 || len(m.gateActive)+len(m.rechecking) < limit {
+		front := len(m.recheckQueue) > 0 && m.recheckQueue[0] == hash
+		if front && (limit <= 0 || len(m.gateActive)+len(m.rechecking) < limit) {
+			m.recheckQueue = m.recheckQueue[1:]
 			m.rechecking[hash] = true
 			m.mu.Unlock()
 			return func() {
@@ -229,10 +242,22 @@ func (m *Manager) acquireRecheck(hash string, stop <-chan struct{}) (release fun
 		m.mu.Unlock()
 		select {
 		case <-stop:
+			dequeue()
 			return nil, false
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
+}
+
+// dropString returns s without hash, keeping the rest of the order.
+func dropString(s []string, hash string) []string {
+	out := make([]string, 0, len(s))
+	for _, h := range s {
+		if h != hash {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // applyConnLimit gives a torrent its connection limit. A torrent whose info is held back gets none:

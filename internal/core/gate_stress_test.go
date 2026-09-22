@@ -156,3 +156,116 @@ func TestLoweringTheLimitPutsTheExtraCheckBackInTheLine(t *testing.T) {
 		return x.Progress == 1 && y.Progress == 1 && y.CheckQueued == 0
 	})
 }
+
+// A manual recheck (the "Проверить файлы" button) must respect the check limit too, queuing
+// behind whatever already holds the slot instead of running alongside it.
+func TestRecheckRespectsTheLimit(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
+	var hashes []string
+	for i := 0; i < 4; i++ {
+		name := fmt.Sprintf("rl%d.bin", i)
+		tp := makeTorrent(t, dir, name, 4<<20)
+		seed(t, m, dir, name)
+		h, err := m.AddFile(tp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hashes = append(hashes, h)
+		waitFor(t, func() bool { s, ok := statusOf(m, h); return ok && s.Progress == 1 })
+	}
+
+	for _, h := range hashes {
+		if err := m.Recheck(h); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	max := 0
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		n, done := 0, 0
+		for _, h := range hashes {
+			tor, err := m.get(h)
+			if err != nil {
+				continue
+			}
+			if c, _ := checkingPieces(tor); c > 0 {
+				n++
+			}
+			if s, ok := statusOf(m, h); ok && !s.Checking && s.CheckQueued == 0 {
+				done++
+			}
+		}
+		if n > max {
+			max = n
+		}
+		if done == len(hashes) {
+			break
+		}
+		time.Sleep(3 * time.Millisecond)
+	}
+	t.Logf("limit 1: at most %d manual rechecks ran at once", max)
+	if max > 1 {
+		t.Fatalf("limit 1, but %d rechecks ran at once", max)
+	}
+}
+
+// A fresh recheck request jumps to the front of the recheck line, ahead of one already
+// waiting: b is asked for first but c, asked for afterward, must start checking before it does.
+func TestRecheckJumpsToTheFrontOfTheQueue(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
+	var hashes []string
+	for i, size := range []int{24 << 20, 8 << 20, 8 << 20} { // a is bigger: its check leaves a real window to queue b then c behind it
+		name := fmt.Sprintf("front%d.bin", i)
+		tp := makeTorrent(t, dir, name, size)
+		seed(t, m, dir, name)
+		h, err := m.AddFile(tp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hashes = append(hashes, h)
+		waitFor(t, func() bool { s, ok := statusOf(m, h); return ok && s.Progress == 1 })
+	}
+	a, b, c := hashes[0], hashes[1], hashes[2]
+
+	if err := m.Recheck(a); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, _ := statusOf(m, a); return s.Checking })
+
+	if err := m.Recheck(b); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, _ := statusOf(m, b); return s.CheckQueued > 0 })
+
+	if err := m.Recheck(c); err != nil {
+		t.Fatal(err)
+	}
+
+	// Whichever of b/c is first seen with Checking=true, once a's slot frees, tells the order
+	// they actually ran in — more robust than snapshotting an exact queue position, which a
+	// fast disk could race past between polls.
+	var bAt, cAt time.Time
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) && (bAt.IsZero() || cAt.IsZero()) {
+		if bAt.IsZero() {
+			if s, _ := statusOf(m, b); s.Checking {
+				bAt = time.Now()
+			}
+		}
+		if cAt.IsZero() {
+			if s, _ := statusOf(m, c); s.Checking {
+				cAt = time.Now()
+			}
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if bAt.IsZero() || cAt.IsZero() {
+		t.Fatalf("both should eventually be checked: b seen at %v, c seen at %v", bAt, cAt)
+	}
+	if !cAt.Before(bAt) {
+		t.Fatalf("c asked for a recheck after b but should have started first: b at %v, c at %v", bAt, cAt)
+	}
+}

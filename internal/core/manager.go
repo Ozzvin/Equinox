@@ -74,6 +74,7 @@ type Manager struct {
 	held             map[string]*heldInfo     // torrents whose info waits for a free check slot
 	gateActive       map[string]bool          // released torrents that are still in their first check
 	rechecking       map[string]bool          // rechecks the user asked for that hold a slot
+	recheckQueue     []string                 // rechecks waiting for a slot; index 0 goes next
 	seedPend         map[string]time.Duration // seeding time counted but not yet written to the records
 	activePend       map[string]time.Duration // running time counted but not yet written to the records
 	lastEnforce      time.Time
