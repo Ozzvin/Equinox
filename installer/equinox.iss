@@ -28,9 +28,6 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-; Пока программа запущена (окно или трей), установка просит её закрыть.
-AppMutex=Local\EquinoxDesktop
-CloseApplications=yes
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -56,6 +53,29 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: 
 Filename: "{app}\Equinox.exe"; Description: "Запустить Equinox"; Flags: nowait postinstall skipifsilent
 
 [Code]
+// Закрывает программу целиком, включая случай, когда она свёрнута в трей (тогда у неё нет
+// окна, и штатный AppMutex/CloseApplications Inno Setup закрыть её не может — деинсталлятор
+// просто откажется работать, пока процесс жив). taskkill убивает процесс и его дочерние
+// (WebView2) независимо от того, открыто окно или нет.
+procedure KillEquinox();
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{cmd}'), '/C taskkill /F /IM Equinox.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  KillEquinox();
+  Result := True;
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  KillEquinox();
+  Result := True;
+end;
+
 // Настройки, список раздач и загрузки лежат в папке data рядом с программой. При удалении они
 // остаются, если пользователь не попросит иначе: раздачи не должны пропадать из-за переустановки.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
