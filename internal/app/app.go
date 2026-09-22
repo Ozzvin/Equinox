@@ -96,3 +96,22 @@ func ExeDir() string {
 	}
 	return filepath.Dir(exe)
 }
+
+// DefaultStateDir returns where Equinox keeps its settings, torrents and downloads by
+// default: the "data" folder next to the executable, so a per-user or portable install
+// carries its data with it. When that folder cannot be created — a machine-wide install to
+// Program Files, where a standard user has no write access there — a per-user folder is
+// used instead, so the app still starts rather than failing with "access is denied".
+func DefaultStateDir() string { return stateDirUnder(ExeDir()) }
+
+func stateDirUnder(exeDir string) string {
+	dir := filepath.Join(exeDir, "data")
+	if err := os.MkdirAll(dir, 0o755); err == nil {
+		return dir
+	}
+	base := os.Getenv("LOCALAPPDATA")
+	if base == "" {
+		base, _ = os.UserConfigDir()
+	}
+	return filepath.Join(base, "Equinox")
+}

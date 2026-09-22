@@ -21,11 +21,14 @@ import (
 )
 
 func main() {
-	stateDir := flag.String("state", filepath.Join(app.ExeDir(), "data"), "state directory (settings, torrents, downloads)")
+	stateDir := flag.String("state", "", "state directory (default: next to the executable, or a per-user folder if that is not writable)")
 	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback)")
 	add := flag.String("add", "", ".torrent file or magnet link to add at startup")
 	noBrowser := flag.Bool("no-browser", false, "do not open the web interface in the browser")
 	flag.Parse()
+	if *stateDir == "" {
+		*stateDir = app.DefaultStateDir()
+	}
 
 	// Already running on this state directory: open its page instead of starting a second one.
 	if url, ok := runningURL(*stateDir); ok {

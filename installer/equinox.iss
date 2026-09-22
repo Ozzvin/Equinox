@@ -1,5 +1,8 @@
 ; Установщик Equinox (Inno Setup 6). Собирается через build.ps1: ISCC /DAppVersion=<версия из файла VERSION> installer\equinox.iss
-; Ставит для текущего пользователя, права администратора не нужны.
+; По умолчанию ставит для текущего пользователя, права администратора не нужны; при запуске от
+; имени администратора (или по явному выбору в диалоге установки) ставит в Program Files для всех
+; пользователей. Программа сама находит доступную для записи папку данных в обоих случаях — см.
+; app.DefaultStateDir в internal/app/app.go.
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
@@ -10,11 +13,13 @@ AppId={{6F0B0C58-2C4B-4E0B-9D53-7A4E8B9A1D01}
 AppName=Equinox
 AppVersion={#AppVersion}
 AppPublisher=Equinox
-; {localappdata}\Programs, not {autopf}: {autopf} switches to the real (admin-only) Program Files
-; the moment the installer happens to run elevated (right-click "Run as administrator", or Windows
-; elevates it on its own), and the app has no admin rights afterwards to write its own data folder
-; there. This path is always writable by the current user, whichever way the installer was started.
-DefaultDirName={localappdata}\Programs\Equinox
+; {autopf} is {pf} (Program Files) in per-machine install mode and {localappdata}\Programs in
+; per-user mode, switching automatically with the privilege the installer actually runs with —
+; the "install for all users" dialog below (or right-click "Run as administrator") picks per-machine.
+; The app itself now falls back to a per-user data folder if {app}\data is not writable (e.g. a
+; standard user running a per-machine copy installed to Program Files by an administrator), so
+; both modes work without the "access is denied" crash the per-machine mode used to cause.
+DefaultDirName={autopf}\Equinox
 DefaultGroupName=Equinox
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -76,18 +81,28 @@ begin
   Result := True;
 end;
 
-// Настройки, список раздач и загрузки лежат в папке data рядом с программой. При удалении они
-// остаются, если пользователь не попросит иначе: раздачи не должны пропадать из-за переустановки.
+// Настройки, список раздач и загрузки обычно лежат в папке data рядом с программой; но если
+// программу поставили для всех пользователей в Program Files, у обычного пользователя нет туда
+// доступа на запись, и она сама переходит на папку %LOCALAPPDATA%\Equinox (см. DefaultStateDir в
+// internal/app/app.go) — проверяем оба места. При удалении данные остаются, если пользователь не
+// попросит иначе: раздачи не должны пропадать из-за переустановки.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  DataDir: String;
+  Candidates: TArrayOfString;
+  Found: String;
+  I: Integer;
 begin
   if CurUninstallStep <> usPostUninstall then Exit;
-  DataDir := ExpandConstant('{app}\data');
-  if not DirExists(DataDir) then Exit;
+  Candidates := [ExpandConstant('{app}\data'), ExpandConstant('{localappdata}\Equinox')];
+  Found := '';
+  for I := 0 to GetArrayLength(Candidates) - 1 do
+    if DirExists(Candidates[I]) then
+      Found := Found + Candidates[I] + #13#10;
+  if Found = '' then Exit;
   if UninstallSilent then Exit;
-  if MsgBox('Удалить также настройки, список раздач и скачанные файлы из папки:' + #13#10 + DataDir + #13#10#13#10 +
+  if MsgBox('Удалить также настройки, список раздач и скачанные файлы из папки:' + #13#10 + Found + #13#10 +
             'Если нажать «Нет», они сохранятся и будут найдены при следующей установке.',
             mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
-    DelTree(DataDir, True, True, True);
+    for I := 0 to GetArrayLength(Candidates) - 1 do
+      DelTree(Candidates[I], True, True, True);
 end;

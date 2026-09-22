@@ -39,7 +39,7 @@ func main() {
 	// The webview and its message loop must stay on the main OS thread.
 	runtime.LockOSThread()
 
-	stateDir := flag.String("state", filepath.Join(app.ExeDir(), "data"), "state directory")
+	stateDir := flag.String("state", "", "state directory (default: next to the executable, or a per-user folder if that is not writable)")
 	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback)")
 	hidden := flag.Bool("hidden", false, "start in the tray without opening the window")
 	after := flag.Int("after", 0, "internal: wait for this process to exit first (used when restarting)")
@@ -47,6 +47,9 @@ func main() {
 	args := flag.Args() // magnet links and .torrent files passed by Windows
 	if *after > 0 {
 		waitForExit(*after, 30*time.Second)
+	}
+	if *stateDir == "" {
+		*stateDir = app.DefaultStateDir()
 	}
 
 	if err := os.MkdirAll(*stateDir, 0o755); err != nil {
