@@ -9,7 +9,8 @@ import (
 	"math"
 )
 
-// Icon returns a 32x32 .ico image: a rounded blue square with a white download arrow.
+// Icon returns a 32x32 .ico image: equinox, drawn as a circle split into a sunlit half and a
+// night half, tilted by Earth's axial tilt (23.4°), with a sun and a moon set into the two halves.
 // It is drawn in code so the executable needs no resource files.
 func Icon() []byte {
 	const n = 32
@@ -50,7 +51,8 @@ func render(n int) []byte {
 	}
 
 	// Rounded square background, anti-aliased with a 1px soft edge.
-	radius := 7.0 * k
+	radius := 6.5 * k
+	bg := [3]byte{0x1b, 0x21, 0x30}
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
 			cx, cy := float64(x)+0.5, float64(y)+0.5
@@ -58,27 +60,50 @@ func render(n int) []byte {
 			dx := math.Max(math.Abs(cx-half)-(half-radius), 0)
 			dy := math.Max(math.Abs(cy-half)-(half-radius), 0)
 			d := math.Hypot(dx, dy) - radius
-			cov := clamp(0.5 - d)
-			if cov > 0 {
-				set(x, y, 0x2f, 0x6f, 0xed, cov)
+			if cov := clamp(0.5 - d); cov > 0 {
+				set(x, y, bg[0], bg[1], bg[2], cov)
 			}
 		}
 	}
 
-	// Arrow: a vertical stem, a chevron and a base line, as thick anti-aliased segments.
-	segs := [][4]float64{
-		{16, 8, 16, 20}, {10.5, 15, 16, 20.5}, {21.5, 15, 16, 20.5}, {9, 25, 23, 25},
-	}
-	stroke := 1.6 * k
+	// The equinox: a circle split into a sunlit half (orange) and a night half (white), a hairline
+	// gap between them, and a sun and a moon set into their own half — tilted 23.4°, Earth's own
+	// axial tilt, the reason an equinox happens at all. Coordinates are in the disc's own, unrotated
+	// frame: a pixel is tested by rotating it back into that frame.
+	const (
+		diskR   = 10.75
+		gapLo   = 0.0 // the sunlit half ends here...
+		gapHi   = 1.0 // ...and the night half starts here: a 1-unit gap shows the background between them
+		bodyR   = 1.625
+		sunY    = -6.5
+		moonY   = 7.5
+		tiltDeg = 23.4
+	)
+	sun := [3]byte{0xf0, 0xa6, 0x3c}
+	moon := [3]byte{0xf4, 0xf5, 0xf8}
+	sinT, cosT := math.Sincos(tiltDeg * math.Pi / 180)
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
-			cx, cy := float64(x)+0.5, float64(y)+0.5
-			best := math.MaxFloat64
-			for _, s := range segs {
-				best = math.Min(best, distToSegment(cx, cy, s[0]*k, s[1]*k, s[2]*k, s[3]*k))
+			dx, dy := (float64(x)+0.5)/k-16, (float64(y)+0.5)/k-16
+			// Rotate the pixel back into the disk's own frame (the inverse of the +23.4° tilt
+			// applied when the artwork was drawn, so the disk itself appears tilted).
+			lx, ly := dx*cosT-dy*sinT, dx*sinT+dy*cosT
+			distEdge := math.Hypot(lx, ly) - diskR
+			circleCov := clamp(0.5 - distEdge)
+			if circleCov <= 0 {
+				continue
 			}
-			if cov := clamp(stroke + 0.5 - best); cov > 0 {
-				set(x, y, 255, 255, 255, cov)
+			if cov := math.Min(circleCov, clamp(0.5-ly)); cov > 0 { // the sunlit half, ly <= gapLo
+				set(x, y, sun[0], sun[1], sun[2], cov)
+			}
+			if cov := math.Min(circleCov, clamp(ly-gapHi+0.5)); cov > 0 { // the night half, ly >= gapHi
+				set(x, y, moon[0], moon[1], moon[2], cov)
+			}
+			if cov := clamp(0.5 - (math.Hypot(lx, ly-sunY) - bodyR)); cov > 0 { // the sun
+				set(x, y, bg[0], bg[1], bg[2], cov)
+			}
+			if cov := clamp(0.5 - (math.Hypot(lx, ly-moonY) - bodyR)); cov > 0 { // the moon
+				set(x, y, bg[0], bg[1], bg[2], cov)
 			}
 		}
 	}
@@ -134,13 +159,3 @@ func DIBFromIcon(ico []byte) []byte {
 }
 
 func clamp(v float64) float64 { return math.Max(0, math.Min(1, v)) }
-
-func distToSegment(px, py, ax, ay, bx, by float64) float64 {
-	vx, vy := bx-ax, by-ay
-	l2 := vx*vx + vy*vy
-	t := 0.0
-	if l2 > 0 {
-		t = clamp(((px-ax)*vx + (py-ay)*vy) / l2)
-	}
-	return math.Hypot(px-(ax+t*vx), py-(ay+t*vy))
-}
