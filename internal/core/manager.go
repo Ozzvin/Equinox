@@ -482,7 +482,7 @@ func (m *Manager) saveCopy(mi *metainfo.MetaInfo, hash string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, hash+".torrent")
+	path := filepath.Join(dir, copyFileName(mi, dir, hash))
 	tmp := path + ".tmp"
 	f, err := os.Create(tmp)
 	if err != nil {
@@ -498,6 +498,41 @@ func (m *Manager) saveCopy(mi *metainfo.MetaInfo, hash string) (string, error) {
 		return "", err
 	}
 	return path, os.Rename(tmp, path)
+}
+
+// copyFileName picks the file name for a saved .torrent copy: the torrent's own name, so the
+// folder stays browsable, falling back to its hash when that name is empty or already taken
+// by a different torrent's copy in the same folder (two different torrents can share a display
+// name; re-adding the same torrent under its own name is fine, since it is its own copy).
+func copyFileName(mi *metainfo.MetaInfo, dir, hash string) string {
+	if info, err := mi.UnmarshalInfo(); err == nil {
+		if name := sanitizeFileName(info.Name); name != "" {
+			p := filepath.Join(dir, name+".torrent")
+			if existing, err := metainfo.LoadFromFile(p); err != nil || existing.HashInfoBytes().HexString() == hash {
+				return name + ".torrent"
+			}
+		}
+	}
+	return hash + ".torrent"
+}
+
+// sanitizeFileName turns a torrent's display name into a name safe to use as a file name on
+// Windows: no reserved characters, no trailing dot or space, and not unreasonably long.
+func sanitizeFileName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		switch {
+		case r < 0x20:
+			return -1
+		case strings.ContainsRune(`<>:"/\|?*`, r):
+			return '_'
+		}
+		return r
+	}, name)
+	name = strings.TrimRight(name, " .")
+	if len(name) > 150 {
+		name = name[:150]
+	}
+	return name
 }
 
 // ---------------------------------------------------------------- removing

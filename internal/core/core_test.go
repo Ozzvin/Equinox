@@ -76,9 +76,9 @@ func TestCopyKeptAndDeletedWithData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copyPath := filepath.Join(dir, "torrents", hash+".torrent")
+	copyPath := filepath.Join(dir, "torrents", "movie.bin.torrent")
 	if !exists(copyPath) {
-		t.Fatal("copy of .torrent was not created")
+		t.Fatal("copy of .torrent was not created under the torrent's own name")
 	}
 
 	// Wait for preallocation to create the data file at full size.
@@ -112,6 +112,39 @@ func TestCopyKeptAndDeletedWithData(t *testing.T) {
 	}
 	if len(m.List()) != 0 {
 		t.Fatal("torrent still listed")
+	}
+}
+
+func TestTorrentCopyNameFallsBackToHashOnCollision(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	if err := os.MkdirAll(filepath.Join(dir, "one"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "two"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tp1 := makeTorrent(t, dir, "one/movie.bin", 50<<10)
+	tp2 := makeTorrent(t, dir, "two/movie.bin", 60<<10) // same display name, different content/hash
+
+	if _, err := m.AddFile(tp1); err != nil {
+		t.Fatal(err)
+	}
+	byName := filepath.Join(dir, "torrents", "movie.bin.torrent")
+	if !exists(byName) {
+		t.Fatal("first torrent should get a copy named after itself")
+	}
+
+	hash2, err := m.AddFile(tp2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byHash := filepath.Join(dir, "torrents", hash2+".torrent")
+	if !exists(byHash) {
+		t.Fatal("second torrent with a colliding display name should fall back to its hash")
+	}
+	if !exists(byName) {
+		t.Fatal("the first torrent's copy must not be overwritten by the second")
 	}
 }
 

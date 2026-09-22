@@ -157,7 +157,7 @@ func TestStreamRangeAndRemoveWithData(t *testing.T) {
 	}
 
 	// Remove with data: file and .torrent copy are gone.
-	copyPath := filepath.Join(e.dir, "torrents", hash+".torrent")
+	copyPath := filepath.Join(e.dir, "torrents", "clip.mkv.torrent")
 	if _, err := os.Stat(copyPath); err != nil {
 		t.Fatal("copy missing before removal")
 	}
