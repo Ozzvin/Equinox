@@ -122,7 +122,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/fs", s.fsList)
 	s.mux.HandleFunc("POST /api/fs/mkdir", s.fsMkdir)
 	s.mux.HandleFunc("POST /api/stage", s.stage)
+	s.mux.HandleFunc("GET /api/stage/{id}", s.stagedInfo)
 	s.mux.HandleFunc("DELETE /api/stage/{id}", s.unstage)
+	s.mux.HandleFunc("GET /api/pending-add", s.pendingAdd)
+	s.mux.HandleFunc("POST /api/pending-add", s.postPendingAdd)
 	s.mux.HandleFunc("POST /api/add-batch", s.addBatch)
 	s.mux.HandleFunc("GET /api/add-dialog", s.addDialog)
 	s.mux.HandleFunc("PUT /api/add-defaults", s.putAddDefaults)
@@ -407,6 +410,51 @@ func (s *Server) stage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) unstage(w http.ResponseWriter, r *http.Request) {
 	s.m.Unstage(r.PathValue("id"))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// stagedInfo describes a staged torrent again, for a client that only has its id (used after
+// pendingAdd names it).
+func (s *Server) stagedInfo(w http.ResponseWriter, r *http.Request) {
+	st, ok := s.m.StagedInfo(r.PathValue("id"))
+	if !ok {
+		fail(w, core.ErrNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// pendingAdd returns and clears the magnets/staged files queued by a second launch or the desktop
+// app opening a file from outside (see postPendingAdd); the page polls this to open the "Add
+// torrents" dialog with them instead of adding them silently.
+func (s *Server) pendingAdd(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.m.TakePendingAdds())
+}
+
+// postPendingAdd queues one magnet link for pendingAdd: POST {"magnet": "..."}. A .torrent file
+// goes through POST /api/stage first, then its id is queued the same way.
+func (s *Server) postPendingAdd(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Magnet string `json:"magnet"`
+		Stage  string `json:"stage"`
+	}
+	if err := decode(r, &b); err != nil {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	switch {
+	case b.Magnet != "":
+		s.m.QueueExternalAdd(core.PendingAdd{Kind: "magnet", Magnet: b.Magnet})
+	case b.Stage != "":
+		if _, ok := s.m.StagedInfo(b.Stage); !ok {
+			fail(w, core.ErrInvalidInput)
+			return
+		}
+		s.m.QueueExternalAdd(core.PendingAdd{Kind: "stage", Stage: b.Stage})
+	default:
+		fail(w, core.ErrInvalidInput)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

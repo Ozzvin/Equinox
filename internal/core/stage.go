@@ -84,6 +84,30 @@ func (m *Manager) Stage(mi *metainfo.MetaInfo) (StagedTorrent, error) {
 	return st, nil
 }
 
+// StagedInfo describes a staged torrent again, for a client that only has its id (see PendingAdd).
+func (m *Manager) StagedInfo(id string) (StagedTorrent, bool) {
+	m.mu.Lock()
+	e := m.staged[id]
+	m.mu.Unlock()
+	if e == nil {
+		return StagedTorrent{}, false
+	}
+	info, err := e.mi.UnmarshalInfo()
+	if err != nil {
+		return StagedTorrent{}, false
+	}
+	hash := e.mi.HashInfoBytes().HexString()
+	st := StagedTorrent{
+		ID: id, Name: info.BestName(), Hash: hash, Size: info.TotalLength(),
+		Private: info.Private != nil && *info.Private, Comment: e.mi.Comment,
+		Trackers: len(e.mi.UpvertedAnnounceList().DistinctValues()), Exists: m.exists(hash),
+	}
+	for _, f := range info.UpvertedFiles() {
+		st.Files = append(st.Files, StagedFile{Path: strings.Join(f.BestPath(), "/"), Size: f.Length})
+	}
+	return st, true
+}
+
 // Unstage forgets a staged torrent (it was removed from the list).
 func (m *Manager) Unstage(id string) {
 	m.mu.Lock()

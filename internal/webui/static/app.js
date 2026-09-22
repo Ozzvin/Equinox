@@ -777,6 +777,7 @@
       render();
       renderDetails();
       if ($("dlg-stats").open) renderStats();
+      await checkPendingAdd();
     } catch (e) { /* transient: retried on the next tick */ }
   }
   function loop() { refresh().finally(() => setTimeout(loop, 1500)); }
@@ -1450,6 +1451,30 @@
       renderAdd(); $("dlg-add").showModal();
     }
     if (files && files.length) await stageFiles(files);
+  }
+
+  // A magnet link or .torrent file opened from outside the app (Explorer, a second launch) lands
+  // here instead of being added at once, so it shows up in the same dialog as anything dropped or
+  // typed by hand.
+  async function checkPendingAdd() {
+    if (!window.__equinoxDesktop) return;
+    let items;
+    try { items = await api("GET", "/api/pending-add"); } catch (_) { return; }
+    if (!items || !items.length) return;
+    await openAdd();
+    for (const p of items) {
+      if (p.kind === "magnet" && p.magnet) addLinks(p.magnet);
+      else if (p.kind === "stage" && p.stage) await attachStaged(p.stage);
+    }
+    renderAdd();
+  }
+  async function attachStaged(id) {
+    let st;
+    try { st = await api("GET", `/api/stage/${id}`); } catch (x) { toast(x.message, true); return; }
+    if (adItems.some((x) => x.hash === st.hash)) return; // already on the list
+    adItems.push({ kind: "file", name: st.name, size: st.size, hash: st.hash, exists: st.exists, stage: st.id, files: st.files || [],
+      sel: (st.files || []).map(() => true), open: null, opts: optDefaults(), error: "" });
+    adSel = adItems.length - 1;
   }
 
   async function stageFiles(list) {
