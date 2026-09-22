@@ -1793,8 +1793,17 @@
     $("st-port-note").hidden = !(port && settings.listenPort !== port.port);
     $("st-port").textContent = portDetails(port); $("st-mapping").checked = !!port.enabled;
     openSection();
+    loadAbout();
     $("st-err").hidden = true; $("dlg-settings").showModal();
   };
+  // "О приложении": fetched once and cached, since it never changes while the app is running.
+  let aboutInfo = null;
+  async function loadAbout() {
+    if (!aboutInfo) { try { aboutInfo = await api("GET", "/api/about"); } catch (_) { return; } }
+    $("ab-version").textContent = "версия " + aboutInfo.version;
+    $("ab-build").textContent = aboutInfo.goVersion + ", " + aboutInfo.os;
+    $("ab-engine").textContent = aboutInfo.engine || "—";
+  }
   { const ids = ["st-down", "st-up", "st-altdown", "st-altup"];
     limitFieldsDirty(ids);
     for (const r of [$("st-unit-bytes"), $("st-unit-bits")]) r.addEventListener("change", () => {

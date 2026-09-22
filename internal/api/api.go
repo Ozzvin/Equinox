@@ -132,6 +132,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/create", s.createTorrent)
 	s.mux.HandleFunc("GET /api/create/{id}", s.createStatus)
 	s.mux.HandleFunc("GET /api/settings", s.getSettings)
+	s.mux.HandleFunc("GET /api/about", s.about)
 	s.mux.HandleFunc("PUT /api/settings", s.putSettings)
 	s.mux.HandleFunc("POST /api/altspeed", s.altSpeed)
 	s.mux.HandleFunc("GET /api/port", s.port)

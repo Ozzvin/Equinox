@@ -679,3 +679,10 @@ html[data-density="compact"] .seg-note { display: none; }
 .opt-form .pick { margin-bottom: 6px; }
 .opt-form .row-end { margin-top: 8px; }
 .file.dir.skip .fn, .file.dir.skip .fs { text-decoration: none; opacity: .6; }
+
+/* the "О приложении" pane of settings */
+.about-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+.about-name { font-size: 17px; font-weight: 700; }
+.about-kv { grid-template-columns: 90px 1fr !important; padding: 0 0 10px !important; gap: 4px 12px !important; }
+.about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.about-links .btn { text-decoration: none; }

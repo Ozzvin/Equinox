@@ -87,3 +87,20 @@ func TestPendingAddMagnetAndBadInput(t *testing.T) {
 		t.Fatalf("an unknown stage id must 404: %d", r.StatusCode)
 	}
 }
+
+// The About endpoint reports the running build's own name and version.
+func TestAboutEndpoint(t *testing.T) {
+	e := setup(t)
+	r := e.do(t, "GET", "/api/about", nil, nil)
+	var a struct {
+		Name      string `json:"name"`
+		Version   string `json:"version"`
+		GoVersion string `json:"goVersion"`
+		OS        string `json:"os"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&a)
+	r.Body.Close()
+	if r.StatusCode != 200 || a.Name != "Equinox" || a.GoVersion == "" || a.OS == "" {
+		t.Fatalf("about: %d %+v", r.StatusCode, a)
+	}
+}

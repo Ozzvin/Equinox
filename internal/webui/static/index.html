@@ -314,6 +314,7 @@
         <button type="button" role="tab" data-sec="network" aria-selected="false">Сеть</button>
         <button type="button" role="tab" data-sec="view" aria-selected="false">Интерфейс</button>
         <button type="button" role="tab" data-sec="system" aria-selected="false" hidden id="sn-system">Системные</button>
+        <button type="button" role="tab" data-sec="about" aria-selected="false">О приложении</button>
       </nav>
       <div class="set-panes">
       <section class="set-pane" role="tabpanel" data-sec="speed" hidden>
@@ -475,6 +476,23 @@
           <legend>Уведомления</legend>
           <label class="check"><input type="checkbox" id="st-notify"><span>Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label>
         </fieldset>
+      </section>
+      <section class="set-pane" role="tabpanel" data-sec="about" hidden>
+        <div class="about-head">
+          <svg viewBox="0 0 32 32" width="48" height="48" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M16 7v13m0 0l-5-5m5 5l5-5M9 25h14" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div><div class="about-name">Equinox</div><div class="muted small" id="ab-version">версия…</div></div>
+        </div>
+        <p class="muted small">Торрент-клиент на Go: движок <a href="https://github.com/anacrolix/torrent" target="_blank" rel="noopener">anacrolix/torrent</a>, без libtorrent.</p>
+        <dl class="kv about-kv">
+          <dt>Сборка</dt><dd id="ab-build">—</dd>
+          <dt>Движок</dt><dd id="ab-engine">—</dd>
+        </dl>
+        <div class="about-links">
+          <a class="btn small" href="https://github.com/Ozzvin/equinox" target="_blank" rel="noopener">Репозиторий на GitHub</a>
+          <a class="btn small" href="https://github.com/Ozzvin/equinox/issues" target="_blank" rel="noopener">Сообщить о проблеме</a>
+          <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/LICENSE" target="_blank" rel="noopener">Лицензия MIT</a>
+          <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Журнал изменений</a>
+        </div>
       </section>
       </div>
     </div>
