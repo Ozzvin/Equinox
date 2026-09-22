@@ -89,6 +89,13 @@ func main() {
 	log.Println("engine started, api at", a.URL[:strings.Index(a.URL, "#")])
 	// Lets a second launch find this instance; like api-token, the file holds the access key.
 	_ = os.WriteFile(filepath.Join(*stateDir, "ui-url"), []byte(a.URL), 0o600)
+	// So Equinox shows up as an option for .torrent/magnet (the "Open with" menu, and the
+	// picker Windows shows when a file type has no default yet) without the user having to
+	// visit Settings first. This does not make it the *default* — Windows only allows that
+	// through its own UI (see RegisterHandlers), which is still a separate, explicit step.
+	if err := desktop.RegisterHandlers(); err != nil {
+		log.Println("register file handlers:", err)
+	}
 	addArgs(a, args)
 
 	d := &desktop_{app: a, show: make(chan struct{}, 1), quit: make(chan struct{}), stateDir: *stateDir, listen: *listen, place: newPlacer(*stateDir, func() bool { return a.Settings.Get().RememberWindow })}
@@ -316,7 +323,7 @@ func (d *desktop_) onTrayReady() {
 	turtle := systray.AddMenuItemCheckbox("Ограничение скорости", "Режим «черепаха»", d.app.Settings.Get().AltSpeedActive)
 	systray.AddSeparator()
 	auto := systray.AddMenuItemCheckbox("Запускать вместе с Windows", "Запуск в трее при входе в систему", desktop.AutostartEnabled())
-	assoc := systray.AddMenuItem("Открывать magnet и .torrent в Equinox…", "Выбрать Equinox в «Приложения по умолчанию»")
+	assoc := systray.AddMenuItem("Сделать торрент-клиентом по умолчанию…", "Выбрать Equinox в «Приложения по умолчанию»")
 	systray.AddSeparator()
 	quit := systray.AddMenuItem("Выход", "Остановить все раздачи и выйти")
 
