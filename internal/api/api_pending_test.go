@@ -2,8 +2,15 @@ package api
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/Ozzvin/equinox/internal/buildinfo"
+	"github.com/Ozzvin/equinox/internal/update"
 )
 
 // A .torrent file opened from outside the app (Explorer, a second launch) is staged and queued,
@@ -102,5 +109,49 @@ func TestAboutEndpoint(t *testing.T) {
 	r.Body.Close()
 	if r.StatusCode != 200 || a.Name != "Equinox" || a.GoVersion == "" || a.OS == "" {
 		t.Fatalf("about: %d %+v", r.StatusCode, a)
+	}
+}
+
+// GET /api/update reports a newer release when GitHub has one, and nothing when it does not.
+func TestUpdateEndpoint(t *testing.T) {
+	oldVersion := buildinfo.Version
+	buildinfo.Version = "1.0.0"
+	t.Cleanup(func() { buildinfo.Version = oldVersion })
+
+	mux := http.NewServeMux()
+	installer := []byte("fake installer")
+	sum := sha256.Sum256(installer)
+	mux.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) { w.Write(installer) })
+	mux.HandleFunc("/sums", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(hex.EncodeToString(sum[:]) + "  Equinox-Setup.exe\n"))
+	})
+	var srv *httptest.Server
+	mux.HandleFunc("/release", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"tag_name": "v1.0.1",
+			"body":     "notes",
+			"html_url": "https://example.invalid/releases/v1.0.1",
+			"assets": []map[string]string{
+				{"name": "Equinox-Setup.exe", "browser_download_url": srv.URL + "/setup"},
+				{"name": "SHA256SUMS.txt", "browser_download_url": srv.URL + "/sums"},
+			},
+		})
+	})
+	srv = httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	oldAPI := update.APIURL
+	update.APIURL = srv.URL + "/release"
+	t.Cleanup(func() { update.APIURL = oldAPI })
+
+	e := setup(t)
+	r := e.do(t, "GET", "/api/update?force=1", nil, nil)
+	var st struct {
+		Available bool   `json:"available"`
+		Version   string `json:"version"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&st)
+	r.Body.Close()
+	if r.StatusCode != 200 || !st.Available || st.Version != "1.0.1" {
+		t.Fatalf("update: %d %+v", r.StatusCode, st)
 	}
 }

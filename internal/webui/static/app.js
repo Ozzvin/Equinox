@@ -1785,7 +1785,7 @@
       $("st-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`; }
 
     fillNetwork(settings.network || {});
-    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
+    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
     if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {}); $("st-copy").value = settings.copyRemovePolicy;
     $("st-data").value = settings.dataDir; $("st-movedone").value = settings.moveCompletedDir || ""; $("st-watch").value = settings.watchDir || ""; $("st-copydir").value = settings.torrentCopyDir || "";
     openLabelRows();
@@ -1803,6 +1803,8 @@
     $("ab-version").textContent = "версия " + aboutInfo.version;
     $("ab-build").textContent = aboutInfo.goVersion + ", " + aboutInfo.os;
     $("ab-engine").textContent = aboutInfo.engine || "—";
+    renderUpdate();
+    if (!lastUpdate) checkUpdate(false);
   }
   { const ids = ["st-down", "st-up", "st-altdown", "st-altup"];
     limitFieldsDirty(ids);
@@ -1831,7 +1833,7 @@
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
-        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
+        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);
@@ -1876,6 +1878,39 @@
     try { toast("Перезапуск…"); const err = await window.restartApp(); if (err) toast("Не удалось перезапустить: " + err, true); }
     catch (x) { toast("Не удалось перезапустить: " + x, true); }
   };
+
+  // Updates: GET /api/update works for both variants; installing (desktop only) runs the
+  // downloaded installer silently and reopens the app once it is done.
+  let lastUpdate = null;
+  async function checkUpdate(force) {
+    try { lastUpdate = await api("GET", "/api/update" + (force ? "?force=1" : "")); }
+    catch (_) { return null; }
+    renderUpdate();
+    return lastUpdate;
+  }
+  function renderUpdate() {
+    const r = lastUpdate, available = !!(r && r.available);
+    const canInstall = available && window.__equinoxDesktop && typeof window.installUpdate === "function";
+    $("update-bar").hidden = !available;
+    if (available) $("update-text").textContent = `Доступна версия Equinox ${r.version}.`;
+    $("btn-update-install").hidden = !canInstall;
+    $("btn-update-link").hidden = !available || canInstall;
+    if (available) $("btn-update-link").href = r.url || "#";
+
+    $("ab-update-box").hidden = !available;
+    if (available) $("ab-update-text").textContent = `Доступна версия ${r.version}.`;
+    $("ab-update-install").hidden = !canInstall;
+    $("ab-update-link").hidden = !available || canInstall;
+    if (available) $("ab-update-link").href = r.url || "#";
+    $("ab-update-status").textContent = r ? (available ? "" : "у вас последняя версия") : "Не удалось проверить";
+  }
+  async function installUpdateNow() {
+    try { toast("Обновление скачивается и устанавливается…"); const err = await window.installUpdate(); if (err) toast("Не удалось установить обновление: " + err, true); }
+    catch (x) { toast("Не удалось установить обновление: " + x, true); }
+  }
+  $("btn-update-install").onclick = installUpdateNow;
+  $("ab-update-install").onclick = installUpdateNow;
+  $("ab-check-update").onclick = async () => { $("ab-update-status").textContent = "Проверка…"; await checkUpdate(true); };
 
   // schedule: weekday chips (values are JS weekdays: 0 = Sunday)
   const DAYS = [[1, "Пн"], [2, "Вт"], [3, "Ср"], [4, "Чт"], [5, "Пт"], [6, "Сб"], [0, "Вс"]];
@@ -2179,4 +2214,12 @@
   if (!token) askToken();
   loop();
   checkRestart(); setInterval(checkRestart, 20000);
+  // Updates: an automatic check shortly after start and then hourly, unless turned off; a
+  // manual check (the About section's button) always works regardless of this setting.
+  (async () => {
+    if (!token) return;
+    try { if ((await api("GET", "/api/settings")).autoUpdateCheck === false) return; } catch (_) { return; }
+    setTimeout(() => checkUpdate(false), 15000);
+    setInterval(() => checkUpdate(false), 60 * 60000);
+  })();
 })();

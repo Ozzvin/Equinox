@@ -55,9 +55,22 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Equinox"; Flags: uninsdeletevalue dontcreatekey
 
 [Run]
-Filename: "{app}\Equinox.exe"; Description: "Запустить Equinox"; Flags: nowait postinstall skipifsilent
+; The normal, interactive install: an unchecked-by-default box on the finish page. A silent
+; install has no finish page, so a "postinstall" entry never runs there regardless of
+; skipifsilent; the flag is kept anyway to document that this one is for interactive use only.
+Filename: "{app}\Equinox.exe"; Description: "Запустить Equinox"; Flags: nowait postinstall skipifsilent; Check: not IsAutoUpdate
+; The app's own auto-update (internal/update) runs Setup with /VERYSILENT /autoupdate=1: this
+; entry reopens Equinox once the silent install finishes. It needs no "postinstall" (there is
+; no finish page to skip it from) and runasoriginaluser keeps it from launching as
+; administrator when Setup itself ran elevated for a per-machine install.
+Filename: "{app}\Equinox.exe"; Flags: nowait runasoriginaluser; Check: IsAutoUpdate
 
 [Code]
+function IsAutoUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:autoupdate|0}') = '1';
+end;
+
 // Закрывает программу целиком, включая случай, когда она свёрнута в трей (тогда у неё нет
 // окна, и штатный AppMutex/CloseApplications Inno Setup закрыть её не может — деинсталлятор
 // просто откажется работать, пока процесс жив). taskkill убивает процесс и его дочерние

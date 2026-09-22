@@ -138,6 +138,9 @@ type Settings struct {
 	EdgePieces int `json:"edgePieces"`
 	// Streaming: size of the sliding window (in pieces) for sequential mode.
 	SequentialWindow int `json:"sequentialWindow"`
+
+	// AutoUpdateCheck periodically asks GitHub for a newer release (manual checks always work).
+	AutoUpdateCheck bool `json:"autoUpdateCheck"`
 }
 
 // Default returns settings with sane values; dir is the daemon's state directory.
@@ -165,6 +168,7 @@ func Default(dir string) Settings {
 		Add:              AddDefaults{EdgePieces: true},
 		EdgePieces:       4,
 		SequentialWindow: 16,
+		AutoUpdateCheck:  true,
 	}
 }
 

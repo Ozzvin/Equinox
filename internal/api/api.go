@@ -133,6 +133,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/create/{id}", s.createStatus)
 	s.mux.HandleFunc("GET /api/settings", s.getSettings)
 	s.mux.HandleFunc("GET /api/about", s.about)
+	s.mux.HandleFunc("GET /api/update", s.updateCheck)
 	s.mux.HandleFunc("PUT /api/settings", s.putSettings)
 	s.mux.HandleFunc("POST /api/altspeed", s.altSpeed)
 	s.mux.HandleFunc("GET /api/port", s.port)
@@ -642,6 +643,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		RatioLimit       float64             `json:"ratioLimit"`
 		SeedTimeLimit    *int                `json:"seedTimeLimitMinutes"` // optional: omitted = unchanged
 		NotifyOnComplete *bool               `json:"notifyOnComplete"`     // optional
+		AutoUpdateCheck  *bool               `json:"autoUpdateCheck"`      // optional
 		StartHidden      *bool               `json:"startHidden"`          // optional
 		SetupDone        *bool               `json:"setupDone"`            // optional
 		CloseToTray      *bool               `json:"closeToTray"`          // optional
@@ -753,6 +755,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.NotifyOnComplete != nil {
 			c.NotifyOnComplete = *b.NotifyOnComplete
+		}
+		if b.AutoUpdateCheck != nil {
+			c.AutoUpdateCheck = *b.AutoUpdateCheck
 		}
 		if b.StartHidden != nil {
 			c.StartHidden = *b.StartHidden

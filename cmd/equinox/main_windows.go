@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -23,6 +24,7 @@ import (
 	"github.com/Ozzvin/equinox/internal/app"
 	"github.com/Ozzvin/equinox/internal/core"
 	"github.com/Ozzvin/equinox/internal/desktop"
+	"github.com/Ozzvin/equinox/internal/update"
 )
 
 var (
@@ -154,6 +156,7 @@ func (d *desktop_) window(dataPath string) {
 
 	hwnd := uintptr(w.Window())
 	_ = w.Bind("restartApp", d.restart) // used by the "restart required" bar
+	_ = w.Bind("installUpdate", d.installUpdate)
 	_ = w.Bind("getAutostart", desktop.AutostartEnabled)
 	_ = w.Bind("setAutostart", func(on bool) string { // used by the Windows section of the settings
 		if err := desktop.SetAutostart(on, d.app.Settings.Get().StartHidden); err != nil {
@@ -242,6 +245,26 @@ func (d *desktop_) restart() string {
 		return err.Error()
 	}
 	go d.doQuit() // after the reply has been sent to the page
+	return ""
+}
+
+// installUpdate downloads and verifies the latest release's installer and runs it silently;
+// the installer's own InitializeSetup (see installer/equinox.iss) closes this process and,
+// since it is passed /autoupdate=1, reopens the app once the update is in place. It returns
+// an error text (empty on success) for the page.
+func (d *desktop_) installUpdate() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	info, err := update.Check(ctx, false)
+	if err != nil {
+		return err.Error()
+	}
+	if info == nil {
+		return "" // someone else already updated, or a background check just missed it
+	}
+	if err := info.Install(ctx, filepath.Join(d.stateDir, "update"), true); err != nil {
+		return err.Error()
+	}
 	return ""
 }
 
