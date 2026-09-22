@@ -316,7 +316,7 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
    own "dialog:not([open]) { display: none }" and the dialog would render inline, all the time,
    instead of only as a modal while actually open (that shipped once and looked exactly like this
    comment warns against: a small, unstyled, stuck strip at the top of the page). */
-#dlg-settings.settings[open] { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; }
+#dlg-settings.settings[open] { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; overflow: hidden; }
 #dlg-settings.settings[open] #f-settings { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 #dlg-settings.settings[open] .set-layout { flex: 1 1 auto; min-height: 0; }
 .set-layout { display: flex; gap: 18px; align-items: stretch; margin-top: 4px; }
