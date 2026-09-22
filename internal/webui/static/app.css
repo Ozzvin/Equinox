@@ -316,7 +316,10 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
    own "dialog:not([open]) { display: none }" and the dialog would render inline, all the time,
    instead of only as a modal while actually open (that shipped once and looked exactly like this
    comment warns against: a small, unstyled, stuck strip at the top of the page). */
-#dlg-settings.settings[open] { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; overflow: hidden; }
+/* a fixed height (not just a cap) so the dialog does not resize as you switch between a tall
+   section (Скорость) and a short one (Метки): every section fits this same box, scrolling inside
+   it if it has to. max-height is still there for a window too short for this value. */
+#dlg-settings.settings[open] { width: min(860px, calc(100vw - 32px)); height: min(620px, calc(100vh - 64px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; overflow: hidden; }
 #dlg-settings.settings[open] #f-settings { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 #dlg-settings.settings[open] .set-layout { flex: 1 1 auto; min-height: 0; }
 .set-layout { display: flex; gap: 18px; align-items: stretch; margin-top: 4px; }
@@ -591,6 +594,7 @@ html:not([data-density="large"]) .row-end { margin-top: 12px; }
 html:not([data-density="large"]) .grid2 { gap: 0 12px; }
 html:not([data-density="large"]) dialog.wide { width: min(640px, calc(100vw - 32px)); }
 html:not([data-density="large"]) #dlg-settings.settings { width: min(780px, calc(100vw - 32px)); }
+html:not([data-density="large"]) #dlg-settings.settings[open] { height: min(560px, calc(100vh - 64px)); }
 html:not([data-density="large"]) .set-layout { gap: 14px; }
 html:not([data-density="large"]) .set-nav { width: 156px; padding-right: 10px; }
 html:not([data-density="large"]) .set-nav button { height: 30px; padding: 0 10px; border-radius: 6px; font-size: 13px; }
@@ -618,6 +622,7 @@ html[data-density="compact"] legend { font-size: 12.5px; padding: 0 5px; }
 html[data-density="compact"] .row-end { margin-top: 10px; }
 html[data-density="compact"] dialog.wide { width: min(600px, calc(100vw - 24px)); }
 html[data-density="compact"] #dlg-settings.settings { width: min(700px, calc(100vw - 24px)); }
+html[data-density="compact"] #dlg-settings.settings[open] { height: min(500px, calc(100vh - 64px)); }
 html[data-density="compact"] .set-nav { width: 138px; padding-right: 8px; }
 html[data-density="compact"] .set-nav button { height: 26px; padding: 0 8px; font-size: 12.5px; }
 html[data-density="compact"] .seg label { padding: 4px 6px; }
