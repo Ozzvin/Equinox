@@ -10,7 +10,11 @@ AppId={{6F0B0C58-2C4B-4E0B-9D53-7A4E8B9A1D01}
 AppName=Equinox
 AppVersion={#AppVersion}
 AppPublisher=Equinox
-DefaultDirName={autopf}\Equinox
+; {localappdata}\Programs, not {autopf}: {autopf} switches to the real (admin-only) Program Files
+; the moment the installer happens to run elevated (right-click "Run as administrator", or Windows
+; elevates it on its own), and the app has no admin rights afterwards to write its own data folder
+; there. This path is always writable by the current user, whichever way the installer was started.
+DefaultDirName={localappdata}\Programs\Equinox
 DefaultGroupName=Equinox
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
