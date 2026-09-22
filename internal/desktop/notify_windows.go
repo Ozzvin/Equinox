@@ -15,11 +15,19 @@ import (
 // id 100). Windows 10/11 show it as a toast.
 
 var (
-	shellDLL         = windows.NewLazySystemDLL("shell32.dll")
-	userDLL          = windows.NewLazySystemDLL("user32.dll")
-	pNotifyIcon      = shellDLL.NewProc("Shell_NotifyIconW")
-	pFindWindowExW   = userDLL.NewProc("FindWindowExW")
-	pGetWindowThread = userDLL.NewProc("GetWindowThreadProcessId")
+	shellDLL           = windows.NewLazySystemDLL("shell32.dll")
+	userDLL            = windows.NewLazySystemDLL("user32.dll")
+	pNotifyIcon        = shellDLL.NewProc("Shell_NotifyIconW")
+	pFindWindowExW     = userDLL.NewProc("FindWindowExW")
+	pGetWindowThread   = userDLL.NewProc("GetWindowThreadProcessId")
+	pGetWindowLongPtrW = userDLL.NewProc("GetWindowLongPtrW")
+	pSetWindowLongPtrW = userDLL.NewProc("SetWindowLongPtrW")
+	pCallWindowProcW   = userDLL.NewProc("CallWindowProcW")
+
+	// GWLP_WNDPROC (-4): a var, not a const, so the negative-to-uintptr conversion below is a
+	// runtime conversion (2's complement) rather than a constant one, which Go's constant
+	// arithmetic would otherwise reject as out of uintptr's range.
+	gwlpWndProc int32 = -4
 )
 
 const (
@@ -28,6 +36,12 @@ const (
 	nimModify  = 1
 	nifInfo    = 0x10
 	niifInfo   = 1
+
+	// The tray library (energye/systray) hardcodes WM_USER+1 as the message it asks Windows to
+	// send back to the tray window for every notification-icon event (clicks, and also a
+	// clicked balloon/toast); NIN_BALLOONUSERCLICK is the click-the-toast-body case.
+	wmSystrayMessage    = 0x0400 + 1
+	ninBalloonUserClick = 0x0400 + 5
 )
 
 // notifyIconData mirrors NOTIFYICONDATAW (the version with the balloon icon).
@@ -88,4 +102,34 @@ func Notify(title, text string) error {
 		return err
 	}
 	return nil
+}
+
+var (
+	notifyClickHandler func()
+	origTrayWndProc    uintptr
+)
+
+// WatchNotificationClicks arranges for onClick to run when the user clicks a notification
+// shown by Notify (its toast body, not its close button, and not the tray icon itself). The
+// tray library owns the tray window's message loop and has no click event for this, so this
+// subclasses that window: its own WNDPROC is swapped for one that watches for
+// NIN_BALLOONUSERCLICK and then always forwards to the original, unchanged. Call it once,
+// after the tray icon exists (e.g. from the tray's own ready callback).
+func WatchNotificationClicks(onClick func()) {
+	hwnd := trayWindow()
+	if hwnd == 0 {
+		return
+	}
+	notifyClickHandler = onClick
+	orig, _, _ := pGetWindowLongPtrW.Call(hwnd, uintptr(gwlpWndProc))
+	origTrayWndProc = orig
+	pSetWindowLongPtrW.Call(hwnd, uintptr(gwlpWndProc), syscall.NewCallback(trayWndProcSubclass))
+}
+
+func trayWndProcSubclass(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
+	if msg == wmSystrayMessage && lParam == ninBalloonUserClick && notifyClickHandler != nil {
+		notifyClickHandler()
+	}
+	r, _, _ := pCallWindowProcW.Call(origTrayWndProc, hwnd, uintptr(msg), wParam, lParam)
+	return r
 }

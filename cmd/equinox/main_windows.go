@@ -303,6 +303,7 @@ func (d *desktop_) onTrayReady() {
 	systray.SetIcon(desktop.Icon())
 	systray.SetTitle("Equinox")
 	systray.SetTooltip("Equinox")
+	desktop.WatchNotificationClicks(d.requestShow) // clicking a notification opens the window
 
 	open := systray.AddMenuItem("Открыть Equinox", "Показать окно")
 	status := systray.AddMenuItem("↓ 0 Б/с   ↑ 0 Б/с", "")
