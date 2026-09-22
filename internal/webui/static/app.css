@@ -312,9 +312,13 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 /* The dialog is capped to the viewport and laid out as a column (title, then the section grid,
    then the buttons), so only .set-panes ever scrolls: the title and the Save/Cancel row never
    scroll out of view, and the page behind the dialog never needs a scrollbar of its own. */
-#dlg-settings.settings { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; }
-#dlg-settings.settings #f-settings { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
-#dlg-settings.settings .set-layout { flex: 1 1 auto; min-height: 0; }
+/* [open] matters here, not just cosmetics: without it "display: flex" would override the browser's
+   own "dialog:not([open]) { display: none }" and the dialog would render inline, all the time,
+   instead of only as a modal while actually open (that shipped once and looked exactly like this
+   comment warns against: a small, unstyled, stuck strip at the top of the page). */
+#dlg-settings.settings[open] { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; }
+#dlg-settings.settings[open] #f-settings { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+#dlg-settings.settings[open] .set-layout { flex: 1 1 auto; min-height: 0; }
 .set-layout { display: flex; gap: 18px; align-items: stretch; margin-top: 4px; }
 .set-nav { flex: none; width: 178px; display: flex; flex-direction: column; gap: 2px; padding-right: 12px; border-right: 1px solid var(--line); overflow: auto; }
 .set-nav button { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
