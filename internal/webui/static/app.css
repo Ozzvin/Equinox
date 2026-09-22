@@ -43,6 +43,8 @@ code { background: var(--panel-2); border: 1px solid var(--line); border-radius:
 .btn.icon { width: 34px; padding: 0; justify-content: center; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+.btn.update-badge { background: var(--warn); border-color: var(--warn); color: #fff; font-weight: 600; }
+.btn.update-badge:hover:not(:disabled) { filter: brightness(1.08); background: var(--warn); }
 .btn.danger:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
 .btn.danger-fill { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
 .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }

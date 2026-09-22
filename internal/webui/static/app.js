@@ -1891,11 +1891,9 @@
   function renderUpdate() {
     const r = lastUpdate, available = !!(r && r.available);
     const canInstall = available && window.__equinoxDesktop && typeof window.installUpdate === "function";
-    $("update-bar").hidden = !available;
-    if (available) $("update-text").textContent = `Доступна версия Equinox ${r.version}.`;
-    $("btn-update-install").hidden = !canInstall;
-    $("btn-update-link").hidden = !available || canInstall;
-    if (available) $("btn-update-link").href = r.url || "#";
+    const badge = $("btn-update-badge");
+    badge.hidden = !available;
+    if (available) badge.title = `Доступна версия Equinox ${r.version}. Нажмите, чтобы ${canInstall ? "установить" : "открыть страницу релиза"}.`;
 
     $("ab-update-box").hidden = !available;
     if (available) $("ab-update-text").textContent = `Доступна версия ${r.version}.`;
@@ -1931,7 +1929,10 @@
       catch (_) { /* the app is about to restart itself; the window closing is feedback enough */ }
     }, 400);
   }
-  $("btn-update-install").onclick = installUpdateNow;
+  $("btn-update-badge").onclick = () => {
+    if (window.__equinoxDesktop && typeof window.installUpdate === "function") installUpdateNow();
+    else if (lastUpdate && lastUpdate.url) window.open(lastUpdate.url, "_blank", "noopener");
+  };
   $("ab-update-install").onclick = installUpdateNow;
   $("ab-check-update").onclick = async () => { $("ab-update-status").textContent = "Проверка…"; await checkUpdate(true); };
   $("up-close").onclick = () => { stopUpdatePoll(); $("dlg-update-progress").close(); };

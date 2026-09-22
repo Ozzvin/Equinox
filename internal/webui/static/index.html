@@ -25,6 +25,7 @@
 
   <div class="grow"></div>
 
+  <button class="btn update-badge" id="btn-update-badge" title="Доступно обновление" hidden><svg class="i"><use href="#i-download"/></svg><span>Обновление</span></button>
   <div class="search" id="search" role="search">
     <select id="f-state" class="narrow-only" aria-label="Состояние">
       <option value="">Все раздачи</option><option value="active">Активные</option><option value="downloading">Загружаются</option><option value="seeding">Раздаются</option><option value="checking">Проверяются</option>
@@ -40,11 +41,6 @@
 <div id="restart-bar" class="notice" hidden role="status">
   <span id="restart-text"></span>
   <button class="btn small primary" id="btn-restart" hidden>Перезапустить</button>
-</div>
-<div id="update-bar" class="notice" hidden role="status">
-  <span id="update-text"></span>
-  <button class="btn small primary" id="btn-update-install" hidden>Установить</button>
-  <a class="btn small" id="btn-update-link" href="#" target="_blank" rel="noopener" hidden>Скачать со страницы релиза</a>
 </div>
 
 <div class="layout">
