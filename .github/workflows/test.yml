@@ -1,0 +1,22 @@
+name: Test (race)
+
+on:
+  push:
+    branches: [main, dev]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        shell: bash
+        run: test -z "$(gofmt -l cmd internal)"
+      - run: go vet ./...
+      # The race detector needs cgo (a C compiler), unlike the Build workflow's actual
+      # binaries, which must stay CGO_ENABLED=0 — see build.yml for why. Leaving CGO_ENABLED
+      # unset here is deliberate: windows-latest has a C compiler, so it defaults to on.
+      - run: go test -race -count=1 ./...
