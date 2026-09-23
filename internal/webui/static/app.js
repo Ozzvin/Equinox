@@ -1078,7 +1078,7 @@
     fileSel.clear(); fileAnchor = null; renderFileSel();
   });
   $("files").addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { e.preventDefault(); e.stopPropagation(); files.forEach((f) => fileSel.add(f.index)); renderFileSel(); }
+    if ((e.ctrlKey || e.metaKey) && keyLetter(e) === "a") { e.preventDefault(); e.stopPropagation(); files.forEach((f) => fileSel.add(f.index)); renderFileSel(); }
     else if (e.key === "Escape" && fileSel.size) { e.stopPropagation(); fileSel.clear(); fileAnchor = null; renderFileSel(); }
     else if (e.key === "Delete" && fileSel.size) { e.preventDefault(); e.stopPropagation(); askDeleteFiles(); }
   });
@@ -1261,15 +1261,26 @@
     }
   }
 
+  // The letter of a shortcut, whatever the keyboard layout is: with a Russian one e.key is "ф" for the
+  // key that types "a", so shortcuts are matched by the Latin letter when the key has one and by its
+  // physical position (e.code) when it does not.
+  function keyLetter(e) {
+    if (/^[a-z]$/i.test(e.key)) return e.key.toLowerCase();
+    return /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase() : "";
+  }
+  // Where the last click was: Ctrl+A over the details panel keeps its usual meaning (select the text there).
+  let clickInDetails = false;
+  document.addEventListener("pointerdown", (e) => { clickInDetails = !!e.target.closest("#details"); }, true);
+
   // keyboard: works when no dialog is open and no field has the focus
   document.addEventListener("keydown", (e) => {
     if (document.querySelector("dialog[open]")) return;
     const tag = (e.target.tagName || "").toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select") { if (e.key === "Escape") e.target.blur(); return; }
-    const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); shownHashes.forEach((h) => sel.add(h)); render(); }
-    else if (mod && e.shiftKey && e.key.toLowerCase() === "d") { e.preventDefault(); setDensity(DENSITIES[(DENSITIES.findIndex((x) => x[0] === density) + 1) % DENSITIES.length][0]); }
-    else if ((mod && e.key.toLowerCase() === "f") || e.key === "/") { e.preventDefault(); openSearch(true); }
+    const mod = e.ctrlKey || e.metaKey, k = keyLetter(e);
+    if (mod && k === "a") { if (clickInDetails || e.target.closest("#details")) return; e.preventDefault(); shownHashes.forEach((h) => sel.add(h)); render(); }
+    else if (mod && e.shiftKey && k === "d") { e.preventDefault(); setDensity(DENSITIES[(DENSITIES.findIndex((x) => x[0] === density) + 1) % DENSITIES.length][0]); }
+    else if ((mod && k === "f") || e.key === "/" || (!mod && !e.shiftKey && e.code === "Slash")) { e.preventDefault(); openSearch(true); }
     else if (e.key === "Escape") { sel.clear(); anchor = null; render(); }
     else if (e.key === "Delete") { if (chosen().length) { e.preventDefault(); $("btn-remove").click(); } }
     else if (e.key === " ") { if (chosen().length) { e.preventDefault(); $("btn-toggle").click(); } }
