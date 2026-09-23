@@ -354,12 +354,15 @@
     return out;
   }
   const rowPad = (depth) => `style="--d:${Math.max(0, depth)}"`;
+  // Same progress bar component as the Peers tab (and the main list): a coloured fill with the
+  // percentage drawn on top, dark over the empty part and light over the filled part.
+  const FILE_BAR = '<div class="pbar"><div class="fill"><span class="lb"></span></div><span class="lb base"></span></div>';
   function dirRowHTML(d, closed) {
     const all = treeFiles(d), size = all.reduce((a, f) => a + f.size, 0), open = !closed.has(d.path);
     return `<div class="file dir" data-dir="${esc(d.path)}" ${rowPad(d.depth)}>
       <div class="fn" title="${esc(d.path.replace(/\/$/, ""))}"><button type="button" class="chev" data-toggle="${esc(d.path)}" aria-expanded="${open}" aria-label="${open ? "Свернуть" : "Развернуть"} папку">${open ? "▾" : "▸"}</button><svg class="i"><use href="#i-folder"/></svg>${esc(d.name)}</div>
       <div class="fs">${bytes(size)}</div>
-      <div class="bar"><i></i></div>
+      ${FILE_BAR}
       <select data-dprio="${esc(d.path)}" aria-label="Приоритет всех файлов папки"><option value="" disabled hidden>Разный</option>${prioOptions}</select>
       <span></span></div>`;
   }
@@ -368,9 +371,17 @@
     return `<div class="file" data-i="${f.index}" ${rowPad(x.depth)}>
       <div class="fn" title="${esc(f.path)}">${esc(x.name)}</div>
       <div class="fs">${bytes(f.size)}</div>
-      <div class="bar"><i></i></div>
+      ${FILE_BAR}
       <select data-prio="${f.index}" aria-label="Приоритет файла">${prioOptions}</select>
       <button class="btn icon" data-play="${f.index}" title="Скопировать ссылку для плеера (VLC, mpv)"><svg class="i"><use href="#i-play"/></svg></button></div>`;
+  }
+  // Mirrors peerBar(): blue once everything is there (a seed), green while still downloading.
+  function setFileBar(bar, pct) {
+    const text = pct >= 100 ? "100%" : pct.toFixed(1) + "%";
+    bar.className = "pbar " + (pct >= 100 ? "seed" : "down");
+    bar.title = text;
+    bar.querySelector(".fill").style.width = pct.toFixed(1) + "%";
+    for (const lb of bar.querySelectorAll(".lb")) lb.textContent = text;
   }
   const FILE_HEAD = '<div class="fhead"><span>Имя</span><span class="r">Размер</span><span>Прогресс</span><span>Приоритет</span><span></span></div>';
 
@@ -439,9 +450,7 @@
     for (const f of files) {
       const row = box.querySelector(`.file[data-i="${f.index}"]`); if (!row) continue;
       row.classList.toggle("skip", f.priority === "skip");
-      const bar = row.querySelector(".bar");
-      bar.classList.toggle("done", f.progress >= 1);
-      bar.firstElementChild.style.width = (f.progress * 100).toFixed(1) + "%";
+      setFileBar(row.querySelector(".pbar"), f.progress * 100);
       const sel = row.querySelector("select");
       if (document.activeElement !== sel) sel.value = f.priority;
     }
@@ -450,9 +459,7 @@
       const all = idxs.map((i) => byIdx.get(i)).filter(Boolean);
       const size = all.reduce((a, f) => a + f.size, 0), done = all.reduce((a, f) => a + f.size * f.progress, 0);
       row.classList.toggle("skip", all.length > 0 && all.every((f) => f.priority === "skip"));
-      const bar = row.querySelector(".bar");
-      bar.classList.toggle("done", size > 0 && done >= size);
-      bar.firstElementChild.style.width = (size ? (done / size) * 100 : 0).toFixed(1) + "%";
+      setFileBar(row.querySelector(".pbar"), size ? (done / size) * 100 : 0);
       const sel = row.querySelector("select"), same = all.length && all.every((f) => f.priority === all[0].priority);
       if (document.activeElement !== sel) sel.value = same ? all[0].priority : "";
     }
