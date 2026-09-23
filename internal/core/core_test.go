@@ -164,6 +164,32 @@ func TestTorrentCopyNameFallsBackToHashOnCollision(t *testing.T) {
 	}
 }
 
+// A torrent whose data was already on disk when added is never "downloaded" through this
+// client, so Downloaded stays 0 forever even while it seeds; the global ratio must still
+// count its uploads instead of letting that one torrent drag the total to 0.00.
+func TestGlobalRatioCountsSeedOnlyTorrents(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	tp := makeTorrent(t, dir, "seedonly.bin", 50<<10)
+	seed(t, m, dir, "seedonly.bin")
+	hash, err := m.AddFile(tp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 })
+
+	if err := m.state.with(func(s *state) { s.Torrents[hash].Uploaded = 25 << 10 }); err != nil {
+		t.Fatal(err)
+	}
+	_, up, r := m.GlobalRatio()
+	if up != 25<<10 {
+		t.Fatalf("uploaded = %d, want %d", up, 25<<10)
+	}
+	if r <= 0 {
+		t.Fatal("a seed-only torrent with real uploads must not show a 0.00 global ratio")
+	}
+}
+
 func TestRestartKeepsTorrentsAndRatio(t *testing.T) {
 	dir := t.TempDir()
 	tp := makeTorrent(t, dir, "a.bin", 50<<10)

@@ -541,17 +541,26 @@ func (m *Manager) List() []Status {
 }
 
 // GlobalRatio is the lifetime share ratio across all torrents, including removed ones.
+// GlobalRatio returns lifetime downloaded/uploaded bytes and the share ratio across every
+// torrent ever added. Like the per-torrent ratio (see ratio below), a torrent seeded from
+// data acquired outside this client has nothing in Downloaded, so its size stands in for it
+// in the denominator instead of letting it drag the whole total down to zero.
 func (m *Manager) GlobalRatio() (down, up int64, r float64) {
-	m.syncCounters()
-	m.state.view(func(s *state) {
-		down, up = s.RemovedDownloaded, s.RemovedUploaded
-		for _, t := range s.Torrents {
-			down += t.Downloaded
-			up += t.Uploaded
+	var removedDown, removedUp int64
+	m.state.view(func(s *state) { removedDown, removedUp = s.RemovedDownloaded, s.RemovedUploaded })
+	down, up = removedDown, removedUp
+	den := removedDown
+	for _, t := range m.List() {
+		down += t.Downloaded
+		up += t.Uploaded
+		if t.Downloaded > 0 {
+			den += t.Downloaded
+		} else {
+			den += t.Size
 		}
-	})
-	if down > 0 {
-		r = float64(up) / float64(down)
+	}
+	if den > 0 {
+		r = float64(up) / float64(den)
 	}
 	return
 }
