@@ -130,12 +130,14 @@ func (m *Manager) runMove(hash string, t *torrent.Torrent, src, dst, target, old
 		newDir = old // data is still (or again) in the old folder
 	}
 
-	_ = m.state.with(func(s *state) {
+	if err := m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
 			r.SavePath = newDir
 			r.MoveFrom, r.MoveTo, r.MoveDir = "", "", "" // the move is over, one way or the other
 		}
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "saving the result of moving %s: %v\n", hash, err)
+	}
 	if err := m.restoreByHash(hash); err != nil {
 		moveErr = errors.Join(moveErr, fmt.Errorf("re-adding after the move: %w", err))
 	}
@@ -317,7 +319,7 @@ func (m *Manager) recoverMoves() {
 		case adopt:
 			fmt.Fprintf(os.Stderr, "move of %s had finished, adopting %s\n", f.hash, f.dir)
 		}
-		_ = m.state.with(func(s *state) {
+		if err := m.state.with(func(s *state) {
 			r := s.Torrents[f.hash]
 			if r == nil {
 				return
@@ -326,6 +328,8 @@ func (m *Manager) recoverMoves() {
 				r.SavePath = f.dir
 			}
 			r.MoveFrom, r.MoveTo, r.MoveDir = "", "", ""
-		})
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "clearing the recovered move trail for %s: %v\n", f.hash, err)
+		}
 	}
 }

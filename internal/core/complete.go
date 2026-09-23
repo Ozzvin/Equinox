@@ -21,17 +21,21 @@ func (m *Manager) handleCompletion(t *torrent.Torrent, hash string, r record) {
 	size, done := selection(t, r.FilePrios)
 	switch {
 	case done < size && !r.WasIncomplete:
-		_ = m.state.with(func(s *state) {
+		if err := m.state.with(func(s *state) {
 			if x := s.Torrents[hash]; x != nil {
 				x.WasIncomplete = true
 			}
-		})
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "saving WasIncomplete for %s: %v\n", t.Name(), err)
+		}
 	case done >= size && r.WasIncomplete:
-		_ = m.state.with(func(s *state) {
+		if err := m.state.with(func(s *state) {
 			if x := s.Torrents[hash]; x != nil {
 				x.WasIncomplete = false
 			}
-		})
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "saving WasIncomplete for %s: %v\n", t.Name(), err)
+		}
 		if d, _ := counters(t); r.Downloaded+d > 0 { // not merely found on disk by the first check
 			m.emit(Event{Kind: "completed", Hash: hash, Name: t.Name()})
 		}

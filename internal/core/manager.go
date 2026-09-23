@@ -95,7 +95,9 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	if err := ValidateNetwork(s.Network); err != nil { // a hand-edited settings file must not stop the engine
 		fmt.Fprintf(os.Stderr, "ignoring invalid network settings: %v\n", err)
 		s.Network = config.Default(stateDir).Network
-		_ = cfg.Update(func(x *config.Settings) { x.Network = s.Network })
+		if err := cfg.Update(func(x *config.Settings) { x.Network = s.Network }); err != nil {
+			fmt.Fprintf(os.Stderr, "saving reset network settings: %v\n", err)
+		}
 	}
 	if err := os.MkdirAll(s.DataDir, 0o755); err != nil {
 		return nil, err
@@ -404,7 +406,9 @@ func (m *Manager) track(spec *torrent.TorrentSpec, rec *record) error {
 	t, _, err := m.cl.AddTorrentSpec(m.holdBack(spec))
 	if err != nil {
 		m.dropHeld(rec.InfoHash)
-		_ = m.state.with(func(s *state) { delete(s.Torrents, rec.InfoHash) })
+		if serr := m.state.with(func(s *state) { delete(s.Torrents, rec.InfoHash) }); serr != nil {
+			fmt.Fprintf(os.Stderr, "removing failed torrent %s from state: %v\n", rec.InfoHash, serr)
+		}
 		return err
 	}
 	m.register(t)
@@ -448,11 +452,13 @@ func (m *Manager) onMetadata(t *torrent.Torrent, hash string) {
 	if needCopy {
 		mi := t.Metainfo()
 		if p, err := m.saveCopy(&mi, hash); err == nil && p != "" {
-			_ = m.state.with(func(s *state) {
+			if err := m.state.with(func(s *state) {
 				if r := s.Torrents[hash]; r != nil {
 					r.CopyPath = p
 				}
-			})
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "saving .torrent copy path for %s: %v\n", hash, err)
+			}
 		}
 	}
 
@@ -582,16 +588,18 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	m.mu.Unlock()
 
 	var copyPath string
-	_ = m.state.with(func(s *state) {
+	var errs []error
+	if err := m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
 			copyPath = r.CopyPath
 		}
 		delete(s.Torrents, hash)
 		s.RemovedDownloaded += down
 		s.RemovedUploaded += up
-	})
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("saving removal to state: %w", err))
+	}
 
-	var errs []error
 	if deleteData {
 		for _, p := range dataPaths {
 			if err := removeAll(p); err != nil {

@@ -148,11 +148,13 @@ func (m *Manager) SetPaused(hash string, paused bool) error {
 }
 
 func (m *Manager) setPaused(t *torrent.Torrent, hash string, paused bool) {
-	_ = m.state.with(func(s *state) {
+	if err := m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
 			r.Paused = paused
 		}
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "saving pause state for %s: %v\n", hash, err)
+	}
 	m.applyPause(t, hash, paused)
 }
 
