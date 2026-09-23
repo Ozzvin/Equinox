@@ -64,6 +64,7 @@ type Manager struct {
 	schedKnown       bool
 	moves            map[string]*moveJob      // storage moves in progress or just failed, by hash
 	checking         map[string]bool          // torrents being re-hashed
+	preallocating    map[string]bool          // torrents reserving their disk space before the first download starts
 	errs             map[string]torrentError  // why a torrent was stopped by the engine, by hash
 	watchSeen        map[string]watchStamp    // files seen in the watch folder on the previous scan
 	creates          map[string]*CreateJob    // torrent creations, by job id
@@ -108,37 +109,38 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	}
 
 	m := &Manager{
-		cfg:        cfg,
-		state:      st,
-		stateDir:   stateDir,
-		startNet:   s.Network,
-		comp:       comp,
-		upLim:      rate.NewLimiter(rate.Inf, 256<<10),
-		downLim:    rate.NewLimiter(rate.Inf, 256<<10),
-		torrents:   map[metainfo.Hash]*torrent.Torrent{},
-		seenDown:   map[metainfo.Hash]int64{},
-		seenUp:     map[metainfo.Hash]int64{},
-		perm:       map[metainfo.Hash]permState{},
-		queued:     map[metainfo.Hash]int{},
-		activeAt:   map[metainfo.Hash]time.Time{},
-		lowOn:      map[metainfo.Hash]bool{},
-		peerRates:  map[string]*peerRate{},
-		peerSeen:   map[string]time.Time{},
-		moves:      map[string]*moveJob{},
-		checking:   map[string]bool{},
-		errs:       map[string]torrentError{},
-		watchSeen:  map[string]watchStamp{},
-		creates:    map[string]*CreateJob{},
-		staged:     map[string]*stagedEntry{},
-		phase:      map[string]*checkPhase{},
-		checkProg:  map[string]float64{},
-		seedPend:   map[string]time.Duration{},
-		activePend: map[string]time.Duration{},
-		held:       map[string]*heldInfo{},
-		gateActive: map[string]bool{},
-		rechecking: map[string]bool{},
-		done:       make(chan struct{}),
-		inbound:    &inboundTracker{},
+		cfg:           cfg,
+		state:         st,
+		stateDir:      stateDir,
+		startNet:      s.Network,
+		comp:          comp,
+		upLim:         rate.NewLimiter(rate.Inf, 256<<10),
+		downLim:       rate.NewLimiter(rate.Inf, 256<<10),
+		torrents:      map[metainfo.Hash]*torrent.Torrent{},
+		seenDown:      map[metainfo.Hash]int64{},
+		seenUp:        map[metainfo.Hash]int64{},
+		perm:          map[metainfo.Hash]permState{},
+		queued:        map[metainfo.Hash]int{},
+		activeAt:      map[metainfo.Hash]time.Time{},
+		lowOn:         map[metainfo.Hash]bool{},
+		peerRates:     map[string]*peerRate{},
+		peerSeen:      map[string]time.Time{},
+		moves:         map[string]*moveJob{},
+		checking:      map[string]bool{},
+		preallocating: map[string]bool{},
+		errs:          map[string]torrentError{},
+		watchSeen:     map[string]watchStamp{},
+		creates:       map[string]*CreateJob{},
+		staged:        map[string]*stagedEntry{},
+		phase:         map[string]*checkPhase{},
+		checkProg:     map[string]float64{},
+		seedPend:      map[string]time.Duration{},
+		activePend:    map[string]time.Duration{},
+		held:          map[string]*heldInfo{},
+		gateActive:    map[string]bool{},
+		rechecking:    map[string]bool{},
+		done:          make(chan struct{}),
+		inbound:       &inboundTracker{},
 	}
 	m.applyLimits()
 
@@ -473,7 +475,14 @@ func (m *Manager) begin(t *torrent.Torrent, hash string) {
 	if removed(t) {
 		return
 	}
-	if err := m.preallocate(t, m.filePrios(hash)); err != nil {
+	m.mu.Lock()
+	m.preallocating[hash] = true
+	m.mu.Unlock()
+	err := m.preallocate(t, m.filePrios(hash))
+	m.mu.Lock()
+	delete(m.preallocating, hash)
+	m.mu.Unlock()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "preallocate %s: %v\n", t.Name(), err)
 		kind := ErrKindOther
 		if errors.Is(err, ErrNoDiskSpace) {

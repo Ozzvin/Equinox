@@ -43,6 +43,7 @@ type Status struct {
 	Error         string    `json:"error"`         // why the engine stopped this torrent, "" if it did not
 	ErrorKind     string    `json:"errorKind"`     // disk_full | write | other
 	Checking      bool      `json:"checking"`      // files are being checked against their hashes
+	Preallocating bool      `json:"preallocating"` // disk space for wanted files is being reserved
 	CheckProgress float64   `json:"checkProgress"` // 0..1 while Checking
 	CheckQueued   int       `json:"checkQueued"`   // 0 = not waiting; N = place in the line for a check of local files (1 = next)
 	Moving        float64   `json:"moving"`        // > 0 while files are being moved (fraction copied; -1 = a plain rename)
@@ -456,6 +457,10 @@ func (m *Manager) List() []Status {
 	for h := range m.checking {
 		checking[h] = true
 	}
+	preallocating := map[string]bool{}
+	for h := range m.preallocating {
+		preallocating[h] = true
+	}
 	recheckPos := map[string]int{}
 	for i, h := range m.recheckQueue {
 		recheckPos[h] = i + 1
@@ -511,6 +516,7 @@ func (m *Manager) List() []Status {
 		st.CheckProgress = checkProg[st.Hash]
 		_, checkingNow := checkProg[st.Hash]
 		st.Checking = checking[st.Hash] || checkingNow
+		st.Preallocating = preallocating[st.Hash]
 		st.Error, st.ErrorKind = errs[st.Hash].msg, errs[st.Hash].kind
 		if v, ok := moves[st.Hash]; ok {
 			st.MoveError, st.MoveNote = v.err, v.note

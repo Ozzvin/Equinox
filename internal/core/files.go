@@ -176,7 +176,14 @@ func (m *Manager) SetFilePriorities(hash string, indexes []int, prio int8) error
 	}
 
 	// Reserve space for newly wanted files before committing.
-	if err := m.preallocate(t, next); err != nil {
+	m.mu.Lock()
+	m.preallocating[hash] = true
+	m.mu.Unlock()
+	err = m.preallocate(t, next)
+	m.mu.Lock()
+	delete(m.preallocating, hash)
+	m.mu.Unlock()
+	if err != nil {
 		return err
 	}
 	if err := m.state.with(func(s *state) {
