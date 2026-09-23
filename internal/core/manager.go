@@ -742,7 +742,10 @@ func allocateFile(path string, size int64, zeroFill bool) error {
 	if old >= size {
 		return nil
 	}
-	if err := f.Truncate(size); err != nil { // reserves the space (SetEndOfFile on NTFS)
+	if !zeroFill {
+		markSparse(f) // see markSparse: without it the first far-off write zero-fills everything before it
+	}
+	if err := f.Truncate(size); err != nil { // sets the length (SetEndOfFile on NTFS)
 		return err
 	}
 	if !zeroFill {
