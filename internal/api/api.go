@@ -722,7 +722,10 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			}
 			colors[l] = id
 		}
-		_ = s.cfg.Update(func(c *config.Settings) { c.LabelColors = colors })
+		if err := s.cfg.Update(func(c *config.Settings) { c.LabelColors = colors }); err != nil {
+			fail(w, err)
+			return
+		}
 	}
 	if b.ListenPort != nil {
 		if err := s.m.SetListenPort(*b.ListenPort); err != nil {
@@ -737,7 +740,10 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if b.Preallocate != nil {
-		_ = s.cfg.Update(func(c *config.Settings) { c.Preallocate = *b.Preallocate })
+		if err := s.cfg.Update(func(c *config.Settings) { c.Preallocate = *b.Preallocate }); err != nil {
+			fail(w, err)
+			return
+		}
 	}
 	if b.AltSchedule != nil {
 		if err := s.m.SetAltSchedule(*b.AltSchedule); err != nil {
