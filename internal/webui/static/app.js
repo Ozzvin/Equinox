@@ -232,7 +232,6 @@
     if (t.checkQueued > 0) return { cls: "wait", text: "Ждёт проверки", title: `Стоит в очереди на проверку локальных файлов: №${t.checkQueued}` };
     if (!t.hasMetadata) return { cls: "wait", text: "Метаданные…" };
     if (t.paused) return { cls: "", text: t.progress >= 1 ? "Остановлено" : "Пауза" };
-    if (t.preallocating) return { cls: "wait", text: "Подготовка диска" };
     if (t.queued > 0) return { cls: "wait", text: `В очереди №${t.queued}` };
     if (t.progress < 1) return t.downRate > 0 ? { cls: "down", text: "Загрузка" } : { cls: "wait", text: "Ожидание пиров" };
     return { cls: "seed", text: "Раздаётся" };

@@ -83,35 +83,6 @@ func closeAndSettle(m *Manager, dir string) {
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
-// The webui shows "Выделение места на диске" instead of "Ожидание пиров" while a torrent's
-// disk space is being reserved (peers can already be connected at that point, which made the
-// old wording misleading); this checks the plumbing from the map begin() sets to List()'s
-// output, without depending on real preallocation being slow enough to observe mid-flight.
-func TestPreallocatingShowsInStatus(t *testing.T) {
-	dir := t.TempDir()
-	m := newManager(t, dir, nil)
-	tp := makeTorrent(t, dir, "big.bin", 20<<10)
-	hash, err := m.AddFile(tp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.HasMeta })
-
-	m.mu.Lock()
-	m.preallocating[hash] = true
-	m.mu.Unlock()
-	if s, ok := statusOf(m, hash); !ok || !s.Preallocating {
-		t.Fatalf("preallocating flag not reflected in status: %+v", s)
-	}
-
-	m.mu.Lock()
-	delete(m.preallocating, hash)
-	m.mu.Unlock()
-	if s, ok := statusOf(m, hash); !ok || s.Preallocating {
-		t.Fatalf("preallocating flag should clear from status: %+v", s)
-	}
-}
-
 func TestCopyKeptAndDeletedWithData(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
