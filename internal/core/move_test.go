@@ -171,7 +171,7 @@ func TestTorrentSurvivesRestartEvenWithoutUserCopies(t *testing.T) {
 	}
 	// The engine closes its files asynchronously; give Windows time to release them before
 	// t.TempDir()'s own cleanup removes the directory (see newManager for the same wait).
-	defer func() { m2.Close(); time.Sleep(300 * time.Millisecond) }()
+	defer func() { m2.Close(); time.Sleep(time.Second) }()
 	if _, ok := statusOf(m2, hash); !ok {
 		t.Fatal("torrent lost on restart: metadata was only kept in the user's copy folder")
 	}

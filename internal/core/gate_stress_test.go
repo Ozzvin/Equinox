@@ -81,7 +81,7 @@ func TestChecksAfterRestartRespectTheLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { m2.Close(); time.Sleep(500 * time.Millisecond) }()
+	defer func() { m2.Close(); time.Sleep(time.Second) }() // see newManager for why
 
 	max := 0
 	deadline := time.Now().Add(60 * time.Second)

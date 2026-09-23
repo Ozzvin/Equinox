@@ -65,8 +65,9 @@ func newManager(t *testing.T, dir string, mut func(*config.Settings)) *Manager {
 	// actually released them yet; t.TempDir()'s own cleanup (registered before this one, so it
 	// runs after it) can otherwise race a torrent's storage still holding a handle open, most
 	// often under `go test -race`, which slows things down enough to make the race likely
-	// instead of rare.
-	t.Cleanup(func() { m.Close(); time.Sleep(300 * time.Millisecond) })
+	// instead of rare. A storage move in flight (copy, then delete the source) seems to need
+	// longer than a plain check does, so this errs generous rather than tuning it per test.
+	t.Cleanup(func() { m.Close(); time.Sleep(time.Second) })
 	return m
 }
 
@@ -171,8 +172,8 @@ func TestRestartKeepsTorrentsAndRatio(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The engine closes its files asynchronously; give Windows time to release them
-	// before the temp dir is removed.
-	defer func() { m2.Close(); time.Sleep(500 * time.Millisecond) }()
+	// before the temp dir is removed (longer under `go test -race`, see newManager).
+	defer func() { m2.Close(); time.Sleep(time.Second) }()
 	l := m2.List()
 	if len(l) != 1 || l[0].Uploaded != 12345 || l[0].Downloaded != 100 {
 		t.Fatalf("state lost after restart: %+v", l)
