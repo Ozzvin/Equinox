@@ -204,9 +204,13 @@ func TestPreallocateRefusesWhenNoSpace(t *testing.T) {
 	}
 }
 
+// waitFor's window is generous (not just enough for a normal run) because `go test -race` can
+// slow things down several times over (e.g. TestDeleteFileWhileTheTorrentIsBeingChecked hashes
+// 200 MB); a passing test still returns the moment its condition holds, so this only costs
+// time when something is actually stuck.
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 600; i++ {
 		if cond() {
 			return
 		}
