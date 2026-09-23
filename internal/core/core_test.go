@@ -61,7 +61,12 @@ func newManager(t *testing.T, dir string, mut func(*config.Settings)) *Manager {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(m.Close)
+	// The engine closes its files asynchronously, so Close returning is not proof Windows has
+	// actually released them yet; t.TempDir()'s own cleanup (registered before this one, so it
+	// runs after it) can otherwise race a torrent's storage still holding a handle open, most
+	// often under `go test -race`, which slows things down enough to make the race likely
+	// instead of rare.
+	t.Cleanup(func() { m.Close(); time.Sleep(300 * time.Millisecond) })
 	return m
 }
 

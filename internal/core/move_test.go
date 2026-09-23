@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Ozzvin/equinox/internal/config"
 )
@@ -168,7 +169,9 @@ func TestTorrentSurvivesRestartEvenWithoutUserCopies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { m2.Close(); waitFor(t, func() bool { return true }) }()
+	// The engine closes its files asynchronously; give Windows time to release them before
+	// t.TempDir()'s own cleanup removes the directory (see newManager for the same wait).
+	defer func() { m2.Close(); time.Sleep(300 * time.Millisecond) }()
 	if _, ok := statusOf(m2, hash); !ok {
 		t.Fatal("torrent lost on restart: metadata was only kept in the user's copy folder")
 	}
