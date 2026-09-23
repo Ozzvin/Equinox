@@ -784,7 +784,6 @@
       for (const h of [...sel]) if (!torrents.some((t) => t.hash === h)) sel.delete(h); // torrents that are gone
       reportMoves();
       reportErrors();
-      recordSample();
       reportCompleted();
       render();
       renderDetails();
@@ -1164,14 +1163,6 @@
     $("dlg-move").close(); toast("Перемещение начато");
     await each(list.slice(1), (t) => post(t, "move", { path }));
   });
-  // Speed history for the chart: one point per refresh while the page is open.
-  const history = [];
-  const HISTORY_MAX = 240;
-  function recordSample() {
-    history.push({ t: Date.now(), down: torrents.reduce((a, t) => a + t.downRate, 0), up: torrents.reduce((a, t) => a + t.upRate, 0) });
-    if (history.length > HISTORY_MAX) history.shift();
-  }
-
   // ---------- push-style notifications ----------
   // A card in the corner of the window for events worth noticing (a check or a download finished). It goes
   // away by itself after a few seconds (not while the pointer is on it), by its cross, or with a click, which
@@ -1248,27 +1239,6 @@
       $("k-ratio").textContent = stats.ratio.toFixed(2);
     }
     $("k-count").textContent = torrents.length;
-    const last = history[history.length - 1] || { down: 0, up: 0 };
-    $("c-down").textContent = speed(last.down).replace("—", speedZero()); $("c-up").textContent = speed(last.up).replace("—", speedZero());
-
-    const W = 640, H = 170, padL = 6, padR = 6, padT = 12, padB = 18;
-    const svg = $("chart");
-    if (history.length < 2) { svg.innerHTML = ""; $("c-scale").textContent = ""; $("c-span").textContent = "Собираю данные…"; return; }
-    const t0 = history[0].t, t1 = history[history.length - 1].t;
-    let max = Math.max(1024, ...history.map((p) => Math.max(p.down, p.up)));
-    // Round the top of the scale to a friendly number (1, 2, 5 x 10^n).
-    const mag = Math.pow(10, Math.floor(Math.log10(max))); max = [1, 2, 5, 10].map((m) => m * mag).find((v) => v >= max);
-    const x = (t) => padL + ((t - t0) / Math.max(1, t1 - t0)) * (W - padL - padR);
-    const y = (v) => H - padB - (v / max) * (H - padT - padB);
-    const line = (key) => history.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p[key]).toFixed(1)}`).join(" ");
-    const area = (key) => `${line(key)} L${x(t1).toFixed(1)},${H - padB} L${x(t0).toFixed(1)},${H - padB} Z`;
-    const grid = [0, 0.5, 1].map((f) => `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(max * f)}" y2="${y(max * f)}"/>`).join("");
-    $("c-scale").textContent = `шкала до ${speed(max)}`;
-    svg.innerHTML = grid +
-      `<path class="area-down" d="${area("down")}"/><path class="area-up" d="${area("up")}"/>` +
-      `<path class="line l-down" d="${line("down")}"/><path class="line l-up" d="${line("up")}"/>`;
-    const secs = Math.round((t1 - t0) / 1000);
-    $("c-span").textContent = secs >= 60 ? `последние ${Math.floor(secs / 60)} мин ${secs % 60} с` : `последние ${secs} с`;
 
     const top = [...torrents].filter((t) => t.uploaded > 0).sort((a, b) => b.uploaded - a.uploaded).slice(0, 5);
     $("k-top-wrap").hidden = top.length === 0;

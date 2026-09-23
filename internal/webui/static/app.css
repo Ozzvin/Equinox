@@ -190,16 +190,6 @@ textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; 
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 8px 0 18px; }
 .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel-2); display: flex; flex-direction: column; gap: 2px; }
 .kpi b { font-size: 20px; font-variant-numeric: tabular-nums; }
-.chart-head { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; }
-.legend { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
-.legend b { color: var(--text); font-variant-numeric: tabular-nums; }
-.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-.sw-down { background: var(--accent); } .sw-up { background: var(--ok); }
-#chart { width: 100%; height: 170px; display: block; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; }
-#chart .grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
-#chart .line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
-#chart .l-down { stroke: var(--accent); } #chart .l-up { stroke: var(--ok); }
-#chart .area-down { fill: var(--accent); opacity: .12; } #chart .area-up { fill: var(--ok); opacity: .12; }
 #k-top-wrap { margin-top: 14px; }
 .toprow { display: grid; grid-template-columns: 1fr 90px 60px; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .toprow span:not(:first-child) { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -613,7 +603,6 @@ html:not([data-density="large"]) dialog.wizard { min-height: 320px; }
 html:not([data-density="large"]) .wz-body { min-height: 200px; }
 html:not([data-density="large"]) .wz-lead { font-size: 14px; }
 html:not([data-density="large"]) .kpi b { font-size: 18px; }
-html:not([data-density="large"]) #chart { height: 150px; }
 
 html[data-density="compact"] dialog { padding: 12px 14px; border-radius: 10px; font-size: 12.5px; }
 html[data-density="compact"] dialog h2 { font-size: 14px; margin: 0 0 8px; }
@@ -636,7 +625,6 @@ html[data-density="compact"] .pk-places button, html[data-density="compact"] .pk
 html[data-density="compact"] .pk-head { height: 22px; }
 html[data-density="compact"] dialog.wizard { min-height: 280px; }
 html[data-density="compact"] .wz-body { min-height: 170px; }
-html[data-density="compact"] #chart { height: 130px; }
 
 /* compact: the switches are slim, one line each */
 html[data-density="compact"] .seg { margin: 4px 0 6px; padding: 2px; border-radius: 8px; }
