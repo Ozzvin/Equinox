@@ -50,7 +50,8 @@ func newManager(t *testing.T, dir string, mut func(*config.Settings)) *Manager {
 	}
 	if err := cfg.Update(func(s *config.Settings) {
 		s.ListenPort = 0
-		s.PortMapping = false // tests must not touch the real router
+		s.PortMapping = false                             // tests must not touch the real router
+		s.TorrentCopyDir = filepath.Join(dir, "torrents") // copies are off by default; many tests here check them
 		if mut != nil {
 			mut(s)
 		}

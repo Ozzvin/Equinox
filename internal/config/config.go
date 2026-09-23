@@ -149,8 +149,7 @@ type Settings struct {
 func Default(dir string) Settings {
 	return Settings{
 		DataDir:             filepath.Join(dir, "downloads"),
-		TorrentCopyDir:      filepath.Join(dir, "torrents"),
-		CopyRemovePolicy:    CopyRemoveWithData,
+		CopyRemovePolicy:    CopyRemoveWithData, // TorrentCopyDir stays empty: copies of .torrent files are off until asked for
 		ListenPort:          51413,
 		NotifyOnComplete:    true,
 		StartHidden:         true,
@@ -176,10 +175,15 @@ func Default(dir string) Settings {
 
 // Store is a concurrency-safe settings holder backed by a JSON file.
 type Store struct {
-	mu   sync.RWMutex
-	path string
-	s    Settings
+	mu    sync.RWMutex
+	path  string
+	s     Settings
+	fresh bool
 }
+
+// Fresh tells whether Load found no settings file and made one from the defaults, that is, whether
+// this is the first start on this state directory.
+func (st *Store) Fresh() bool { return st.fresh }
 
 // Load reads path, creating it with defaults when missing.
 func Load(path, stateDir string) (*Store, error) {
@@ -198,6 +202,7 @@ func Load(path, stateDir string) (*Store, error) {
 		return nil, err
 	}
 	if !ok {
+		st.fresh = true
 		return st, st.save()
 	}
 	if fromBackup {

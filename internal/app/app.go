@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -41,6 +42,15 @@ func Start(stateDir, listen string) (*App, error) {
 	cfg, err := config.Load(filepath.Join(stateDir, "settings.json"), stateDir)
 	if err != nil {
 		return nil, err
+	}
+	// A first start saves new torrents into the user's Downloads folder rather than a folder tucked away
+	// among the application's data. Only a new settings file gets this: an existing one already has its say.
+	if cfg.Fresh() {
+		if d := config.SystemDownloads(); d != "" {
+			if err := cfg.Update(func(s *config.Settings) { s.DataDir = d }); err != nil {
+				log.Println("cannot use the Downloads folder as the default:", err)
+			}
+		}
 	}
 	m, err := core.New(cfg, stateDir)
 	if err != nil {

@@ -127,7 +127,7 @@
     { id: "path", title: "Папка", menu: "Папка загрузки", cls: "c-txt", w: 240, sort: (t) => (t.savePath || "").toLowerCase(), cell: (t) => `<span title="${esc(t.savePath || "")}">${esc(t.savePath || "—")}</span>` },
   ];
   const COL = Object.fromEntries(COLS.map((c) => [c.id, c]));
-  const DEFAULT_COLS = ["num", "name", "size", "progress", "down", "up", "ratio", "peers"];
+  const DEFAULT_COLS = ["num", "name", "size", "progress", "down", "up", "eta", "ratio"];
   const PINNED = ["num", "name"]; // always the first two, in this order
   let colIds = [...DEFAULT_COLS];
   try {
@@ -2169,6 +2169,7 @@
     const lim = (id) => (limitRead(id, bits) ? `${$(id).value} ${limitUnit(bits)}` : "без ограничения");
     li.push(`Папка загрузок: ${$("wz-data").value.trim() || "—"}`);
     li.push($("wz-watch").value.trim() ? `Папка автодобавления: ${$("wz-watch").value.trim()}` : "Папка автодобавления: выключена");
+    li.push($("wz-copydir").value.trim() ? `Копии .torrent файлов: ${$("wz-copydir").value.trim()}` : "Копии .torrent файлов: не сохраняются");
     li.push(`Скорость: загрузка ${lim("wz-down")}, отдача ${lim("wz-up")}`);
     li.push(`Порт ${Number($("wz-port").value) || "—"}, автоматический проброс: ${$("wz-mapping").checked ? "включён" : "выключен"}`);
     if (wzDesktop()) li.push(`Запуск вместе с Windows: ${$("wz-autostart").checked ? ($("wz-starthidden").checked ? "да, в трее" : "да") : "нет"}; закрытие окна ${$("wz-closetray").checked ? "прячет в трей" : "завершает программу"}`);
@@ -2179,7 +2180,7 @@
     try { wz.cur = await api("GET", "/api/settings"); wz.port = await api("GET", "/api/port"); } catch (e) { return toast(e.message, true); }
     const s = wz.cur, bits = s.speedUnit === "bits";
     wz.bits = bits;
-    $("wz-data").value = s.dataDir || ""; $("wz-watch").value = s.watchDir || ""; $("wz-paused").checked = !!(s.add && s.add.paused);
+    $("wz-data").value = s.dataDir || ""; $("wz-watch").value = s.watchDir || ""; $("wz-copydir").value = s.torrentCopyDir || ""; $("wz-paused").checked = !!(s.add && s.add.paused);
     $("wz-unit-bits").checked = bits; $("wz-unit-bytes").checked = !bits;
     limitFill("wz-down", s.downLimitKBps, bits); limitFill("wz-up", s.upLimitKBps, bits);
     $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
@@ -2222,7 +2223,7 @@
     if (!$("wz-data").value.trim()) { $("wz-err").textContent = "Укажите папку для загрузок."; $("wz-err").hidden = false; return; }
     if (port < 1 || port > 65535) { $("wz-err").textContent = "Порт должен быть от 1 до 65535."; $("wz-err").hidden = false; return; }
     const body = { ...wzBase(wz.cur), setupDone: true,
-      dataDir: $("wz-data").value.trim(), watchDir: $("wz-watch").value.trim(), addPaused: $("wz-paused").checked,
+      dataDir: $("wz-data").value.trim(), watchDir: $("wz-watch").value.trim(), torrentCopyDir: $("wz-copydir").value.trim(), addPaused: $("wz-paused").checked,
       speedUnit: bits ? "bits" : "bytes", downLimitKBps: limitRead("wz-down", bits), upLimitKBps: limitRead("wz-up", bits), listenPort: port };
     if (wzDesktop()) Object.assign(body, { startHidden: $("wz-starthidden").checked, closeToTray: $("wz-closetray").checked, notifyOnComplete: $("wz-notify").checked });
     $("wz-next").disabled = true;

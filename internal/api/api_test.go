@@ -35,7 +35,10 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = cfg.Update(func(s *config.Settings) { s.ListenPort, s.PortMapping = 0, false })
+	_ = cfg.Update(func(s *config.Settings) {
+		s.ListenPort, s.PortMapping = 0, false
+		s.TorrentCopyDir = filepath.Join(dir, "torrents") // copies are off by default; the tests here check them
+	})
 	m, err := core.New(cfg, dir)
 	if err != nil {
 		t.Fatal(err)

@@ -21,6 +21,39 @@ func TestLoadCreatesDefaultsOnFirstRun(t *testing.T) {
 	}
 }
 
+// A new install does not copy .torrent files anywhere until asked to, and only the first start
+// counts as fresh: an existing settings file keeps what it says, including a copy folder chosen
+// back when copies were on by default.
+func TestFreshStartDefaultsAndExistingFilesKeepTheirCopyFolder(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	st, err := Load(path, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Fresh() {
+		t.Error("no settings file yet: this is a fresh start")
+	}
+	if st.Get().TorrentCopyDir != "" {
+		t.Errorf("copies of .torrent files must be off by default, got %q", st.Get().TorrentCopyDir)
+	}
+
+	kept := filepath.Join(dir, "old-copies")
+	if err := st.Update(func(s *Settings) { s.TorrentCopyDir = kept }); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Load(path, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Fresh() {
+		t.Error("the settings file exists now: the second start is not fresh")
+	}
+	if again.Get().TorrentCopyDir != kept {
+		t.Errorf("an existing copy folder must survive, got %q", again.Get().TorrentCopyDir)
+	}
+}
+
 // A settings file from an older build knows nothing about fields added since; those must come
 // up at their defaults, not at Go's zero values (a zero SequentialWindow would break streaming).
 func TestLoadKeepsDefaultsForAbsentFields(t *testing.T) {
