@@ -177,6 +177,12 @@ func (d *desktop_) window(dataPath string) {
 	log.Println("window: created, navigating")
 
 	hwnd := uintptr(w.Window())
+	// The library shows the window itself as soon as it is created, at Windows' default
+	// position with a blank white page — before it has been moved to the remembered spot or
+	// themed or navigated anywhere. Hide it again right away and reveal it only once all of
+	// that is done, so what the user sees is the finished window appearing once, in place,
+	// instead of a flash at the wrong spot followed by a jump and a white-to-dark repaint.
+	pShowWindow.Call(hwnd, 0)           // SW_HIDE
 	_ = w.Bind("restartApp", d.restart) // used by the "restart required" bar
 	_ = w.Bind("installUpdate", d.installUpdate)
 	_ = w.Bind("getAutostart", desktop.AutostartEnabled)
@@ -195,6 +201,15 @@ func (d *desktop_) window(dataPath string) {
 	})
 	_ = w.Bind("windowDensity", d.place.setDensity) // the page reports its density; the window gets that density's size
 	_ = w.Bind("resetWindowSize", d.place.resetSize)
+	// Closing to the tray hides this same window instead of tearing it down (see below), so this
+	// full creation only ever runs once per launch; restoring from the tray afterwards is instant.
+	desktop.InterceptClose(hwnd, func() bool {
+		if !d.app.Settings.Get().CloseToTray {
+			return false // let it close (and quit) as usual
+		}
+		pShowWindow.Call(hwnd, 0) // SW_HIDE
+		return true
+	})
 	stopWatch := make(chan struct{})
 	go d.watchMinimize(w, hwnd, stopWatch)
 	go d.place.watch(stopWatch)
@@ -212,6 +227,11 @@ func (d *desktop_) window(dataPath string) {
 	w.Init("window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true;")
 	d.place.attach(w, hwnd) // the size, position and state the window had last time
 	w.Navigate(strings.SplitN(d.app.URL, "/#", 2)[0] + "/")
+	go func() { // give the local page a moment to paint before the window is shown
+		time.Sleep(300 * time.Millisecond)
+		pShowWindow.Call(hwnd, 9) // SW_RESTORE
+		pSetForeground.Call(hwnd)
+	}()
 	w.Run()
 	log.Println("window: closed")
 	close(stopWatch)
@@ -225,7 +245,9 @@ func (d *desktop_) window(dataPath string) {
 	}
 }
 
-// watchMinimize closes the window into the tray when it is minimised (if the setting asks for it).
+// watchMinimize hides the window into the tray when it is minimised (if the setting asks for
+// it), the same way closing it does: the WebView2 instance stays alive behind it, so a later
+// restore is instant instead of a full recreate. Keeps watching afterwards, for the next time.
 func (d *desktop_) watchMinimize(w webview2.WebView, hwnd uintptr, stop <-chan struct{}) {
 	tick := time.NewTicker(300 * time.Millisecond)
 	defer tick.Stop()
@@ -238,8 +260,7 @@ func (d *desktop_) watchMinimize(w webview2.WebView, hwnd uintptr, stop <-chan s
 				continue
 			}
 			if r, _, _ := pIsIconic.Call(hwnd); r != 0 {
-				w.Dispatch(w.Terminate)
-				return
+				w.Dispatch(func() { pShowWindow.Call(hwnd, 0) }) // SW_HIDE
 			}
 		}
 	}
@@ -313,6 +334,18 @@ func waitForExit(pid int, limit time.Duration) {
 
 // requestShow asks the main loop to open (or raise) the window.
 func (d *desktop_) requestShow() {
+	d.mu.Lock()
+	v := d.view
+	d.mu.Unlock()
+	if v != nil {
+		// The window survives being closed or minimised to the tray (see window/watchMinimize):
+		// main's loop is blocked inside w.Run() for as long as that is true, so it never gets
+		// back to select on d.show to notice a request here. Show the existing window directly.
+		hwnd := uintptr(v.Window())
+		pShowWindow.Call(hwnd, 9) // SW_RESTORE
+		pSetForeground.Call(hwnd)
+		return
+	}
 	select {
 	case d.show <- struct{}{}:
 	default:
