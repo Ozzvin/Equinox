@@ -3,10 +3,12 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/Ozzvin/equinox/internal/atomicfile"
 )
 
 // CopyRemovePolicy decides when the saved .torrent copy is deleted.
@@ -182,15 +184,24 @@ type Store struct {
 // Load reads path, creating it with defaults when missing.
 func Load(path, stateDir string) (*Store, error) {
 	st := &Store{path: path, s: Default(stateDir)}
-	b, err := os.ReadFile(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return st, st.save()
-	case err != nil:
+	// Parse into the defaults, so a settings file written by an older version keeps the new
+	// fields at their defaults instead of their zero values.
+	ok, fromBackup, err := atomicfile.ReadWithBackup(path, func(b []byte) error {
+		cur := Default(stateDir)
+		if err := json.Unmarshal(b, &cur); err != nil {
+			return err
+		}
+		st.s = cur
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(b, &st.s); err != nil {
-		return nil, err
+	if !ok {
+		return st, st.save()
+	}
+	if fromBackup {
+		fmt.Fprintln(os.Stderr, "settings.json was unusable, fell back to settings.json.bak")
 	}
 	return st, nil
 }
@@ -215,14 +226,7 @@ func (st *Store) save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(st.path), 0o755); err != nil {
-		return err
-	}
-	tmp := st.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, st.path)
+	return atomicfile.Write(st.path, b, 0o644, true)
 }
 
 // LabelPalette lists the colours a label can have. They are chosen so that none of them looks like

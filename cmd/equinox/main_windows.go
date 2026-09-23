@@ -81,6 +81,14 @@ func main() {
 	if err != nil {
 		fatalBox(err)
 	}
+	// The installer asks for a clean exit through this event instead of killing the process.
+	// A forced kill skips Manager.Close, which is what flushes the counters and settles a
+	// storage move that is halfway through (see installer/equinox.iss).
+	quitEvName, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktopQuit`)
+	quitEvent, err := windows.CreateEvent(nil, 0, 0, quitEvName)
+	if err != nil {
+		fatalBox(err)
+	}
 	log.Println("starting engine")
 	a, err := app.Start(*stateDir, *listen)
 	if err != nil {
@@ -108,6 +116,13 @@ func main() {
 			}
 			d.requestShow()
 		}
+	}()
+	go func() { // the installer (or the uninstaller) asks the app to close itself
+		if r, _ := windows.WaitForSingleObject(quitEvent, windows.INFINITE); r != windows.WAIT_OBJECT_0 {
+			return
+		}
+		log.Println("quit requested by the installer")
+		d.doQuit()
 	}()
 	if !*hidden || len(args) > 0 {
 		d.show <- struct{}{} // open the window on start (not when autostarted into the tray)
@@ -274,7 +289,14 @@ func (d *desktop_) installUpdate() string {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		_ = info.Install(ctx, filepath.Join(d.stateDir, "update"), true)
+		if err := info.Install(ctx, filepath.Join(d.stateDir, "update"), true); err != nil {
+			return // the page reads the reason from GET /api/update-progress
+		}
+		// The installer is running and waits for this process to go. Closing ourselves here
+		// means Manager.Close gets to flush the counters and settle any storage move, which a
+		// forced kill from the installer would not.
+		log.Println("update: installer started, closing for the update")
+		d.doQuit()
 	}()
 	return ""
 }

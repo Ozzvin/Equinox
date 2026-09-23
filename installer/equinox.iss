@@ -71,16 +71,53 @@ begin
   Result := ExpandConstant('{param:autoupdate|0}') = '1';
 end;
 
+const
+  EVENT_MODIFY_STATE = $0002;
+  EquinoxMutex = 'Local\EquinoxDesktop';
+  EquinoxQuitEvent = 'Local\EquinoxDesktopQuit';
+
+function OpenEventW(dwDesiredAccess: LongWord; bInheritHandle: Boolean; lpName: String): LongWord;
+  external 'OpenEventW@kernel32.dll stdcall';
+function SetEventAPI(hEvent: LongWord): Boolean;
+  external 'SetEvent@kernel32.dll stdcall';
+function CloseHandleAPI(hObject: LongWord): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+// AskEquinoxToQuit signals the event the running app watches (see cmd/equinox/main_windows.go).
+// True means the app was there to hear it.
+function AskEquinoxToQuit(): Boolean;
+var
+  H: LongWord;
+begin
+  Result := False;
+  H := OpenEventW(EVENT_MODIFY_STATE, False, EquinoxQuitEvent);
+  if H <> 0 then
+  begin
+    Result := SetEventAPI(H);
+    CloseHandleAPI(H);
+  end;
+end;
+
 // Закрывает программу целиком, включая случай, когда она свёрнута в трей (тогда у неё нет
-// окна, и штатный AppMutex/CloseApplications Inno Setup закрыть её не может — деинсталлятор
-// просто откажется работать, пока процесс жив). Без /T: при автообновлении изнутри программы
-// этот установщик — дочерний процесс самого Equinox.exe, и /T убил бы всё дерево процессов,
-// включая себя же, оборвав установку на середине. WebView2 всё равно сам закрывает свои
-// дочерние процессы, когда основной процесс Equinox.exe завершается (job object).
+// окна, и штатный AppMutex/CloseApplications Inno Setup закрыть её не может).
+//
+// Сначала просим закрыться по-хорошему и ждём: только штатное завершение сбрасывает счётчики
+// на диск и доводит до конца (или безопасно помечает) начатый перенос файлов раздачи.
+// taskkill /F остаётся аварийным вариантом — он обрывает всё это на середине.
+// Без /T: при автообновлении изнутри программы этот установщик — дочерний процесс самого
+// Equinox.exe, и /T убил бы всё дерево процессов, включая себя же. WebView2 всё равно сам
+// закрывает свои дочерние процессы, когда основной процесс завершается (job object).
 procedure KillEquinox();
 var
-  ResultCode: Integer;
+  ResultCode, I: Integer;
 begin
+  if not CheckForMutexes(EquinoxMutex) then Exit; // не запущена
+  AskEquinoxToQuit();
+  for I := 0 to 59 do // до ~30 секунд: столько может занять закрытие движка
+  begin
+    Sleep(500);
+    if not CheckForMutexes(EquinoxMutex) then Exit; // ушла сама, чисто
+  end;
   Exec(ExpandConstant('{cmd}'), '/C taskkill /F /IM Equinox.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 

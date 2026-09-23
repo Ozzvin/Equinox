@@ -127,7 +127,7 @@ func TestInstallVerifiesChecksumBeforeRunning(t *testing.T) {
 	// only check that it downloaded the right bytes and accepted the matching checksum by
 	// verifying the file it wrote before the exec step would fail.
 	setupPath := filepath.Join(dir, "Equinox-Setup.exe")
-	if err := download(context.Background(), info.setupURL, setupPath, nil); err != nil {
+	if err := download(context.Background(), info.setupURL, setupPath, maxSetupBytes, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(setupPath)
@@ -155,7 +155,7 @@ func TestDownloadReportsProgress(t *testing.T) {
 
 	var last struct{ done, total int64 }
 	var calls int
-	err := download(context.Background(), srv.URL+"/setup", setupPath, func(done, total int64) {
+	err := download(context.Background(), srv.URL+"/setup", setupPath, maxSetupBytes, func(done, total int64) {
 		calls++
 		last.done, last.total = done, total
 	})

@@ -185,6 +185,10 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		m.ports.Start()
 	}
 
+	// A move interrupted by a crash or a forced kill must be settled before the torrents are
+	// restored: until then a record may still point at a folder whose tree is half-copied.
+	m.recoverMoves()
+
 	// Restore torrents from the previous run.
 	var recs []*record
 	st.view(func(s *state) {
@@ -212,6 +216,9 @@ func (m *Manager) Close() {
 	m.cancel()
 	<-m.done
 	m.syncCounters()
+	if err := m.state.flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "saving state on shutdown: %v\n", err)
+	}
 	m.portMu.Lock()
 	if m.ports != nil {
 		m.ports.Stop()

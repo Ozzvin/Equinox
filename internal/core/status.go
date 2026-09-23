@@ -107,7 +107,7 @@ func (m *Manager) flushActiveTime() {
 	if len(whole) == 0 {
 		return
 	}
-	_ = m.state.with(func(s *state) {
+	m.state.touch(func(s *state) {
 		for h, secs := range whole {
 			if r := s.Torrents[h]; r != nil {
 				r.ActiveSeconds += secs

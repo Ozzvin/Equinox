@@ -98,6 +98,21 @@ func (m *Manager) MoveStorage(hash, dir string) error {
 	m.moves[hash] = job
 	m.mu.Unlock()
 
+	// Write the trail before the first file is touched: if the process dies during the copy,
+	// recoverMoves finds the half-written destination on the next start (see runMove, which
+	// clears it, and recoverMoves, which cleans up after it).
+	if err := m.state.with(func(s *state) {
+		if r := s.Torrents[hash]; r != nil {
+			r.MoveFrom, r.MoveTo, r.MoveDir = src, dst, target
+		}
+	}); err != nil {
+		m.mu.Lock()
+		job.running = false
+		delete(m.moves, hash)
+		m.mu.Unlock()
+		return err
+	}
+
 	go m.runMove(hash, t, src, dst, target, cur, job)
 	return nil
 }
@@ -118,6 +133,7 @@ func (m *Manager) runMove(hash string, t *torrent.Torrent, src, dst, target, old
 	_ = m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
 			r.SavePath = newDir
+			r.MoveFrom, r.MoveTo, r.MoveDir = "", "", "" // the move is over, one way or the other
 		}
 	})
 	if err := m.restoreByHash(hash); err != nil {
@@ -264,4 +280,52 @@ func copyFile(src, dst string, done *atomic.Int64) error {
 		}
 	}
 	return out.Close()
+}
+
+// recoverMoves finishes what a move interrupted by a crash, a forced kill or a power cut left
+// behind. It runs once at start, before any torrent is restored.
+//
+// moveTree either renames (atomic: the tree is wholly at one end or the other) or copies and
+// then deletes the source, so at the moment of the interruption exactly one of these holds:
+//
+//   - the source is still there: the copy had not finished, and whatever reached the
+//     destination is a partial tree nobody will ever complete — delete it and stay put;
+//   - the source is gone and the destination exists: the rename went through, or the copy
+//     finished and the source was removed, but the record never learned the new folder —
+//     adopt the destination;
+//   - neither exists: nothing had been downloaded yet, so only the folder changes.
+func (m *Manager) recoverMoves() {
+	type fix struct{ hash, from, to, dir string }
+	var todo []fix
+	m.state.view(func(s *state) {
+		for h, r := range s.Torrents {
+			if r.MoveTo != "" {
+				todo = append(todo, fix{h, r.MoveFrom, r.MoveTo, r.MoveDir})
+			}
+		}
+	})
+	for _, f := range todo {
+		_, srcErr := os.Lstat(f.from)
+		_, dstErr := os.Lstat(f.to)
+		adopt := srcErr != nil && dstErr == nil
+		switch {
+		case srcErr == nil && dstErr == nil:
+			fmt.Fprintf(os.Stderr, "move of %s was interrupted, removing the partial copy at %s\n", f.hash, f.to)
+			if err := removeAll(f.to); err != nil {
+				fmt.Fprintf(os.Stderr, "cannot remove the partial copy at %s: %v\n", f.to, err)
+			}
+		case adopt:
+			fmt.Fprintf(os.Stderr, "move of %s had finished, adopting %s\n", f.hash, f.dir)
+		}
+		_ = m.state.with(func(s *state) {
+			r := s.Torrents[f.hash]
+			if r == nil {
+				return
+			}
+			if adopt && f.dir != "" {
+				r.SavePath = f.dir
+			}
+			r.MoveFrom, r.MoveTo, r.MoveDir = "", "", ""
+		})
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -368,7 +369,7 @@ func (m *Manager) syncCounters() {
 	if len(ds) == 0 {
 		return
 	}
-	_ = m.state.with(func(s *state) {
+	m.state.touch(func(s *state) {
 		for _, d := range ds {
 			if r := s.Torrents[d.hash]; r != nil {
 				r.Downloaded += d.down
@@ -604,6 +605,9 @@ func (m *Manager) loop(ctx context.Context) {
 
 		if flush++; flush%15 == 0 {
 			m.syncCounters()
+			if err := m.state.flush(); err != nil {
+				fmt.Fprintf(os.Stderr, "saving state: %v\n", err)
+			}
 		}
 		m.updateChecks(ts)
 		m.refreshLow(ts)

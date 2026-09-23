@@ -252,3 +252,38 @@ func TestMoveTreeAcrossDrives(t *testing.T) {
 		t.Fatal("source must be removed after a successful copy")
 	}
 }
+
+// The trail recoverMoves relies on must be written before the move and gone after it.
+func TestMoveStorageClearsItsTrail(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	defer m.Close()
+	tp := makeTorrent(t, dir, "trail.bin", 64<<10)
+	seed(t, m, dir, "trail.bin")
+	hash, err := m.AddFile(tp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 })
+
+	target := filepath.Join(dir, "moved")
+	if err := m.MoveStorage(hash, target); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool {
+		s, ok := statusOf(m, hash)
+		return ok && s.SavePath == target && s.Moving == 0
+	})
+	r, ok := m.record(hash)
+	if !ok {
+		t.Fatal("record is gone")
+	}
+	if r.MoveFrom != "" || r.MoveTo != "" || r.MoveDir != "" {
+		t.Errorf("a finished move left its trail behind: %+v", r)
+	}
+	// A restart must not now think a move was interrupted and delete the data.
+	m.recoverMoves()
+	if !exists(filepath.Join(target, "trail.bin")) {
+		t.Error("recoverMoves removed the data of a move that had finished")
+	}
+}

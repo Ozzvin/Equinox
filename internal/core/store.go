@@ -2,11 +2,12 @@ package core
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/Ozzvin/equinox/internal/atomicfile"
 )
 
 // record is the persisted, per-torrent state that the engine itself does not keep.
@@ -29,10 +30,16 @@ type record struct {
 	MaxConns       int      `json:"maxConns,omitempty"`      // connection limit of this torrent, 0 = the global setting
 	ExtraTrackers  []string `json:"extraTrackers,omitempty"` // announce URLs the user added
 	SavePath       string   `json:"savePath,omitempty"`      // download folder of this torrent ("" = the default folder)
-	RatioLimit     float64  `json:"ratioLimit"`              // 0 = use the global default
-	SeedTimeLimit  int      `json:"seedTimeLimit,omitempty"` // minutes of seeding after which it stops, 0 = the global default
-	SeedSeconds    int64    `json:"seedSeconds,omitempty"`   // time spent seeding, adds up across restarts
-	ActiveSeconds  int64    `json:"activeSeconds,omitempty"` // time the torrent has been running (not paused), adds up across restarts
+	// A storage move that has started but not finished. It is written before the first file is
+	// touched and cleared when the move ends, so a crash or a forced kill in the middle leaves a
+	// trail for recoverMoves to follow instead of a half-copied tree nobody knows about.
+	MoveFrom      string  `json:"moveFrom,omitempty"`      // the data tree being moved away from
+	MoveTo        string  `json:"moveTo,omitempty"`        // where that tree is being copied to
+	MoveDir       string  `json:"moveDir,omitempty"`       // the save folder the torrent gets when it succeeds
+	RatioLimit    float64 `json:"ratioLimit"`              // 0 = use the global default
+	SeedTimeLimit int     `json:"seedTimeLimit,omitempty"` // minutes of seeding after which it stops, 0 = the global default
+	SeedSeconds   int64   `json:"seedSeconds,omitempty"`   // time spent seeding, adds up across restarts
+	ActiveSeconds int64   `json:"activeSeconds,omitempty"` // time the torrent has been running (not paused), adds up across restarts
 
 	// Per-file priority (see PrioSkip/PrioLow/PrioNormal/PrioHigh); missing entries mean normal.
 	FilePrios []int8 `json:"filePrios,omitempty"`
@@ -50,22 +57,27 @@ type state struct {
 }
 
 type stateStore struct {
-	mu   sync.Mutex
-	path string
-	st   state
+	mu    sync.Mutex
+	path  string
+	st    state
+	dirty bool // touched since the last save; flush writes it out
 }
 
 func loadState(path string) (*stateStore, error) {
 	s := &stateStore{path: path, st: state{Torrents: map[string]*record{}}}
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return s, nil
-	}
+	var parsed state
+	ok, fromBackup, err := atomicfile.ReadWithBackup(path, func(b []byte) error {
+		parsed = state{}
+		return json.Unmarshal(b, &parsed)
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(b, &s.st); err != nil {
-		return nil, err
+	if ok {
+		s.st = parsed
+		if fromBackup {
+			fmt.Fprintf(os.Stderr, "state.json was unusable, fell back to state.json.bak\n")
+		}
 	}
 	if s.st.Torrents == nil {
 		s.st.Torrents = map[string]*record{}
@@ -73,11 +85,34 @@ func loadState(path string) (*stateStore, error) {
 	return s, nil
 }
 
-// with runs fn under the lock and persists afterwards.
+// with runs fn under the lock and writes the result to the disk before returning. It is for
+// changes the user made and would notice losing: a label, a queue move, a torrent added or
+// removed. Counters that merely tick along use touch instead.
 func (s *stateStore) with(fn func(*state)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fn(&s.st)
+	return s.saveLocked()
+}
+
+// touch runs fn under the lock and only marks the state as needing a save. It is for the
+// counters the engine updates every second (traffic, seeding and running time): writing the
+// whole file that often rewrote it several times a second and wore the disk for nothing.
+// flush, called on a timer and at shutdown, does the actual write.
+func (s *stateStore) touch(fn func(*state)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn(&s.st)
+	s.dirty = true
+}
+
+// flush writes the state if touch has marked it since the last save.
+func (s *stateStore) flush() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.dirty {
+		return nil
+	}
 	return s.saveLocked()
 }
 
@@ -93,12 +128,11 @@ func (s *stateStore) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	// Keep a backup: this one file holds every torrent record, so a state.json that cannot be
+	// parsed after a crash would otherwise mean starting from an empty list.
+	if err := atomicfile.Write(s.path, b, 0o644, true); err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	s.dirty = false
+	return nil
 }

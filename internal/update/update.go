@@ -23,6 +23,14 @@ import (
 
 const cacheTTL = time.Hour
 
+// Caps on what a release may hand us. Nothing here is trusted to be the size it claims: a
+// Content-Length is the server's word, so the readers below are bounded instead.
+const (
+	maxSetupBytes   = 256 << 20 // the installer; it is ~10 MB today
+	maxSumsBytes    = 1 << 20   // SHA256SUMS.txt is a handful of lines
+	maxReleaseBytes = 8 << 20   // the release JSON from the GitHub API
+)
+
 // APIURL is a var so tests can point it at a fake server.
 var APIURL = "https://api.github.com/repos/Ozzvin/equinox/releases/latest"
 
@@ -120,7 +128,7 @@ func fetch(ctx context.Context) (*Info, error) {
 		return nil, fmt.Errorf("update: github returned %s", res.Status)
 	}
 	var rel ghRelease
-	if err := json.NewDecoder(res.Body).Decode(&rel); err != nil {
+	if err := json.NewDecoder(io.LimitReader(res.Body, maxReleaseBytes)).Decode(&rel); err != nil {
 		return nil, err
 	}
 	latest := strings.TrimPrefix(rel.TagName, "v")
@@ -179,7 +187,7 @@ func (i *Info) Install(ctx context.Context, dir string, relaunch bool) error {
 	}
 	setupPath := filepath.Join(dir, "Equinox-Setup.exe")
 	setProgress(Progress{Phase: "downloading"})
-	if err := download(ctx, i.setupURL, setupPath, func(done, total int64) {
+	if err := download(ctx, i.setupURL, setupPath, maxSetupBytes, func(done, total int64) {
 		var pct float64
 		if total > 0 {
 			pct = float64(done) / float64(total)
@@ -217,7 +225,7 @@ func (i *Info) Install(ctx context.Context, dir string, relaunch bool) error {
 
 // download saves url to path, calling report(bytesSoFar, totalBytes) as it goes (totalBytes
 // is 0 if the server did not send a Content-Length). report may be nil.
-func download(ctx context.Context, url, path string, report func(done, total int64)) error {
+func download(ctx context.Context, url, path string, limit int64, report func(done, total int64)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -241,8 +249,14 @@ func download(ctx context.Context, url, path string, report func(done, total int
 	if report != nil {
 		w = pw
 	}
-	if _, err := io.Copy(w, res.Body); err != nil {
+	// One byte over the limit is read on purpose, so an oversized body is caught rather than
+	// silently truncated into a file that then fails its checksum for the wrong reason.
+	n, err := io.Copy(w, io.LimitReader(res.Body, limit+1))
+	if err != nil {
 		return err
+	}
+	if n > limit {
+		return fmt.Errorf("update: %s is larger than the %d byte limit", filepath.Base(path), limit)
 	}
 	if report != nil {
 		report(pw.done, pw.total) // a final call so 100% is always seen, even if throttled
@@ -284,7 +298,14 @@ func downloadBytes(ctx context.Context, url string) ([]byte, error) {
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("update: download checksums: %s", res.Status)
 	}
-	return io.ReadAll(res.Body)
+	b, err := io.ReadAll(io.LimitReader(res.Body, maxSumsBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > maxSumsBytes {
+		return nil, fmt.Errorf("update: the checksum file is larger than the %d byte limit", maxSumsBytes)
+	}
+	return b, nil
 }
 
 // findSum reads a line like "<hash>  <name>" (the format build.ps1 writes) out of sums.
