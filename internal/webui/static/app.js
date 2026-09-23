@@ -702,7 +702,6 @@
     showTab();
     if (!t) { // the panel is always there; without one chosen torrent it only says so
       const n = chosen().length;
-      $("btn-recheck").disabled = true;
       $("file-actions").hidden = true;
       filesKey = "";
       for (const id of ["files", "pane-status", "pane-general", "pane-peers", "tr-list"]) $(id).innerHTML = "";
@@ -711,7 +710,6 @@
       $("d-empty").hidden = false;
       return;
     }
-    $("btn-recheck").disabled = !t.hasMetadata || t.checking || !!t.moving;
     if (tab === "files") return renderFiles();
     if (tab === "status") return renderStatus(t, () => cur() && cur().hash === t.hash);
     if (tab === "options") {
@@ -772,10 +770,10 @@
     try { await post(t, "trackers", { url }); $("tr-input").value = ""; toast("Трекер добавлен"); renderDetails(); }
     catch (x) { toast(x.message, true); }
   });
-  $("btn-recheck").onclick = async () => {
+  async function recheckCurrent() {
     const t = cur(); if (!t) return;
     try { await post(t, "recheck"); toast("Проверка файлов запущена"); refresh(); } catch (x) { toast(x.message, true); }
-  };
+  }
   // ---------- data loop ----------
   async function refresh() {
     try {
@@ -1091,10 +1089,12 @@
     e.preventDefault();
     const own = row.dataset.dir !== undefined ? dirIdx.get(row.dataset.dir) || [] : [Number(row.dataset.i)], i = own[0];
     if (own.length && !own.every((x) => fileSel.has(x))) { fileSel.clear(); own.forEach((x) => fileSel.add(x)); fileAnchor = i; renderFileSel(); }
-    const menu = $("ctx"), n = fileSel.size;
+    const menu = $("ctx"), n = fileSel.size, t = cur();
+    const recheckDisabled = !t || !t.hasMetadata || t.checking || !!t.moving;
     menu.innerHTML = `<div class="ctx-head">${n > 1 ? `Выбрано файлов: ${n}` : "Файл"}</div>` +
       PRIO.map(([v, name]) => `<button role="menuitem" data-fprio="${v}">${name}</button>`).join("") +
       `<hr><button role="menuitem" data-fopen="${i}"${n > 1 ? " disabled" : ""}>Показать в Проводнике</button>` +
+      `<button role="menuitem" data-frecheck="1"${recheckDisabled ? " disabled" : ""}>Проверить файлы</button>` +
       `<button role="menuitem" class="danger" data-fdel="1">Удалить с диска…</button>`;
     menu.hidden = false;
     menu.style.left = Math.min(e.clientX, innerWidth - menu.offsetWidth - 8) + "px";
@@ -1103,13 +1103,14 @@
   });
   // show one file in the file manager; delete the selected files from the disk after a confirmation
   $("ctx").addEventListener("click", async (e) => {
-    const open = e.target.closest("[data-fopen]"), del = e.target.closest("[data-fdel]");
-    if (!open && !del) return;
+    const open = e.target.closest("[data-fopen]"), del = e.target.closest("[data-fdel]"), recheck = e.target.closest("[data-frecheck]");
+    if (!open && !del && !recheck) return;
     e.stopPropagation(); $("ctx").hidden = true;
     if (open && !open.disabled) {
       const t = cur(); if (!t) return;
       try { await api("POST", `/api/torrents/${t.hash}/files/${open.dataset.fopen}/open`); } catch (x) { toast(x.message, true); }
     } else if (del) askDeleteFiles();
+    else if (recheck && !recheck.disabled) recheckCurrent();
   });
   function askDeleteFiles() {
     if (!fileSel.size) return;
@@ -1135,8 +1136,6 @@
     e.stopPropagation(); $("ctx").hidden = true;
     setPriority(filesForAction(), b.dataset.fprio);
   });
-  $("f-all").onclick = () => setPriority(files.map((f) => f.index), "normal");
-  $("f-none").onclick = () => setPriority(files.map((f) => f.index), "skip");
   $("files").addEventListener("click", (e) => {
     const b = e.target.closest("[data-play]"); if (b) copyLink(Number(b.dataset.play));
   });
@@ -1346,7 +1345,10 @@
     ctx.style.top = Math.min(e.clientY, innerHeight - ctx.offsetHeight - 8) + "px";
     ctx.querySelector("button:not(:disabled)")?.focus();
   });
-  ctx.addEventListener("click", (e) => { const b = e.target.closest("[data-act]"); if (!b || b.disabled) return; hideCtx(); $(b.dataset.act).click(); });
+  ctx.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]"); if (!b || b.disabled) return; hideCtx();
+    if (b.dataset.act === "btn-recheck") recheckCurrent(); else $(b.dataset.act).click();
+  });
   document.addEventListener("click", (e) => { if (!ctx.contains(e.target)) hideCtx(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideCtx(); }, true);
   addEventListener("blur", hideCtx); addEventListener("resize", hideCtx);
