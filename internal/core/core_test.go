@@ -61,14 +61,24 @@ func newManager(t *testing.T, dir string, mut func(*config.Settings)) *Manager {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The engine closes its files asynchronously, so Close returning is not proof Windows has
-	// actually released them yet; t.TempDir()'s own cleanup (registered before this one, so it
-	// runs after it) can otherwise race a torrent's storage still holding a handle open, most
-	// often under `go test -race`, which slows things down enough to make the race likely
-	// instead of rare. A storage move in flight (copy, then delete the source) seems to need
-	// longer than a plain check does, so this errs generous rather than tuning it per test.
-	t.Cleanup(func() { m.Close(); time.Sleep(time.Second) })
+	t.Cleanup(func() { closeAndSettle(m, dir) })
 	return m
+}
+
+// closeAndSettle closes m and then clears dir itself, retrying instead of sleeping a fixed
+// amount: the engine closes files asynchronously, so Close returning is not proof Windows has
+// actually released them yet, and a fixed delay (tried first, up to a full second) still lost
+// to t.TempDir()'s own cleanup occasionally, most often under `go test -race`, which slows
+// things down enough to make the race likely instead of rare. Once this removes dir, that
+// later cleanup finds nothing left to trip over.
+func closeAndSettle(m *Manager, dir string) {
+	m.Close()
+	for i := 0; i < 30; i++ {
+		if os.RemoveAll(dir) == nil {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
@@ -171,9 +181,7 @@ func TestRestartKeepsTorrentsAndRatio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The engine closes its files asynchronously; give Windows time to release them
-	// before the temp dir is removed (longer under `go test -race`, see newManager).
-	defer func() { m2.Close(); time.Sleep(time.Second) }()
+	defer closeAndSettle(m2, dir)
 	l := m2.List()
 	if len(l) != 1 || l[0].Uploaded != 12345 || l[0].Downloaded != 100 {
 		t.Fatalf("state lost after restart: %+v", l)
