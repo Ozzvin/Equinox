@@ -13,6 +13,10 @@ $Version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot VERSION) -Raw).Tri
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+# Pure Go, always: on a machine with a C compiler in PATH, `go build` silently enables cgo and
+# links against MinGW's runtime DLLs, which a plain Windows install does not have (v1.0.9 shipped
+# broken this way when built on a GitHub Actions runner, which has one; explicit beats implicit).
+$env:CGO_ENABLED = '0'
 
 function Step($text) { Write-Host "==> $text" -ForegroundColor Cyan }
 function Check($what) { if ($LASTEXITCODE -ne 0) { throw "$what завершилась с ошибкой (код $LASTEXITCODE)" } }
