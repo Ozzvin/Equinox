@@ -35,6 +35,20 @@ var (
 )
 
 // Manager owns the engine client and everything layered on top of it.
+//
+// Locks, and the order they may be taken in:
+//
+//	portCtl -> portMu             starting and stopping the router mapping; portCtl is held across the slow
+//	                              Stop, portMu only for the pointer, so PortStatus never waits for the router
+//	m.mu -> cfg.mu                cfg.Get() is read under m.mu in a few places
+//	state.mu -> cfg.mu            likewise inside state.with/touch/view callbacks
+//	lowMu, evMu, peerMu, self.mu  leaves: nothing else is taken while one of them is held
+//
+// m.mu and state.mu are never nested: no state.with/touch/view callback takes m.mu, and nothing calls into
+// the state store while holding m.mu. The state store writes the file under its own lock, so a callback must
+// stay short. Do not call the engine's torrent methods that block, or emit(), under any of these; emit only
+// hands the event to another goroutine. checkLine and snapshotRecords take m.mu themselves and must be called
+// without it held. A new lock, or a new nesting, belongs in this list.
 type Manager struct {
 	cfg        *config.Store
 	state      *stateStore
