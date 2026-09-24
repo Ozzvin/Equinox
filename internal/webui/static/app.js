@@ -510,7 +510,7 @@
     for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", b.dataset.tab === tab);
     for (const [k, id] of Object.entries(PANES)) $(id).hidden = k !== tab;
     $("file-actions").hidden = tab !== "files";
-    if (tab !== "peers") $("peer-count").hidden = true;
+    if (tab !== "peers") { $("peer-count").hidden = true; $("peer-add").hidden = true; }
     $("d-empty").hidden = true;
   }
   $("tabs").addEventListener("click", (e) => {
@@ -520,14 +520,15 @@
   });
 
   const when = (s) => (s && !s.startsWith("0001") ? new Date(s).toLocaleString("ru-RU") : "—");
-  const SOURCES = { tracker: "Трекер", dht: "DHT", pex: "PEX", incoming: "Входящий", other: "—" };
+  const SOURCES = { tracker: "Трекер", dht: "DHT", pex: "PEX", incoming: "Входящий", manual: "Вручную", other: "—" };
   // what each source means, for the tooltips of the "Источник" column
   const SOURCE_TIPS = {
     tracker: "Адрес этого пира сообщил трекер раздачи.",
     dht: "Адрес нашёлся через DHT, распределённую сеть поиска пиров без трекера.",
     pex: "Адрес сообщил другой пир, с которым вы уже связаны (обмен пирами, PEX).",
     incoming: "Пир сам подключился к вам. Значит, ваш порт доступен снаружи.",
-    other: "Источник неизвестен (например, пир добавлен вручную).",
+    manual: "Этот адрес вы добавили сами кнопкой «Добавить пира».",
+    other: "Источник неизвестен.",
   };
   const SOURCES_TIP = Object.keys(SOURCE_TIPS).filter((k) => k !== "other").map((k) => SOURCES[k] + " — " + SOURCE_TIPS[k]).join("\n");
 
@@ -731,6 +732,7 @@
     // The number of peers this torrent is connected to, in the tab row, on the peers tab only.
     const pc = $("peer-count");
     pc.hidden = tab !== "peers" || !t;
+    $("peer-add").hidden = tab !== "peers" || !t;
     if (t) pc.textContent = `Подключено пиров: ${t.peers}` + (t.seeds ? ` · из них раздающих: ${t.seeds}` : "");
     if (!t) { // the panel is always there; without one chosen torrent it only says so
       const n = chosen().length;
@@ -1443,6 +1445,32 @@
     const label = $("lb-input").value.trim();
     $("dlg-label").close();
     each(list, (t) => post(t, "label", { label }));
+  });
+
+  // peers added by hand
+  const PEER_WHY = { format: "нужен адрес вида хост:порт", port: "порт должен быть от 1 до 65535", address: "такой адрес не может быть у пира", resolve: "не удалось найти адрес по имени" };
+  $("peer-add").onclick = () => {
+    const t = cur(); if (!t) return;
+    $("pe-name").textContent = t.name || t.hash;
+    $("pe-input").value = ""; $("pe-err").hidden = true;
+    $("dlg-peers").showModal(); $("pe-input").focus();
+  };
+  $("f-peers").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const t = cur(); if (!t) { $("dlg-peers").close(); return; }
+    const peers = $("pe-input").value.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+    if (!peers.length) { $("pe-err").textContent = "Введите хотя бы один адрес."; $("pe-err").hidden = false; return; }
+    let r;
+    try { r = await post(t, "peers", { peers }); }
+    catch (x) { $("pe-err").textContent = x.message; $("pe-err").hidden = false; return; }
+    const errs = r.errors || [];
+    if (r.added + r.known > 0) toast(r.added ? `Пиров добавлено: ${r.added}` + (r.known ? `, уже были известны: ${r.known}` : "") : `Эти пиры уже известны раздаче: ${r.known}`);
+    if (!errs.length) { $("dlg-peers").close(); renderDetails(); return; }
+    // what was fine is done; what was not stays in the box, each with its reason
+    $("pe-input").value = errs.map((x) => x.addr).join("\n");
+    $("pe-err").textContent = errs.map((x) => `${x.addr} — ${PEER_WHY[x.reason] || "не подошёл"}`).join("\n");
+    $("pe-err").style.whiteSpace = "pre-line";
+    $("pe-err").hidden = false;
   });
 
   // remove

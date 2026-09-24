@@ -103,7 +103,7 @@ type Peer struct {
 	Downloaded int64   `json:"downloaded"`
 	Uploaded   int64   `json:"uploaded"`
 	Incoming   bool    `json:"incoming"`
-	Source     string  `json:"source"` // tracker, dht, pex, incoming, other
+	Source     string  `json:"source"` // tracker, dht, pex, incoming, manual, other
 	Network    string  `json:"network"`
 }
 
@@ -119,6 +119,8 @@ func sourceName(s torrent.PeerSource) string {
 		return "pex"
 	case torrent.PeerSourceIncoming:
 		return "incoming"
+	case torrent.PeerSourceDirect:
+		return "manual"
 	}
 	return "other"
 }

@@ -455,14 +455,33 @@ func TestDetailsPeersTrackersRecheckEndpoints(t *testing.T) {
 		t.Fatalf("bad tracker must be 400, got %d", c)
 	}
 
+	// Peers added by hand: the answer says how many were new and which addresses could not be used.
+	addPeers := func(body string) (int, core.PeerAddResult) {
+		r := e.do(t, "POST", base+"/peers", bytes.NewReader([]byte(body)), nil)
+		defer r.Body.Close()
+		var out core.PeerAddResult
+		_ = json.NewDecoder(r.Body).Decode(&out)
+		return r.StatusCode, out
+	}
+	code, pr := addPeers(`{"peers":["203.0.113.5:6881","nonsense","203.0.113.5:0"]}`)
+	if code != 200 || pr.Added+pr.Known != 1 || len(pr.Errors) != 2 || pr.Errors[0].Reason != "format" || pr.Errors[1].Reason != "port" {
+		t.Fatalf("add peers: %d %+v", code, pr)
+	}
+	if code, _ := addPeers(`{"peers":[]}`); code != 400 {
+		t.Fatalf("an empty list of peers must be 400, got %d", code)
+	}
+	if code, _ := addPeers(`not json`); code != 400 {
+		t.Fatalf("a bad body must be 400, got %d", code)
+	}
+
 	r := e.do(t, "POST", base+"/recheck", nil, nil)
 	r.Body.Close()
 	if r.StatusCode != http.StatusAccepted {
 		t.Fatalf("recheck: %d", r.StatusCode)
 	}
 	bad := "/api/torrents/" + strings.Repeat("z", 40)
-	for _, c := range [][2]string{{"GET", bad + "/details"}, {"GET", bad + "/peers"}, {"POST", bad + "/trackers"}, {"POST", bad + "/recheck"}} {
-		r := e.do(t, c[0], c[1], bytes.NewReader([]byte(`{"url":"udp://t.example:1/a"}`)), nil)
+	for _, c := range [][2]string{{"GET", bad + "/details"}, {"GET", bad + "/peers"}, {"POST", bad + "/trackers"}, {"POST", bad + "/peers"}, {"POST", bad + "/recheck"}} {
+		r := e.do(t, c[0], c[1], bytes.NewReader([]byte(`{"url":"udp://t.example:1/a","peers":["203.0.113.5:6881"]}`)), nil)
 		r.Body.Close()
 		if r.StatusCode != 404 {
 			t.Errorf("%s %s: %d, want 404", c[0], c[1], r.StatusCode)

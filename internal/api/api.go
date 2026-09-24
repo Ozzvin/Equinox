@@ -107,6 +107,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/torrents/{hash}/details", s.details)
 	s.mux.HandleFunc("GET /api/torrents/{hash}/peers", s.peers)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/trackers", s.addTracker)
+	s.mux.HandleFunc("POST /api/torrents/{hash}/peers", s.addPeers)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/recheck", s.recheck)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/max-connections", s.maxConns)
 	s.mux.HandleFunc("GET /api/torrents/{hash}/status", s.statusExtra)
@@ -322,6 +323,24 @@ func (s *Server) addTracker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// addPeers gives a torrent peers to try: {"peers": ["203.0.113.5:51413", "[2001:db8::1]:6881", "seedbox.lan:6881"]}. The
+// answer tells how many were new and which could not be used.
+func (s *Server) addPeers(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Peers []string `json:"peers"`
+	}
+	if err := decode(r, &b); err != nil {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	res, err := s.m.AddPeers(r.PathValue("hash"), b.Peers)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // maxConns limits the peer connections of one torrent: {"limit": 20} (0 = global setting).
