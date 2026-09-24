@@ -381,6 +381,9 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 .pk-row.dir:hover { background: var(--hover); }
 .pk-row.dir .i { color: var(--warn); }
 .pk-row.file { color: var(--muted); opacity: .7; }
+.pk-row.file.pick { color: var(--text); opacity: 1; cursor: pointer; }
+.pk-row.file.pick:hover { background: var(--hover); }
+.pk-row.file.pick .i { color: var(--muted); }
 .pk-row.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .pk-row .dt { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pk-msg { padding: 14px 16px; color: var(--muted); }

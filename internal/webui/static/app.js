@@ -2159,12 +2159,12 @@
   $("st-port-num").addEventListener("input", () => { $("st-port-note").hidden = !(port && Number($("st-port-num").value) !== port.port); });
 
   // ---------- folder picker (our own window, the same in the browser and in the app) ----------
-  const pk = { resolve: null, data: null, sel: "", seq: 0 };
+  const pk = { resolve: null, data: null, sel: "", seq: 0, any: false }; // any: a file can be chosen as well as a folder
   const pkFinish = (v) => { const r = pk.resolve; pk.resolve = null; if (r) r(v); };
-  function pickFolder(title, initial) {
+  function pickFolder(title, initial, any) {
     return new Promise((resolve) => {
       if ($("dlg-picker").open) return resolve("");
-      pk.resolve = resolve; pk.sel = "";
+      pk.resolve = resolve; pk.sel = ""; pk.any = !!any;
       $("pk-title").textContent = title || "Выбор папки";
       $("pk-newrow").hidden = true; $("pk-err").hidden = true; $("pk-path").value = initial || "";
       $("dlg-picker").showModal();
@@ -2202,26 +2202,35 @@
     }).join("");
     const rows = d.entries.map((e, i) => e.dir ?
       `<div class="pk-row dir" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-folder"/></svg><span>${esc(e.name)}</span></span><span class="r dt"></span><span class="dt">${pkDate(e.modified)}</span></div>` :
+      pk.any ? `<div class="pk-row file pick" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-newfile"/></svg><span>${esc(e.name)}</span></span><span class="r dt">${bytes(e.size)}</span><span class="dt">${pkDate(e.modified)}</span></div>` :
       `<div class="pk-row file" aria-disabled="true"><span class="nm"><svg class="i"><use href="#i-newfile"/></svg><span>${esc(e.name)}</span></span><span class="r dt">${bytes(e.size)}</span><span class="dt">${pkDate(e.modified)}</span></div>`);
     $("pk-list").innerHTML = (d.error ? `<div class="pk-msg">${esc(d.error)}</div>` : "") + rows.join("") +
       (!d.error && d.entries.length === 0 ? '<div class="pk-msg">Здесь пусто. Можно выбрать эту папку или создать в ней новую.</div>' : "") +
       (d.truncated ? '<div class="pk-msg">Показаны первые записи, остальные скрыты.</div>' : "");
     $("pk-ok").disabled = !$("pk-path").value.trim();
   }
+  const PK_ROWS = ".pk-row.dir, .pk-row.file.pick";
   function pkSelect(path) {
     pk.sel = path;
-    for (const r of $("pk-list").querySelectorAll(".pk-row.dir")) { const on = r.dataset.path === path; r.classList.toggle("sel", on); r.setAttribute("aria-selected", on); if (on) r.scrollIntoView({ block: "nearest" }); }
+    for (const r of $("pk-list").querySelectorAll(PK_ROWS)) { const on = r.dataset.path === path; r.classList.toggle("sel", on); r.setAttribute("aria-selected", on); if (on) r.scrollIntoView({ block: "nearest" }); }
     $("pk-path").value = path || (pk.data && pk.data.path) || "";
     $("pk-ok").disabled = !$("pk-path").value.trim();
   }
-  $("pk-list").addEventListener("click", (e) => { const r = e.target.closest(".pk-row.dir"); if (r) pkSelect(r.dataset.path); });
-  $("pk-list").addEventListener("dblclick", (e) => { const r = e.target.closest(".pk-row.dir"); if (r) pkGo(r.dataset.path); });
+  $("pk-list").addEventListener("click", (e) => { const r = e.target.closest(PK_ROWS); if (r) pkSelect(r.dataset.path); });
+  $("pk-list").addEventListener("dblclick", (e) => {
+    const r = e.target.closest(PK_ROWS); if (!r) return;
+    if (r.classList.contains("file")) { pkFinish(r.dataset.path); $("dlg-picker").close(); } // a file is chosen at once
+    else pkGo(r.dataset.path);
+  });
   $("pk-list").addEventListener("keydown", (e) => {
-    const rows = [...$("pk-list").querySelectorAll(".pk-row.dir")]; if (!rows.length) return;
+    const rows = [...$("pk-list").querySelectorAll(PK_ROWS)]; if (!rows.length) return;
     const i = rows.findIndex((r) => r.dataset.path === pk.sel);
     if (e.key === "ArrowDown") { e.preventDefault(); pkSelect(rows[Math.min(rows.length - 1, i + 1)].dataset.path); }
     else if (e.key === "ArrowUp") { e.preventDefault(); pkSelect(rows[Math.max(0, i - 1)].dataset.path); }
-    else if (e.key === "Enter" && i >= 0) { e.preventDefault(); pkGo(pk.sel); }
+    else if (e.key === "Enter" && i >= 0) {
+      e.preventDefault();
+      if (rows[i].classList.contains("file")) { pkFinish(pk.sel); $("dlg-picker").close(); } else pkGo(pk.sel);
+    }
     else if (e.key === "Backspace" && pk.data && pk.data.parent !== null) { e.preventDefault(); pkGo(pk.data.parent); }
   });
   for (const id of ["pk-crumbs", "pk-places"]) $(id).addEventListener("click", (e) => { const b = e.target.closest("[data-go]"); if (b) pkGo(b.dataset.go); });
@@ -2246,7 +2255,8 @@
   document.querySelectorAll("[data-pick]").forEach((b) => {
     b.addEventListener("click", async () => {
       const input = $(b.dataset.pick);
-      const dir = await pickFolder("Выберите папку", input.value);
+      const any = b.hasAttribute("data-pick-any"); // this field takes a file as well as a folder
+      const dir = await pickFolder(any ? "Выберите файл или папку" : "Выберите папку", input.value, any);
       if (dir) { input.value = dir; input.dispatchEvent(new Event("input", { bubbles: true })); }
     });
   });
