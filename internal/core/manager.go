@@ -60,8 +60,10 @@ type Manager struct {
 	activeAt         map[metainfo.Hash]time.Time // when each torrent last moved data
 	lowMu            sync.Mutex
 	lowOn            map[metainfo.Hash]bool // per torrent: were the low-priority files allowed to download at the last apply
+	peerMu           sync.Mutex             // guards the three peer* fields below; the peers tab asks for every connection in turn
 	peerRates        map[string]*peerRate   // smoothed speeds of connections, by torrent and address
 	peerSeen         map[string]time.Time
+	peerSweep        time.Time                   // when the gone connections were last dropped from the two maps
 	perm             map[metainfo.Hash]permState // what the engine was last told each torrent may do
 	queued           map[metainfo.Hash]int       // waiting torrents: 1 = next in line
 	seedQueued       map[metainfo.Hash]int       // finished torrents waiting for a place to share: 1 = next in line

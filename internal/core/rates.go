@@ -78,18 +78,23 @@ func (p *peerRate) step(now time.Time, down, up int64) (int64, int64) {
 func (m *Manager) peerSpeed(hash, addr string, down, up int64) (int64, int64) {
 	now := time.Now()
 	key := hash + "|" + addr
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.peerMu.Lock()
+	defer m.peerMu.Unlock()
 	p := m.peerRates[key]
 	if p == nil {
 		p = &peerRate{}
 		m.peerRates[key] = p
 	}
 	m.peerSeen[key] = now
-	for k, at := range m.peerSeen {
-		if now.Sub(at) > peerForget {
-			delete(m.peerSeen, k)
-			delete(m.peerRates, k)
+	// Every connection is asked for in turn, so walking all of them each time would grow with the square of
+	// their number; the gone ones are dropped twice per forgetting period instead.
+	if now.Sub(m.peerSweep) > peerForget/2 {
+		m.peerSweep = now
+		for k, at := range m.peerSeen {
+			if now.Sub(at) > peerForget {
+				delete(m.peerSeen, k)
+				delete(m.peerRates, k)
+			}
 		}
 	}
 	return p.step(now, down, up)
