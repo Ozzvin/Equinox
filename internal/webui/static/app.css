@@ -110,6 +110,17 @@ label.file { display: block; padding: 0; }
 .pill { display: inline-flex; align-items: center; gap: 7px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
 .pill.ok .dot { background: var(--ok); } .pill.warn .dot { background: var(--warn); } .pill.bad .dot { background: var(--bad); }
+/* The port dot after several quick clicks (see the click handler on #s-port in app.js). */
+@keyframes disco-dot {
+  0% { background: #ff2d55; box-shadow: 0 0 9px #ff2d55; transform: scale(1.5); }
+  16.6% { background: #ff9f0a; box-shadow: 0 0 9px #ff9f0a; transform: scale(1); }
+  33.3% { background: #ffe600; box-shadow: 0 0 9px #ffe600; transform: scale(1.5); }
+  50% { background: #30d158; box-shadow: 0 0 9px #30d158; transform: scale(1); }
+  66.6% { background: #0a84ff; box-shadow: 0 0 9px #0a84ff; transform: scale(1.5); }
+  83.3% { background: #bf5af2; box-shadow: 0 0 9px #bf5af2; transform: scale(1); }
+}
+.pill.disco .dot { animation: disco-dot .6s steps(1, end) infinite; }
+@media (prefers-reduced-motion: reduce) { .pill.disco .dot { animation: none; } }
 
 /* dialogs */
 dialog { border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; background: var(--panel); color: var(--text); width: min(440px, calc(100vw - 32px)); box-shadow: var(--shadow); }

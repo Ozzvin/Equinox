@@ -294,11 +294,26 @@
     checking: { cls: "warn", text: (p) => `Порт ${p.port} · проверка…` },
   };
 
+  // A small joke: click the port dot several times in a row and it starts changing colours like a disco ball.
+  // It goes on while the clicking goes on and for three seconds after the last click, then the dot is what it was.
+  let discoOn = false, discoClicks = 0, discoLast = 0, discoTimer = 0;
+  const discoClick = (e) => {
+    if (e.type === "contextmenu") e.preventDefault(); // a right click counts too, and has no menu to show here
+    const now = Date.now();
+    discoClicks = now - discoLast < 1200 ? discoClicks + 1 : 1;
+    discoLast = now;
+    clearTimeout(discoTimer);
+    if (discoClicks >= 5 && !discoOn) { discoOn = true; $("s-port").classList.add("disco"); }
+    if (discoOn) discoTimer = setTimeout(() => { discoOn = false; discoClicks = 0; $("s-port").classList.remove("disco"); }, 3000);
+  };
+  $("s-port").addEventListener("click", discoClick);
+  $("s-port").addEventListener("contextmenu", discoClick);
+
   function renderPort() {
     const el = $("s-port");
     if (!port) return;
     const ui = PORT_UI[port.verdict] || PORT_UI.checking;
-    el.className = "pill tip-host " + ui.cls;
+    el.className = "pill tip-host " + ui.cls + (discoOn ? " disco" : "");
     const head = ui.text(port) + (port.wantedPort ? ` · нужный ${port.wantedPort} занят` : "");
     let more = port.advice || "";
     if (port.wantedPort) more = `Порт ${port.wantedPort} занят другой программой или недоступен, поэтому выбран порт ${port.port}. ${port.advice || ""}`.trim();
