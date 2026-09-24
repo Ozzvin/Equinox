@@ -68,7 +68,7 @@
 
 
   // ---------- state ----------
-  let torrents = [], settings = null, stats = null, port = null, files = [];
+  let torrents = [], settings = null, stats = null, port = null, files = [], dataLoaded = false;
   const sel = new Set();          // hashes of the selected rows
   let anchor = null;              // where a Shift-range starts
   let shownHashes = [];           // hashes of the rows on screen, in display order
@@ -180,9 +180,11 @@
   const sideItem = (key, name, icon, count, current) =>
     `<button class="side-item" data-view="${esc(key)}" aria-current="${current}">${icon}<span class="name">${name}</span><span class="cnt">${count}</span></button>`;
 
-  function renderSide() {
+  const HIDDEN_WHEN_EMPTY = ["checking", "paused", "queued"];
+
+  function renderSide(gone) {
     const svg = (id) => `<svg class="i"><use href="#${id}"/></svg>`;
-    $("side-states").innerHTML = VIEWS.map(([k, n, ic]) =>
+    $("side-states").innerHTML = VIEWS.filter(([k]) => !gone.has(k)).map(([k, n, ic]) =>
       sideItem("s:" + k, n, svg(ic), k ? torrents.filter((t) => matches(t, { state: k })).length : torrents.length,
         !filter.label && filter.state === k)).join("");
     const labels = allLabels();
@@ -241,8 +243,17 @@
   function render() {
     const rows = $("rows");
     renderLabelFilter();
+    // The views that describe a passing state ("Проверяются", "На паузе", "В очереди") are there only while some
+    // torrent is in it. When the last one leaves while its view is the chosen one, go back to all the torrents
+    // rather than leave an empty list with no explanation.
+    const gone = new Set(HIDDEN_WHEN_EMPTY.filter((k) => !torrents.some((t) => matches(t, { state: k }))));
+    if (dataLoaded && gone.has(filter.state)) { filter.state = ""; saveFilter(); }
+    for (const k of HIDDEN_WHEN_EMPTY) {
+      const opt = $("f-state").querySelector(`option[value="${k}"]`);
+      if (opt) opt.hidden = gone.has(k);
+    }
     $("f-state").value = filter.state; $("f-label").value = filter.label;
-    renderSide();
+    renderSide(gone);
     const shown = sorted(torrents.filter((t) => matches(t)));
     shownHashes = shown.map((t) => t.hash);
     for (const th of document.querySelectorAll("th[data-sort]")) th.setAttribute("aria-sort", th.dataset.sort === sortBy.key ? (sortBy.dir > 0 ? "ascending" : "descending") : "none");
@@ -798,6 +809,7 @@
   async function refresh() {
     try {
       [torrents, stats, port] = await Promise.all([api("GET", "/api/torrents"), api("GET", "/api/stats"), api("GET", "/api/port")]);
+      dataLoaded = true;
       if (!settings) settings = await api("GET", "/api/settings");
       for (const h of [...sel]) if (!torrents.some((t) => t.hash === h)) sel.delete(h); // torrents that are gone
       reportMoves();
