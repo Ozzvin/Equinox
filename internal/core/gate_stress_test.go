@@ -143,6 +143,11 @@ func TestLoweringTheLimitPutsTheExtraCheckBackInTheLine(t *testing.T) {
 	if ok && sb.CheckQueued == 0 && !sb.Checking {
 		t.Skip("the second check ended before the limit was lowered (a fast disk)")
 	}
+	if !sa.Checking && sa.CheckQueued == 0 {
+		// The first check ended in between, freeing the only place, and the second one took it again at once:
+		// there is nothing left to see, and how soon that happens depends on the speed of the disk and of the machine.
+		t.Skip("the first check ended before the second one was put back into the line")
+	}
 	if !ok || sb.CheckQueued == 0 {
 		t.Fatalf("the torrent lower in the queue must wait for its turn: %+v", sb)
 	}

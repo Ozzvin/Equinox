@@ -116,9 +116,18 @@ func TestAddedPeerIsUsed(t *testing.T) {
 	if s, _ := statusOf(b, hashB); s.Progress != 0 {
 		t.Fatalf("the second client must start empty, got %v", s.Progress)
 	}
-	res, err := b.AddPeers(hashB, []string{"127.0.0.1:" + strconv.Itoa(a.Port())})
+	addr := "127.0.0.1:" + strconv.Itoa(a.Port())
+	res, err := b.AddPeers(hashB, []string{addr})
 	if err != nil || res.Added != 1 {
 		t.Fatalf("add peer: %+v, %v", res, err)
 	}
-	waitFor(t, func() bool { s, ok := statusOf(b, hashB); return ok && s.Progress == 1 })
+	// The engine drops an address it could not reach at the first try, which is why the program tries the saved
+	// peers again every few minutes; here that is done every second.
+	waitFor(t, func() bool {
+		s, ok := statusOf(b, hashB)
+		if ok && s.Progress < 1 && s.Peers == 0 {
+			_, _ = b.AddPeers(hashB, []string{addr})
+		}
+		return ok && s.Progress == 1
+	})
 }

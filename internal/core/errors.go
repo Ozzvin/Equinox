@@ -32,6 +32,17 @@ func (m *Manager) clearError(hash string) {
 	m.mu.Unlock()
 }
 
+// clearSetupError forgets a failure of the disk preparation (no room, an allocation that failed), but keeps a
+// write error: begin runs in the background after the torrent is added, and the engine can report a failing write
+// while it is still preparing the disk; a finished preparation must not wipe that report.
+func (m *Manager) clearSetupError(hash string) {
+	m.mu.Lock()
+	if e, ok := m.errs[hash]; ok && e.kind != ErrKindWrite {
+		delete(m.errs, hash)
+	}
+	m.mu.Unlock()
+}
+
 // watchWrites makes a failing write to disk visible: the engine stops the download on its
 // own but says nothing, so the user would just see a torrent that does not move.
 func (m *Manager) watchWrites(t *torrent.Torrent, hash string) {

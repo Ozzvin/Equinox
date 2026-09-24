@@ -506,7 +506,7 @@ func (m *Manager) begin(t *torrent.Torrent, hash string) {
 		m.setPaused(t, hash, true) // do not download into a disk that cannot hold it
 		return
 	}
-	m.clearError(hash)
+	m.clearSetupError(hash)
 	m.applyFiles(t, hash)
 }
 

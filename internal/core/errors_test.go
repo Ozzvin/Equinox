@@ -71,3 +71,24 @@ func TestWriteErrorIsReportedOnceAndPauses(t *testing.T) {
 		t.Fatal("failure record must be dropped with the torrent")
 	}
 }
+
+// begin() runs in the background after a torrent is added; when it finishes it forgets a failure of the disk
+// preparation, but not a write error the engine reported meanwhile.
+func TestFinishedSetupKeepsAWriteError(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	hash, err := m.AddFile(makeTorrent(t, dir, "k.bin", 20<<10), WithPaused())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.setError(hash, ErrKindWrite, "the disk went away")
+	m.clearSetupError(hash)
+	if s, _ := statusOf(m, hash); s.ErrorKind != ErrKindWrite || s.Error != "the disk went away" {
+		t.Fatalf("a write error must survive the end of the setup: %+v", s)
+	}
+	m.setError(hash, ErrKindDiskFull, "no room")
+	m.clearSetupError(hash)
+	if s, _ := statusOf(m, hash); s.Error != "" {
+		t.Fatalf("a failure of the setup itself must be forgotten once it is over: %+v", s)
+	}
+}
