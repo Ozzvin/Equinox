@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
 )
@@ -144,4 +145,55 @@ func TestCreateRejectsBadRequests(t *testing.T) {
 	if _, err := m.Create("nosuchjob"); err == nil {
 		t.Fatal("unknown job id must be an error")
 	}
+}
+
+func TestHasData(t *testing.T) {
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty")
+	_ = os.MkdirAll(filepath.Join(empty, "a", "b"), 0o755)
+	_ = os.WriteFile(filepath.Join(empty, "a", "zero.bin"), nil, 0o644)
+	if hasData(empty, time.Minute) {
+		t.Fatal("folders and zero-length files are no data")
+	}
+	if !hasData(empty, -time.Second) {
+		t.Fatal("when the budget is out the answer is \"yes\": the job itself finds out")
+	}
+	_ = os.WriteFile(filepath.Join(empty, "a", "b", "x.bin"), []byte("x"), 0o644)
+	if !hasData(empty, time.Minute) {
+		t.Fatal("a file with content is data")
+	}
+}
+
+// Finished jobs make room for new ones, oldest first, while a full set of running ones refuses another.
+func TestCreateJobsAreBounded(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	src := filepath.Join(dir, "d.bin")
+	_ = os.WriteFile(src, bytes.Repeat([]byte{3}, 20<<10), 0o644)
+
+	m.mu.Lock()
+	for i := 0; i < maxCreateJobs; i++ {
+		id := string(rune('a' + i))
+		m.creates[id] = &CreateJob{ID: id, Running: true, Started: time.Now().Add(-time.Duration(i) * time.Second)}
+	}
+	m.mu.Unlock()
+	if _, err := m.StartCreate(CreateRequest{Source: src}); err == nil {
+		t.Fatal("a full set of running jobs must refuse another")
+	}
+
+	m.mu.Lock()
+	oldest := string(rune('a' + 5))
+	m.creates[oldest].Running = false // the only finished one, so the one to go
+	m.mu.Unlock()
+	job, err := m.StartCreate(CreateRequest{Source: src, Output: filepath.Join(dir, "d2.torrent")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	n, kept := len(m.creates), m.creates[oldest]
+	m.mu.Unlock()
+	if kept != nil || n != maxCreateJobs {
+		t.Fatalf("the oldest finished job should have made room: %d jobs, oldest kept = %v", n, kept != nil)
+	}
+	waitJob(t, m, job.ID)
 }

@@ -62,20 +62,10 @@ func (m *Manager) StartCreate(req CreateRequest) (CreateJob, error) {
 	if err != nil || req.Source == "" {
 		return CreateJob{}, fmt.Errorf("%w: choose a file or a folder", ErrInvalidInput)
 	}
-	fi, err := os.Stat(src)
-	if err != nil {
+	if _, err := os.Stat(src); err != nil {
 		return CreateJob{}, fmt.Errorf("%w: %q not found", ErrInvalidInput, src)
 	}
-	var size int64
-	_ = filepath.WalkDir(src, func(_ string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			if i, e := d.Info(); e == nil {
-				size += i.Size()
-			}
-		}
-		return nil
-	})
-	if size == 0 {
+	if !hasData(src, hasDataBudget) {
 		return CreateJob{}, fmt.Errorf("%w: there is no data to make a torrent from", ErrInvalidInput)
 	}
 	var trackers []string
@@ -118,18 +108,30 @@ func (m *Manager) StartCreate(req CreateRequest) (CreateJob, error) {
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return CreateJob{}, fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
-	_ = fi
 
 	raw := make([]byte, 6)
 	_, _ = rand.Read(raw)
-	job := &CreateJob{ID: hex.EncodeToString(raw), Name: name, Running: true, Output: out, Started: time.Now(), Size: size}
+	job := &CreateJob{ID: hex.EncodeToString(raw), Name: name, Running: true, Output: out, Started: time.Now()}
 
 	m.mu.Lock()
-	if len(m.creates) >= maxCreateJobs { // forget the oldest finished ones
+	if len(m.creates) >= maxCreateJobs { // forget the finished ones, the oldest first, to make room
 		for id, j := range m.creates {
 			if !j.Running && time.Since(j.Started) > 10*time.Minute {
 				delete(m.creates, id)
 			}
+		}
+		for len(m.creates) >= maxCreateJobs {
+			oldest := ""
+			for id, j := range m.creates {
+				if !j.Running && (oldest == "" || j.Started.Before(m.creates[oldest].Started)) {
+					oldest = id
+				}
+			}
+			if oldest == "" {
+				m.mu.Unlock()
+				return CreateJob{}, fmt.Errorf("%w: too many torrents are being made at once, wait for one to finish", ErrInvalidInput)
+			}
+			delete(m.creates, oldest)
 		}
 	}
 	m.creates[job.ID] = job
@@ -140,12 +142,57 @@ func (m *Manager) StartCreate(req CreateRequest) (CreateJob, error) {
 	return snapshot, nil
 }
 
+// hasDataBudget is how long StartCreate looks for the first byte of data before it lets the job find out.
+const hasDataBudget = 2 * time.Second
+
+// hasData reports whether src holds a file with something in it. It stops at the first one, so a big
+// folder costs nothing, and gives up guessing "yes" after the budget: StartCreate runs in an HTTP handler
+// and must not hang on a huge tree or a slow network drive. A wrong "yes" only makes the job itself fail.
+func hasData(src string, budget time.Duration) bool {
+	deadline := time.Now().Add(budget)
+	found, late := false, false
+	_ = filepath.WalkDir(src, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			late = true
+			return filepath.SkipAll
+		}
+		if !d.IsDir() {
+			if i, e := d.Info(); e == nil && i.Size() > 0 {
+				found = true
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	return found || late
+}
+
 func (m *Manager) runCreate(job *CreateJob, src string, req CreateRequest, trackers []string) {
 	fail := func(err error) {
 		m.mu.Lock()
 		job.Running, job.Error = false, err.Error()
 		m.mu.Unlock()
 	}
+
+	var size int64 // the whole walk is done here, not in the request
+	_ = filepath.WalkDir(src, func(_ string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if i, e := d.Info(); e == nil {
+				size += i.Size()
+			}
+		}
+		return nil
+	})
+	if size == 0 {
+		fail(fmt.Errorf("there is no data to make a torrent from"))
+		return
+	}
+	m.mu.Lock()
+	job.Size = size
+	m.mu.Unlock()
 
 	info := metainfo.Info{PieceLength: req.PieceLength}
 	if req.Private {

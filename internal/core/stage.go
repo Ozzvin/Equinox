@@ -69,19 +69,33 @@ func (m *Manager) Stage(mi *metainfo.MetaInfo) (StagedTorrent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := time.Now()
-	total := len(mi.InfoBytes)
-	for id, e := range m.staged {
-		if now.Sub(e.at) > stagedTTL {
-			delete(m.staged, id)
-		} else {
-			total += e.bytes
-		}
-	}
+	total := len(mi.InfoBytes) + m.sweepStagedLocked(now)
 	if len(m.staged) >= maxStaged || total > maxStagedBytes {
 		return StagedTorrent{}, fmt.Errorf("%w: too many torrents on the list at once, add or remove some first", ErrInvalidInput)
 	}
 	m.staged[st.ID] = &stagedEntry{mi: mi, at: now, bytes: len(mi.InfoBytes)}
 	return st, nil
+}
+
+// sweepStagedLocked drops the staged torrents nobody came back for and returns the size of the rest. The caller
+// holds m.mu.
+func (m *Manager) sweepStagedLocked(now time.Time) (bytes int) {
+	for id, e := range m.staged {
+		if now.Sub(e.at) > stagedTTL {
+			delete(m.staged, id)
+		} else {
+			bytes += e.bytes
+		}
+	}
+	return bytes
+}
+
+// sweepStaged does that on a timer: without it a torrent staged and forgotten would sit in memory until the
+// next Stage, however long that takes.
+func (m *Manager) sweepStaged() {
+	m.mu.Lock()
+	m.sweepStagedLocked(time.Now())
+	m.mu.Unlock()
 }
 
 // StagedInfo describes a staged torrent again, for a client that only has its id (see PendingAdd).

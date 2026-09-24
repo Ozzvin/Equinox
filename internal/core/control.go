@@ -609,6 +609,19 @@ func (m *Manager) loop(ctx context.Context) {
 			rates[h] = [2]int64{rd, ru}
 			lastDown[h], lastUp[h] = d, u
 		}
+		if len(hist) > len(ts) { // the ones of removed torrents would otherwise stay for good
+			live := make(map[metainfo.Hash]bool, len(ts))
+			for _, t := range ts {
+				live[t.InfoHash()] = true
+			}
+			for h := range hist {
+				if !live[h] {
+					delete(hist, h)
+					delete(lastDown, h)
+					delete(lastUp, h)
+				}
+			}
+		}
 		now := time.Now()
 		m.mu.Lock()
 		m.rates = rates
@@ -620,6 +633,7 @@ func (m *Manager) loop(ctx context.Context) {
 		m.mu.Unlock()
 
 		if flush++; flush%15 == 0 {
+			m.sweepStaged()
 			m.syncCounters()
 			if err := m.state.flush(); err != nil {
 				fmt.Fprintf(os.Stderr, "saving state: %v\n", err)

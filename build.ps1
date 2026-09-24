@@ -116,7 +116,7 @@ if (Test-Path "dist\Equinox-Setup-$Version.exe") {
 }
 
 Step "контрольные суммы"
-$sums = Get-ChildItem dist -File | Where-Object { $_.Extension -in ".exe", ".zip" } | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+$sums = Get-ChildItem dist -File | Where-Object { $_.Name -like 'Equinox*' -and $_.Extension -in ".exe", ".zip" } | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
 Set-Content -Encoding ASCII -Path dist\SHA256SUMS.txt -Value $sums
 
 Write-Host ""
