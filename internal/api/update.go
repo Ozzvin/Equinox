@@ -14,10 +14,11 @@ type UpdateStatus struct {
 	URL       string `json:"url,omitempty"` // the release's page, for a manual download
 }
 
-// updateCheck asks GitHub for the latest release. ?force=1 bypasses the hourly cache, for the
-// "check now" button; the periodic background check leaves it off.
+// updateCheck asks GitHub for the latest release. An answer is reused for as long as the period of the
+// automatic check, so that reloading the page does not ask again; ?force=1 bypasses that, for the "check
+// now" button and for the timer of the periodic check.
 func (s *Server) updateCheck(w http.ResponseWriter, r *http.Request) {
-	info, err := update.Check(r.Context(), r.URL.Query().Get("force") == "1")
+	info, err := update.CheckWithin(r.Context(), r.URL.Query().Get("force") == "1", s.cfg.Get().UpdateCheckEvery())
 	if err != nil {
 		fail(w, err)
 		return

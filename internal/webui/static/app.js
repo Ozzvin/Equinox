@@ -1821,7 +1821,7 @@
       $("st-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`; }
 
     fillNetwork(settings.network || {});
-    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
+    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
     if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {}); $("st-copy").value = settings.copyRemovePolicy;
     $("st-data").value = settings.dataDir; $("st-movedone").value = settings.moveCompletedDir || ""; $("st-watch").value = settings.watchDir || ""; $("st-copydir").value = settings.torrentCopyDir || "";
     openLabelRows();
@@ -1873,6 +1873,8 @@
     e.preventDefault();
     const n = (id) => Number($(id).value) || 0;
     const bitsNow = $("st-unit-bits").checked; // the unit the limit fields are shown in right now
+    const updEvery = Math.round(Number($("st-updevery").value));
+    if (!(updEvery >= 5 && updEvery <= 20160)) { $("st-err").textContent = "Период проверки обновлений: от 5 минут до 14 суток (20160 минут)."; $("st-err").hidden = false; return; }
     try {
       // labels deleted in the settings are taken off their torrents first
       for (const name of lbDeleted) for (const t of torrents.filter((x) => x.label === name)) await api("POST", `/api/torrents/${t.hash}/label`, { label: "" });
@@ -1882,16 +1884,18 @@
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
-        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), maxActiveSeeds: n("st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
+        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, updateCheckMinutes: updEvery, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), maxActiveSeeds: n("st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);
         if (err) { toast("Не удалось изменить автозапуск: " + err, true); }
       }
+      scheduleUpdateChecks(settings);
       $("dlg-settings").close(); toast("Настройки сохранены"); refresh(); checkRestart();
     } catch (x) { $("st-err").textContent = x.message; $("st-err").hidden = false; }
   });
 
+  $("st-autoupdate").onchange = () => { $("st-updevery").disabled = !$("st-autoupdate").checked; };
   $("st-assoc").onclick = async () => {
     if (typeof window.registerHandlers !== "function") return;
     const err = await window.registerHandlers();
@@ -2291,12 +2295,22 @@
   if (!token) askToken();
   loop();
   checkRestart(); setInterval(checkRestart, 20000);
-  // Updates: an automatic check shortly after start and then hourly, unless turned off; a
-  // manual check (the About section's button) always works regardless of this setting.
+  // Updates: an automatic check shortly after start and then at the period from the settings (an hour unless
+  // changed), unless turned off; a manual check (the About section's button) always works regardless. The
+  // schedule is made again when the settings are saved. Only the first schedule after the check was off makes the
+  // check at once: a new period alone does not.
+  let updStartTimer = null, updTimer = null;
+  function scheduleUpdateChecks(s) {
+    clearInterval(updTimer);
+    const wasOn = updTimer !== null;
+    updTimer = null;
+    if (!s || s.autoUpdateCheck === false) { clearTimeout(updStartTimer); updStartTimer = null; return; }
+    const every = Math.min(20160, Math.max(5, s.updateCheckMinutes || 60)) * 60000;
+    updTimer = setInterval(() => checkUpdate(true), every); // the timer is due, so it must not be answered from the cache
+    if (!wasOn && updStartTimer === null) updStartTimer = setTimeout(() => { updStartTimer = null; checkUpdate(false); }, 5000);
+  }
   (async () => {
     if (!token) return;
-    try { if ((await api("GET", "/api/settings")).autoUpdateCheck === false) return; } catch (_) { return; }
-    setTimeout(() => checkUpdate(false), 15000);
-    setInterval(() => checkUpdate(false), 60 * 60000);
+    try { scheduleUpdateChecks(await api("GET", "/api/settings")); } catch (_) {}
   })();
 })();

@@ -492,6 +492,8 @@
         <fieldset>
           <legend>Обновления</legend>
           <label class="check"><input type="checkbox" id="st-autoupdate"><span>Проверять обновления автоматически</span></label>
+          <label>Период проверки, минут<input type="number" min="5" max="20160" step="1" id="st-updevery"></label>
+          <p class="muted small">От 5 минут до 14 суток, по умолчанию 60. Первая проверка — вскоре после запуска.</p>
           <div class="row-end" style="margin:8px 0">
             <button type="button" class="btn small" id="ab-check-update" style="margin-right:auto">Проверить обновления</button>
             <span class="muted small" id="ab-update-status"></span>

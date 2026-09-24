@@ -102,12 +102,15 @@ func setProgress(p Progress) {
 // Check reports the latest GitHub release if it is newer than the running version, or nil if
 // not (or if the check fails). A result is cached for an hour unless force is set, so opening
 // the settings repeatedly does not hit GitHub every time.
-func Check(ctx context.Context, force bool) (*Info, error) {
+func Check(ctx context.Context, force bool) (*Info, error) { return CheckWithin(ctx, force, cacheTTL) }
+
+// CheckWithin is Check with the age up to which a cached result is good enough.
+func CheckWithin(ctx context.Context, force bool, maxAge time.Duration) (*Info, error) {
 	if !buildinfo.IsRelease() {
 		return nil, nil // a beta or dev build has no release to update to, and must not overwrite the real install
 	}
 	mu.Lock()
-	if !force && checked && time.Since(cachedAt) < cacheTTL {
+	if !force && checked && time.Since(cachedAt) < maxAge {
 		info := cached
 		mu.Unlock()
 		return info, nil

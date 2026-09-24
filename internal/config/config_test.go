@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadCreatesDefaultsOnFirstRun(t *testing.T) {
@@ -138,5 +139,24 @@ func TestValidLabelColor(t *testing.T) {
 	}
 	if ValidLabelColor("green") {
 		t.Error("green is a state colour and must not be a label colour")
+	}
+}
+
+func TestUpdateCheckEvery(t *testing.T) {
+	for minutes, want := range map[int]time.Duration{
+		0:                         time.Hour, // never set: the default
+		-5:                        time.Hour,
+		MinUpdateCheckMinutes - 1: time.Hour,
+		MinUpdateCheckMinutes:     5 * time.Minute,
+		90:                        90 * time.Minute,
+		MaxUpdateCheckMinutes:     time.Duration(MaxUpdateCheckMinutes) * time.Minute,
+		MaxUpdateCheckMinutes + 1: time.Hour,
+	} {
+		if got := (Settings{UpdateCheckMinutes: minutes}).UpdateCheckEvery(); got != want {
+			t.Errorf("%d minutes: %v, want %v", minutes, got, want)
+		}
+	}
+	if got := Default(t.TempDir()); got.UpdateCheckMinutes != 60 || !got.AutoUpdateCheck {
+		t.Errorf("a new install checks every hour, got %d", got.UpdateCheckMinutes)
 	}
 }

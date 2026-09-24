@@ -253,6 +253,38 @@ func TestSettingsScheduleAndQueueRoundTrip(t *testing.T) {
 	if res := put(`{` + base + `,"maxActiveDownloads":-1}`); res.StatusCode != 400 {
 		t.Fatalf("negative limit must be rejected, got %d", res.StatusCode)
 	}
+	// So is the period of the update check: stored when given, kept when omitted, refused outside 5 min .. 14 days.
+	var upd struct {
+		Minutes int `json:"updateCheckMinutes"`
+	}
+	getUpd := func() {
+		r := e.do(t, "GET", "/api/settings", nil, nil)
+		_ = json.NewDecoder(r.Body).Decode(&upd)
+	}
+	getUpd()
+	if upd.Minutes != 60 {
+		t.Fatalf("a new install checks every hour, got %d", upd.Minutes)
+	}
+	if res := put(`{` + base + `,"maxActiveDownloads":3,"updateCheckMinutes":15}`); res.StatusCode != 200 {
+		t.Fatalf("put update period: %d", res.StatusCode)
+	}
+	getUpd()
+	if upd.Minutes != 15 {
+		t.Fatalf("update period not stored: %d", upd.Minutes)
+	}
+	if res := put(`{` + base + `,"maxActiveDownloads":3}`); res.StatusCode != 200 {
+		t.Fatalf("put without update period: %d", res.StatusCode)
+	}
+	getUpd()
+	if upd.Minutes != 15 {
+		t.Fatalf("omitted update period must stay unchanged: %d", upd.Minutes)
+	}
+	for _, bad := range []string{"0", "4", "-1", "20161"} {
+		if res := put(`{` + base + `,"maxActiveDownloads":3,"updateCheckMinutes":` + bad + `}`); res.StatusCode != 400 {
+			t.Fatalf("update period %s must be rejected, got %d", bad, res.StatusCode)
+		}
+	}
+
 	// The seed limit is optional too: stored when given, left alone when omitted, refused when negative.
 	if res := put(`{` + base + `,"maxActiveDownloads":3,"maxActiveSeeds":4}`); res.StatusCode != 200 {
 		t.Fatalf("put seed limit: %d", res.StatusCode)

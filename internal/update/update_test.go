@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Ozzvin/equinox/internal/buildinfo"
 )
@@ -258,5 +259,37 @@ func TestInstallRejectsTamperedInstaller(t *testing.T) {
 	err := info.Install(context.Background(), t.TempDir(), false)
 	if err == nil {
 		t.Fatal("Install must refuse a download that does not match the published checksum")
+	}
+}
+
+// A cached answer is reused only while it is younger than the age asked for: the period of the automatic
+// check decides how often GitHub is asked, and the manual check and the timer skip the cache.
+func TestCheckWithinReusesOnlyAYoungAnswer(t *testing.T) {
+	old := buildinfo.Version
+	buildinfo.Version = "1.0.0"
+	t.Cleanup(func() { buildinfo.Version = old })
+
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_ = json.NewEncoder(w).Encode(ghRelease{TagName: "v1.0.1", Assets: []ghAsset{
+			{Name: "Equinox-Setup-1.0.1.exe", URL: "http://x/a.exe"}, {Name: "SHA256SUMS.txt", URL: "http://x/sums"},
+		}})
+	}))
+	t.Cleanup(srv.Close)
+	oldURL := APIURL
+	APIURL = srv.URL
+	t.Cleanup(func() { APIURL = oldURL })
+
+	ctx := context.Background()
+	if _, err := CheckWithin(ctx, true, time.Hour); err != nil || hits != 1 {
+		t.Fatalf("a forced check must ask: hits %d, err %v", hits, err)
+	}
+	if _, err := CheckWithin(ctx, false, time.Hour); err != nil || hits != 1 {
+		t.Fatalf("a young answer must be reused: hits %d, err %v", hits, err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if _, err := CheckWithin(ctx, false, 10*time.Millisecond); err != nil || hits != 2 {
+		t.Fatalf("an answer older than the age asked for must be replaced: hits %d, err %v", hits, err)
 	}
 }

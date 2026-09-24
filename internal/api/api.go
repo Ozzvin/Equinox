@@ -645,6 +645,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		SeedTimeLimit    *int                `json:"seedTimeLimitMinutes"` // optional: omitted = unchanged
 		NotifyOnComplete *bool               `json:"notifyOnComplete"`     // optional
 		AutoUpdateCheck  *bool               `json:"autoUpdateCheck"`      // optional
+		UpdateEvery      *int                `json:"updateCheckMinutes"`   // optional
 		StartHidden      *bool               `json:"startHidden"`          // optional
 		SetupDone        *bool               `json:"setupDone"`            // optional
 		CloseToTray      *bool               `json:"closeToTray"`          // optional
@@ -673,6 +674,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		(b.SeedTimeLimit != nil && (*b.SeedTimeLimit < 0 || *b.SeedTimeLimit > 60*24*3650)) ||
 		(b.MaxChecks != nil && (*b.MaxChecks < 0 || *b.MaxChecks > 64)) ||
 		(b.MaxSeeds != nil && (*b.MaxSeeds < 0 || *b.MaxSeeds > 100000)) ||
+		(b.UpdateEvery != nil && (*b.UpdateEvery < config.MinUpdateCheckMinutes || *b.UpdateEvery > config.MaxUpdateCheckMinutes)) ||
 		(b.SpeedUnit != nil && *b.SpeedUnit != "bytes" && *b.SpeedUnit != "bits") {
 		fail(w, core.ErrInvalidInput)
 		return
@@ -773,6 +775,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.AutoUpdateCheck != nil {
 			c.AutoUpdateCheck = *b.AutoUpdateCheck
+		}
+		if b.UpdateEvery != nil {
+			c.UpdateCheckMinutes = *b.UpdateEvery
 		}
 		if b.StartHidden != nil {
 			c.StartHidden = *b.StartHidden
