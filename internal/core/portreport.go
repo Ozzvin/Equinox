@@ -94,15 +94,37 @@ func (m *Manager) SetPortMapping(on bool) error {
 	if err := m.cfg.Update(func(s *config.Settings) { s.PortMapping = on }); err != nil {
 		return err
 	}
+	m.portCtl.Lock()
+	defer m.portCtl.Unlock()
+	if !on {
+		m.stopPortMappingLocked()
+		return nil
+	}
 	m.portMu.Lock()
 	defer m.portMu.Unlock()
-	switch {
-	case on && m.ports == nil:
+	if m.ports == nil {
 		m.ports = portmap.New(m.cl.LocalPort(), portmap.Options{})
 		m.ports.Start()
-	case !on && m.ports != nil:
-		m.ports.Stop()
-		m.ports = nil
 	}
 	return nil
+}
+
+func (m *Manager) stopPortMapping() {
+	m.portCtl.Lock()
+	defer m.portCtl.Unlock()
+	m.stopPortMappingLocked()
+}
+
+// stopPortMappingLocked takes the mapping off the router, which can last up to 10 s. The pointer is cleared
+// first, under portMu, and Stop runs after it is released: PortStatus and RefreshPort (the interface asks for
+// them every 1.5 s) must not wait for the router. portCtl, held by the caller, keeps a new mapping from
+// starting while the old one is still being removed.
+func (m *Manager) stopPortMappingLocked() {
+	m.portMu.Lock()
+	p := m.ports
+	m.ports = nil
+	m.portMu.Unlock()
+	if p != nil {
+		p.Stop()
+	}
 }

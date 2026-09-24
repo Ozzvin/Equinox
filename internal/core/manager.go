@@ -44,7 +44,8 @@ type Manager struct {
 	wantedPort int            // the port asked for at start; the engine may have had to use another
 	cl         *torrent.Client
 	comp       storage.PieceCompletion
-	portMu     sync.Mutex
+	portCtl    sync.Mutex // serialises starting and stopping the mapping; held across the slow Stop
+	portMu     sync.Mutex // guards only the ports pointer, so PortStatus never waits for the router
 	ports      *portmap.Manager
 	inbound    *inboundTracker
 	self       selfIPs // our own address as the peers report it
@@ -229,12 +230,7 @@ func (m *Manager) Close() {
 	if err := m.state.flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "saving state on shutdown: %v\n", err)
 	}
-	m.portMu.Lock()
-	if m.ports != nil {
-		m.ports.Stop()
-		m.ports = nil
-	}
-	m.portMu.Unlock()
+	m.stopPortMapping()
 	m.cl.Close()
 	m.comp.Close()
 }
