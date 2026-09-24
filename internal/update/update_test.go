@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/Ozzvin/equinox/internal/buildinfo"
@@ -94,6 +95,44 @@ func TestCheckReportsNewerRelease(t *testing.T) {
 	}
 	if info == nil || info.Version != "1.0.1" {
 		t.Fatalf("Check = %+v, want version 1.0.1", info)
+	}
+}
+
+// Releases carry the installer under a versioned name and, for the copies installed before that, under the
+// old fixed one. Whichever order the assets come in, a new client takes the versioned one and its checksum.
+func TestCheckPrefersTheVersionedInstaller(t *testing.T) {
+	old := buildinfo.Version
+	buildinfo.Version = "1.0.16"
+	t.Cleanup(func() { buildinfo.Version = old })
+
+	for name, assets := range map[string][]string{
+		"legacy first":    {"Equinox-Setup.exe", "Equinox-Setup-1.0.17.exe", "SHA256SUMS.txt"},
+		"versioned first": {"Equinox-Setup-1.0.17.exe", "Equinox-Setup.exe", "SHA256SUMS.txt"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var srv *httptest.Server
+			mux := http.NewServeMux()
+			mux.HandleFunc("/release", func(w http.ResponseWriter, r *http.Request) {
+				rel := ghRelease{TagName: "v1.0.17"}
+				for _, n := range assets {
+					rel.Assets = append(rel.Assets, ghAsset{Name: n, URL: srv.URL + "/dl/" + n})
+				}
+				_ = json.NewEncoder(w).Encode(rel)
+			})
+			srv = httptest.NewServer(mux)
+			t.Cleanup(srv.Close)
+			oldURL := APIURL
+			APIURL = srv.URL + "/release"
+			t.Cleanup(func() { APIURL = oldURL })
+
+			info, err := Check(context.Background(), true)
+			if err != nil || info == nil {
+				t.Fatalf("Check = %+v, %v", info, err)
+			}
+			if info.setupName != "Equinox-Setup-1.0.17.exe" || !strings.HasSuffix(info.setupURL, "/dl/Equinox-Setup-1.0.17.exe") {
+				t.Fatalf("took %q from %s, want the versioned installer", info.setupName, info.setupURL)
+			}
+		})
 	}
 }
 

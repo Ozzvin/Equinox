@@ -2,7 +2,8 @@
   Собирает две версии Equinox, каждая в своём архиве:
   для ПК (окно и трей) и серверную (без окна).
 
-    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup.exe, архивы Equinox-pc.zip и Equinox-server.zip
+    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup-<версия>.exe (и его копия Equinox-Setup.exe
+                             для уже установленных программ, см. internal/update), архивы Equinox-pc-<версия>.zip и Equinox-server-<версия>.zip
     .\build.ps1 -SkipTests   то же без запуска тестов (быстрее)
 
   Результат лежит в папке dist (она не входит в репозиторий).
@@ -36,6 +37,9 @@ if (-not $SkipTests) {
 }
 
 New-Item -ItemType Directory -Force -Path dist | Out-Null
+# File names carry the version, so a rebuild for a new version would leave the previous one's files beside
+# them (and in the checksums): clear what this script makes. dist\beta and the like are not touched.
+Get-ChildItem dist -File | Where-Object { $_.Name -like 'Equinox*' -or $_.Name -eq 'SHA256SUMS.txt' } | Remove-Item -Force
 
 Step "Equinox.exe (версия для ПК: окно и трей)"
 go build -ldflags "-H windowsgui -s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$Version" -o dist\Equinox.exe .\cmd\equinox
@@ -92,15 +96,24 @@ Equinox Server
 Ключ:     файл data\api-token; никому его не показывайте.
 '@
 
-function Pack($exe, $readme, $zip) {
+function Pack($exe, $nameInZip, $readme, $zip) {
     $stage = Join-Path $env:TEMP "equinox-pack-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $stage | Out-Null
-    Copy-Item $exe $stage
+    Copy-Item $exe (Join-Path $stage $nameInZip)
     Set-Content -Encoding UTF8 -Path (Join-Path $stage 'README.txt') -Value $readme
     Compress-Archive -Force -Path (Join-Path $stage '*') -DestinationPath $zip
+    Remove-Item -Recurse -Force $stage
 }
-Pack dist\Equinox.exe $pcReadme dist\Equinox-pc.zip
-Pack dist\Equinox-server.exe $serverReadme dist\Equinox-server.zip
+# The portable programs carry the version in their file name too ("Equinox 1.0.17.exe"); the installed
+# one stays Equinox.exe, which the shortcuts, autostart and file associations point at.
+Pack dist\Equinox.exe "Equinox $Version.exe" $pcReadme "dist\Equinox-pc-$Version.zip"
+Pack dist\Equinox-server.exe "Equinox-server $Version.exe" $serverReadme "dist\Equinox-server-$Version.zip"
+
+# The installer is also published under its old fixed name: programs installed before names carried the
+# version look for exactly that file when they update themselves (see internal/update).
+if (Test-Path "dist\Equinox-Setup-$Version.exe") {
+    Copy-Item "dist\Equinox-Setup-$Version.exe" dist\Equinox-Setup.exe
+}
 
 Step "контрольные суммы"
 $sums = Get-ChildItem dist -File | Where-Object { $_.Extension -in ".exe", ".zip" } | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
@@ -108,4 +121,4 @@ Set-Content -Encoding ASCII -Path dist\SHA256SUMS.txt -Value $sums
 
 Write-Host ""
 Get-ChildItem dist | Select-Object Name, @{n = 'МБ'; e = { [math]::Round($_.Length / 1MB, 1) }} | Format-Table -AutoSize
-Write-Host "Готово: dist\Equinox-Setup.exe, Equinox-pc.zip, Equinox-server.zip" -ForegroundColor Green
+Write-Host "Готово: dist\Equinox-Setup-$Version.exe (и Equinox-Setup.exe), Equinox-pc-$Version.zip, Equinox-server-$Version.zip" -ForegroundColor Green

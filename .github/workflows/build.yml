@@ -37,8 +37,9 @@ jobs:
         with:
           name: equinox-${{ inputs.version || github.sha }}
           path: |
+            dist/Equinox-Setup-*.exe
             dist/Equinox-Setup.exe
-            dist/Equinox-pc.zip
-            dist/Equinox-server.zip
+            dist/Equinox-pc-*.zip
+            dist/Equinox-server-*.zip
             dist/SHA256SUMS.txt
           retention-days: 30

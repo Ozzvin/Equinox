@@ -40,9 +40,18 @@ type Info struct {
 	Notes   string // the release's own description (Markdown)
 	URL     string // the release's page, for a manual download
 
-	setupURL string
-	sumsURL  string
+	setupURL  string
+	setupName string // the release asset the installer was taken from, the name its checksum is listed under
+	sumsURL   string
 }
+
+// legacySetupName is the installer's name in the releases before file names carried the version. Every
+// release still publishes the same installer under it, because the copies of the program that are already
+// installed look for exactly this name and would otherwise never find an update.
+const legacySetupName = "Equinox-Setup.exe"
+
+// versionedSetupName is the installer's name in a release: "Equinox-Setup-1.0.17.exe".
+func versionedSetupName(version string) string { return "Equinox-Setup-" + version + ".exe" }
 
 type ghAsset struct {
 	Name string `json:"name"`
@@ -141,8 +150,12 @@ func fetch(ctx context.Context) (*Info, error) {
 	info := &Info{Version: latest, Notes: rel.Body, URL: rel.HTMLURL}
 	for _, a := range rel.Assets {
 		switch a.Name {
-		case "Equinox-Setup.exe":
-			info.setupURL = a.URL
+		case versionedSetupName(latest):
+			info.setupURL, info.setupName = a.URL, a.Name // preferred: named after the release it belongs to
+		case legacySetupName:
+			if info.setupName == "" {
+				info.setupURL, info.setupName = a.URL, a.Name
+			}
 		case "SHA256SUMS.txt":
 			info.sumsURL = a.URL
 		}
@@ -204,7 +217,11 @@ func (i *Info) Install(ctx context.Context, dir string, relaunch bool) error {
 	if err != nil {
 		return fail(err)
 	}
-	want, err := findSum(sums, "Equinox-Setup.exe")
+	name := i.setupName
+	if name == "" {
+		name = legacySetupName
+	}
+	want, err := findSum(sums, name)
 	if err != nil {
 		return fail(err)
 	}
