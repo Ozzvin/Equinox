@@ -1299,7 +1299,15 @@
     const tag = (e.target.tagName || "").toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select") { if (e.key === "Escape") e.target.blur(); return; }
     const mod = e.ctrlKey || e.metaKey, k = keyLetter(e);
-    if (mod && k === "a") { if (clickInDetails || e.target.closest("#details")) return; e.preventDefault(); shownHashes.forEach((h) => sel.add(h)); render(); }
+    if (mod && k === "a") {
+      if (clickInDetails || e.target.closest("#details")) { // in the details panel it means "everything on this tab", not the whole page
+        e.preventDefault();
+        if (tab === "files") { files.forEach((f) => fileSel.add(f.index)); renderFileSel(); }
+        else { const pane = $(PANES[tab]); if (pane && !pane.hidden) getSelection().selectAllChildren(pane); }
+        return;
+      }
+      e.preventDefault(); shownHashes.forEach((h) => sel.add(h)); render();
+    }
     else if (mod && e.shiftKey && k === "d") { e.preventDefault(); setDensity(DENSITIES[(DENSITIES.findIndex((x) => x[0] === density) + 1) % DENSITIES.length][0]); }
     else if ((mod && k === "f") || e.key === "/" || (!mod && !e.shiftKey && e.code === "Slash")) { e.preventDefault(); openSearch(true); }
     else if (e.key === "Escape") { sel.clear(); anchor = null; render(); }
