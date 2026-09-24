@@ -98,6 +98,7 @@
       </span>
     </span>
     <button type="button" class="btn small" id="peer-add" title="Добавить пиров по адресу вручную" hidden>Добавить пира…</button>
+    <button type="button" class="btn small warn-btn" id="peer-stale" title="Пиры, добавленные вручную, с которыми давно нет связи" hidden></button>
     <span id="peer-count" class="muted small" hidden></span>
   </div>
   <div class="details-body">
@@ -274,10 +275,16 @@
     <label>Адреса пиров, по одному в строке
       <textarea id="pe-input" rows="5" spellcheck="false" autocomplete="off" placeholder="203.0.113.5:51413&#10;[2001:db8::1]:6881&#10;seedbox.example.org:6881"></textarea>
     </label>
-    <p class="muted small">Адрес и порт через двоеточие: IPv4, IPv6 в квадратных скобках или имя хоста. Программа сразу попробует подключиться. После перезапуска добавленные пиры не сохраняются.</p>
+    <p class="muted small">Адрес и порт через двоеточие: IPv4, IPv6 в квадратных скобках или имя хоста. Программа сразу попробует подключиться и запомнит пира.</p>
     <p class="err" id="pe-err" hidden></p>
+    <div id="pe-saved" class="pe-saved" hidden>
+      <h3>Добавленные вручную</h3>
+      <div id="pe-list"></div>
+      <p class="muted small">Эти пиры запоминаются и пробуются снова после перезапуска и раз в несколько минут. Пир, с которым давно нет связи, сам не удаляется: его можно убрать здесь.</p>
+      <div class="row-end"><button type="button" class="btn small danger" id="pe-clean" hidden></button></div>
+    </div>
     <div class="row-end">
-      <button type="button" class="btn" data-close>Отмена</button>
+      <button type="button" class="btn" data-close>Закрыть</button>
       <button class="btn primary" value="ok">Добавить</button>
     </div>
   </form>

@@ -18,18 +18,19 @@ type record struct {
 	Added    time.Time `json:"added"`
 	Order    int64     `json:"order"` // queue position, lower runs first (0 = fall back to Added)
 
-	Paused         bool     `json:"paused"`
-	Sequential     bool     `json:"sequential"`
-	Label          string   `json:"label,omitempty"`         // free-form category, "" = none
-	WasIncomplete  bool     `json:"wasIncomplete,omitempty"` // seen unfinished; set until the completion is handled
-	SkipCheck      bool     `json:"-"`                       // only while adding: trust the files on disk
-	pausedExplicit bool     `json:"-"`                       // only while adding: the caller chose paused or not, so the "add paused" setting does not apply
-	EdgePieces     bool     `json:"edgePieces,omitempty"`    // raise the first and last pieces of every file
-	MoveDone       string   `json:"moveDone,omitempty"`      // where to move this torrent when it finishes, overrides the global folder
-	Prealloc       *bool    `json:"prealloc,omitempty"`      // per-torrent preallocation choice, nil = the global setting
-	MaxConns       int      `json:"maxConns,omitempty"`      // connection limit of this torrent, 0 = the global setting
-	ExtraTrackers  []string `json:"extraTrackers,omitempty"` // announce URLs the user added
-	SavePath       string   `json:"savePath,omitempty"`      // download folder of this torrent ("" = the default folder)
+	Paused         bool         `json:"paused"`
+	Sequential     bool         `json:"sequential"`
+	Label          string       `json:"label,omitempty"`         // free-form category, "" = none
+	WasIncomplete  bool         `json:"wasIncomplete,omitempty"` // seen unfinished; set until the completion is handled
+	SkipCheck      bool         `json:"-"`                       // only while adding: trust the files on disk
+	pausedExplicit bool         `json:"-"`                       // only while adding: the caller chose paused or not, so the "add paused" setting does not apply
+	EdgePieces     bool         `json:"edgePieces,omitempty"`    // raise the first and last pieces of every file
+	MoveDone       string       `json:"moveDone,omitempty"`      // where to move this torrent when it finishes, overrides the global folder
+	Prealloc       *bool        `json:"prealloc,omitempty"`      // per-torrent preallocation choice, nil = the global setting
+	MaxConns       int          `json:"maxConns,omitempty"`      // connection limit of this torrent, 0 = the global setting
+	ExtraTrackers  []string     `json:"extraTrackers,omitempty"` // announce URLs the user added
+	SavePath       string       `json:"savePath,omitempty"`      // download folder of this torrent ("" = the default folder)
+	ManualPeers    []manualPeer `json:"manualPeers,omitempty"`   // peers the user added by hand: tried again after a restart
 	// A storage move that has started but not finished. It is written before the first file is
 	// touched and cleared when the move ends, so a crash or a forced kill in the middle leaves a
 	// trail for recoverMoves to follow instead of a half-copied tree nobody knows about.

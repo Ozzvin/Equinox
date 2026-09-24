@@ -38,20 +38,20 @@ func TestResolvePeerAddr(t *testing.T) {
 		{"bad host name:6881", "", "format"},
 		{"bad/host:6881", "", "format"},
 	} {
-		addrs, reason := resolvePeerAddr(ctx, c.in)
+		_, addrs, reason := resolvePeerAddr(ctx, c.in)
 		if reason != c.reason || (c.want == "") != (len(addrs) == 0) || (c.want != "" && addrs[0] != c.want) {
 			t.Errorf("%q: got %v, %q; want %q, %q", c.in, addrs, reason, c.want, c.reason)
 		}
 	}
 	// A name is looked up now; localhost needs no network.
-	addrs, reason := resolvePeerAddr(ctx, "localhost:6881")
+	_, addrs, reason := resolvePeerAddr(ctx, "localhost:6881")
 	if reason != "" || len(addrs) == 0 || len(addrs) > maxPerHostname {
 		t.Errorf("localhost: %v, %q", addrs, reason)
 	}
 	// (A made-up name is no good for this: some providers answer every name.)
 	gone, stop := context.WithCancel(context.Background())
 	stop()
-	if _, reason := resolvePeerAddr(gone, "localhost:6881"); reason != "resolve" {
+	if _, _, reason := resolvePeerAddr(gone, "localhost:6881"); reason != "resolve" {
 		t.Errorf("a lookup that cannot be done must say resolve, got %q", reason)
 	}
 	if sourceName(torrent.PeerSourceDirect) != "manual" {

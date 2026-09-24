@@ -27,6 +27,7 @@ func TestRemoveForgetsEverythingKeptPerTorrent(t *testing.T) {
 	m.activePend[hash] = time.Second
 	m.activeAt[h] = time.Now()
 	m.moves[hash] = &moveJob{}
+	m.rememberPeerIPs(hash, "203.0.113.5:6881", []string{"203.0.113.5:6881"})
 	m.phase[hash] = &checkPhase{}
 	m.checkProg[hash] = 0.5
 	m.errs[hash] = torrentError{}
@@ -54,6 +55,7 @@ func TestRemoveForgetsEverythingKeptPerTorrent(t *testing.T) {
 		"activePend":   hasKey(m.activePend, hash),
 		"activeAt":     hasKey(m.activeAt, h),
 		"moves":        hasKey(m.moves, hash),
+		"manualIPs":    hasKey(m.manualIPs, hash+"|203.0.113.5:6881"),
 		"phase":        hasKey(m.phase, hash),
 		"checkProg":    hasKey(m.checkProg, hash),
 		"errs":         hasKey(m.errs, hash),

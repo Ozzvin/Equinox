@@ -34,8 +34,9 @@ type PeerAddResult struct {
 }
 
 // AddPeers hands peers the user knows about to a torrent: "ip:port", "[ipv6]:port" or "name:port" (the name is
-// looked up now). They are only tried for the running session; nothing is remembered across a restart. Peers
-// of a private torrent are fine too: the user asked for these ones, they are not found by DHT or PEX.
+// looked up now and again whenever the peer is tried again). The addresses are kept with the torrent (see
+// manualpeers.go), so a restart does not lose them. Peers of a private torrent are fine too: the user asked
+// for these ones, they are not found by DHT or PEX.
 func (m *Manager) AddPeers(hash string, raw []string) (PeerAddResult, error) {
 	t, err := m.get(hash)
 	if err != nil {
@@ -49,18 +50,26 @@ func (m *Manager) AddPeers(hash string, raw []string) (PeerAddResult, error) {
 	defer cancel()
 	seen := map[string]bool{}
 	var infos []torrent.PeerInfo
+	var keys []string
 	for _, r := range raw {
-		addrs, reason := resolvePeerAddr(ctx, r)
+		key, addrs, reason := resolvePeerAddr(ctx, r)
 		if reason != "" {
 			res.Errors = append(res.Errors, PeerAddrError{Addr: strings.TrimSpace(r), Reason: reason})
 			continue
 		}
+		keys = append(keys, key)
+		m.rememberPeerIPs(hash, key, addrs)
 		for _, a := range addrs {
 			if seen[a] {
 				continue
 			}
 			seen[a] = true
 			infos = append(infos, torrent.PeerInfo{Addr: torrent.StringAddr(a), Source: torrent.PeerSourceDirect, Trusted: true})
+		}
+	}
+	if len(keys) > 0 {
+		if err := m.saveManualPeers(hash, keys); err != nil {
+			return PeerAddResult{}, err
 		}
 	}
 	if len(infos) > 0 {
@@ -70,30 +79,33 @@ func (m *Manager) AddPeers(hash string, raw []string) (PeerAddResult, error) {
 	return res, nil
 }
 
-// resolvePeerAddr turns what the user typed into one or more "ip:port" strings, or says why not.
-func resolvePeerAddr(ctx context.Context, raw string) (addrs []string, reason string) {
+// resolvePeerAddr turns what the user typed into one or more "ip:port" strings, or says why not. key is what
+// is kept and shown for the entry: the address in its plain form, or the name in lower case with the port.
+func resolvePeerAddr(ctx context.Context, raw string) (key string, addrs []string, reason string) {
 	raw = strings.TrimSpace(raw)
 	host, portStr, err := net.SplitHostPort(raw)
 	if err != nil || host == "" {
-		return nil, "format"
+		return "", nil, "format"
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port < 1 || port > 65535 {
-		return nil, "port"
+		return "", nil, "port"
 	}
 	if ip, err := netip.ParseAddr(host); err == nil {
 		ip = ip.Unmap()
 		if ip.Zone() != "" || !usablePeerIP(ip) {
-			return nil, "address"
+			return "", nil, "address"
 		}
-		return []string{netip.AddrPortFrom(ip, uint16(port)).String()}, ""
+		key = netip.AddrPortFrom(ip, uint16(port)).String()
+		return key, []string{key}, ""
 	}
 	if !validHostname(host) {
-		return nil, "format"
+		return "", nil, "format"
 	}
+	key = strings.ToLower(net.JoinHostPort(host, portStr))
 	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 	if err != nil {
-		return nil, "resolve"
+		return "", nil, "resolve"
 	}
 	for _, ip := range ips {
 		if ip = ip.Unmap(); usablePeerIP(ip) {
@@ -104,9 +116,9 @@ func resolvePeerAddr(ctx context.Context, raw string) (addrs []string, reason st
 		}
 	}
 	if len(addrs) == 0 {
-		return nil, "resolve"
+		return "", nil, "resolve"
 	}
-	return addrs, ""
+	return key, addrs, ""
 }
 
 // usablePeerIP allows any address a peer can really have, loopback and the local network included (a seedbox

@@ -647,6 +647,7 @@ func (m *Manager) loop(ctx context.Context) {
 			m.scanWatch()
 		}
 		recs := m.snapshotRecords()
+		m.serviceManualPeers(ts, recs, tickN)
 		m.applyQueue(ts, recs)
 		m.applySeedQueue(ts, recs)
 		m.enforce(ts)

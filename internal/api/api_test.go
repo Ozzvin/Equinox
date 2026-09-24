@@ -467,6 +467,24 @@ func TestDetailsPeersTrackersRecheckEndpoints(t *testing.T) {
 	if code != 200 || pr.Added+pr.Known != 1 || len(pr.Errors) != 2 || pr.Errors[0].Reason != "format" || pr.Errors[1].Reason != "port" {
 		t.Fatalf("add peers: %d %+v", code, pr)
 	}
+	// ...and they are listed, and can be removed.
+	lr := e.do(t, "GET", base+"/manual-peers", nil, nil)
+	var saved []core.ManualPeerInfo
+	_ = json.NewDecoder(lr.Body).Decode(&saved)
+	lr.Body.Close()
+	if lr.StatusCode != 200 || len(saved) != 1 || saved[0].Addr != "203.0.113.5:6881" || saved[0].Stale {
+		t.Fatalf("manual peers: %d %+v", lr.StatusCode, saved)
+	}
+	rr := e.do(t, "POST", base+"/manual-peers/remove", bytes.NewReader([]byte(`{"addrs":["203.0.113.5:6881"]}`)), nil)
+	var removed map[string]int
+	_ = json.NewDecoder(rr.Body).Decode(&removed)
+	rr.Body.Close()
+	if rr.StatusCode != 200 || removed["removed"] != 1 {
+		t.Fatalf("remove manual peers: %d %v", rr.StatusCode, removed)
+	}
+	if rr := e.do(t, "POST", base+"/manual-peers/remove", bytes.NewReader([]byte(`{"addrs":[]}`)), nil); rr.StatusCode != 400 {
+		t.Fatalf("an empty removal must be 400, got %d", rr.StatusCode)
+	}
 	if code, _ := addPeers(`{"peers":[]}`); code != 400 {
 		t.Fatalf("an empty list of peers must be 400, got %d", code)
 	}
@@ -480,8 +498,8 @@ func TestDetailsPeersTrackersRecheckEndpoints(t *testing.T) {
 		t.Fatalf("recheck: %d", r.StatusCode)
 	}
 	bad := "/api/torrents/" + strings.Repeat("z", 40)
-	for _, c := range [][2]string{{"GET", bad + "/details"}, {"GET", bad + "/peers"}, {"POST", bad + "/trackers"}, {"POST", bad + "/peers"}, {"POST", bad + "/recheck"}} {
-		r := e.do(t, c[0], c[1], bytes.NewReader([]byte(`{"url":"udp://t.example:1/a","peers":["203.0.113.5:6881"]}`)), nil)
+	for _, c := range [][2]string{{"GET", bad + "/details"}, {"GET", bad + "/peers"}, {"POST", bad + "/trackers"}, {"POST", bad + "/peers"}, {"GET", bad + "/manual-peers"}, {"POST", bad + "/manual-peers/remove"}, {"POST", bad + "/recheck"}} {
+		r := e.do(t, c[0], c[1], bytes.NewReader([]byte(`{"url":"udp://t.example:1/a","peers":["203.0.113.5:6881"],"addrs":["203.0.113.5:6881"]}`)), nil)
 		r.Body.Close()
 		if r.StatusCode != 404 {
 			t.Errorf("%s %s: %d, want 404", c[0], c[1], r.StatusCode)

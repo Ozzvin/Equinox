@@ -42,7 +42,7 @@ var (
 //	                              Stop, portMu only for the pointer, so PortStatus never waits for the router
 //	m.mu -> cfg.mu                cfg.Get() is read under m.mu in a few places
 //	state.mu -> cfg.mu            likewise inside state.with/touch/view callbacks
-//	lowMu, evMu, peerMu, self.mu  leaves: nothing else is taken while one of them is held
+//	lowMu, evMu, peerMu, manualMu, self.mu  leaves: nothing else is taken while one of them is held
 //
 // m.mu and state.mu are never nested: no state.with/touch/view callback takes m.mu, and nothing calls into
 // the state store while holding m.mu. The state store writes the file under its own lock, so a callback must
@@ -78,6 +78,8 @@ type Manager struct {
 	peerRates        map[string]*peerRate   // smoothed speeds of connections, by torrent and address
 	peerSeen         map[string]time.Time
 	peerSweep        time.Time                   // when the gone connections were last dropped from the two maps
+	manualMu         sync.Mutex                  // leaf: guards manualIPs
+	manualIPs        map[string][]string         // IP addresses each saved manual peer stands for, by torrent and entry
 	perm             map[metainfo.Hash]permState // what the engine was last told each torrent may do
 	queued           map[metainfo.Hash]int       // waiting torrents: 1 = next in line
 	seedQueued       map[metainfo.Hash]int       // finished torrents waiting for a place to share: 1 = next in line
@@ -409,6 +411,7 @@ func (m *Manager) restore(r *record) error {
 	m.watchWrites(t, r.InfoHash)
 	m.applyConnLimit(t, r.InfoHash, *r)
 	m.reapplyTrackers(t, *r)
+	m.reapplyManualPeers(t, *r)
 	if r.Paused {
 		m.applyPause(t, r.InfoHash, true)
 	}
@@ -611,6 +614,7 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	m.recheckQueue = dropString(m.recheckQueue, hash)
 	m.mu.Unlock()
 	m.forgetSeedTime(hash) // the uncounted seeding and running time (seedPend, activePend)
+	m.forgetPeerIPs(hash)
 	m.lowMu.Lock()
 	delete(m.lowOn, h)
 	m.lowMu.Unlock()

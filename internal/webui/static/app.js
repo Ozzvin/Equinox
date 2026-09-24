@@ -510,7 +510,7 @@
     for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", b.dataset.tab === tab);
     for (const [k, id] of Object.entries(PANES)) $(id).hidden = k !== tab;
     $("file-actions").hidden = tab !== "files";
-    if (tab !== "peers") { $("peer-count").hidden = true; $("peer-add").hidden = true; }
+    if (tab !== "peers") { $("peer-count").hidden = true; $("peer-add").hidden = true; $("peer-stale").hidden = true; }
     $("d-empty").hidden = true;
   }
   $("tabs").addEventListener("click", (e) => {
@@ -733,6 +733,7 @@
     const pc = $("peer-count");
     pc.hidden = tab !== "peers" || !t;
     $("peer-add").hidden = tab !== "peers" || !t;
+    if (tab !== "peers" || !t) $("peer-stale").hidden = true;
     if (t) pc.textContent = `Подключено пиров: ${t.peers}` + (t.seeds ? ` · из них раздающих: ${t.seeds}` : "");
     if (!t) { // the panel is always there; without one chosen torrent it only says so
       const n = chosen().length;
@@ -775,6 +776,7 @@
         const p = await api("GET", `/api/torrents/${t.hash}/peers`); if (!same()) return;
         if (peersBusy) return; // a click or a drag is under way: drawing again would lose it
         lastPeers = p; drawPeers();
+        loadManualPeers(t, false); // for the notice about peers added by hand that went silent
       } else if (tab === "trackers") {
         const d = await api("GET", `/api/torrents/${t.hash}/details`); if (!same()) return;
         $("tr-list").innerHTML = d.trackers.length === 0 ? '<p class="none">У раздачи нет трекеров: пиры ищутся через DHT</p>' :
@@ -1447,14 +1449,61 @@
     each(list, (t) => post(t, "label", { label }));
   });
 
-  // peers added by hand
+  // peers added by hand: they are kept with the torrent, and one that has gone silent for long is offered for removal
   const PEER_WHY = { format: "нужен адрес вида хост:порт", port: "порт должен быть от 1 до 65535", address: "такой адрес не может быть у пира", resolve: "не удалось найти адрес по имени" };
-  $("peer-add").onclick = () => {
+  let manualPeers = { hash: "", at: 0, list: [] };
+  function drawStaleChip() {
+    const t = cur(), chip = $("peer-stale");
+    const n = t && tab === "peers" && manualPeers.hash === t.hash ? manualPeers.list.filter((p) => p.stale).length : 0;
+    chip.hidden = n === 0;
+    if (n) chip.textContent = `Давно не отвечают: ${n}`;
+  }
+  async function loadManualPeers(t, force) {
+    if (!t) return [];
+    if (!force && manualPeers.hash === t.hash && Date.now() - manualPeers.at < 20000) { drawStaleChip(); return manualPeers.list; }
+    try { manualPeers = { hash: t.hash, at: Date.now(), list: await api("GET", `/api/torrents/${t.hash}/manual-peers`) }; }
+    catch (_) { if (manualPeers.hash !== t.hash) return []; }
+    drawStaleChip();
+    return manualPeers.list;
+  }
+  const daysAgo = (s) => (s && !s.startsWith("0001") ? Math.floor((Date.now() - new Date(s).getTime()) / 86400000) : null);
+  function peerStatus(p) {
+    if (p.connected) return { cls: "ok", text: "подключён" };
+    const d = daysAgo(p.lastSeen) ?? daysAgo(p.added);
+    const when = d === null ? "связи ещё не было" : d === 0 ? "связь была сегодня" : `связи нет ${d} дн.`;
+    return p.stale ? { cls: "bad", text: `давно не отвечает: ${when}` } : { cls: "", text: when };
+  }
+  function drawSavedPeers() {
+    const list = manualPeers.list, stale = list.filter((p) => p.stale);
+    $("pe-saved").hidden = list.length === 0;
+    $("pe-list").innerHTML = list.map((p) => {
+      const s = peerStatus(p);
+      return `<div class="pe-row"><span class="pe-addr">${esc(p.addr)}</span><span class="pe-st ${s.cls}">${esc(s.text)}</span><button type="button" class="btn small" data-rmpeer="${esc(p.addr)}" title="Забыть этого пира и закрыть соединение с ним" aria-label="Удалить ${esc(p.addr)}">✕</button></div>`;
+    }).join("");
+    $("pe-clean").hidden = stale.length === 0;
+    if (stale.length) $("pe-clean").textContent = `Удалить давно не отвечающих (${stale.length})`;
+  }
+  async function openPeersDialog(fresh) {
     const t = cur(); if (!t) return;
     $("pe-name").textContent = t.name || t.hash;
-    $("pe-input").value = ""; $("pe-err").hidden = true;
-    $("dlg-peers").showModal(); $("pe-input").focus();
-  };
+    if (fresh) { $("pe-input").value = ""; $("pe-err").hidden = true; }
+    await loadManualPeers(t, true);
+    drawSavedPeers();
+    if (!$("dlg-peers").open) $("dlg-peers").showModal();
+    $("pe-input").focus();
+  }
+  $("peer-add").onclick = () => openPeersDialog(true);
+  $("peer-stale").onclick = () => openPeersDialog(true);
+  async function removeSavedPeers(addrs) {
+    const t = cur(); if (!t || !addrs.length) return;
+    try { await api("POST", `/api/torrents/${t.hash}/manual-peers/remove`, { addrs }); }
+    catch (x) { toast(x.message, true); return; }
+    await loadManualPeers(t, true);
+    drawSavedPeers();
+    renderDetails();
+  }
+  $("pe-list").addEventListener("click", (e) => { const b = e.target.closest("[data-rmpeer]"); if (b) removeSavedPeers([b.dataset.rmpeer]); });
+  $("pe-clean").onclick = () => removeSavedPeers(manualPeers.list.filter((p) => p.stale).map((p) => p.addr));
   $("f-peers").addEventListener("submit", async (e) => {
     e.preventDefault();
     const t = cur(); if (!t) { $("dlg-peers").close(); return; }
@@ -1465,12 +1514,14 @@
     catch (x) { $("pe-err").textContent = x.message; $("pe-err").hidden = false; return; }
     const errs = r.errors || [];
     if (r.added + r.known > 0) toast(r.added ? `Пиров добавлено: ${r.added}` + (r.known ? `, уже были известны: ${r.known}` : "") : `Эти пиры уже известны раздаче: ${r.known}`);
+    await loadManualPeers(t, true);
     if (!errs.length) { $("dlg-peers").close(); renderDetails(); return; }
     // what was fine is done; what was not stays in the box, each with its reason
     $("pe-input").value = errs.map((x) => x.addr).join("\n");
     $("pe-err").textContent = errs.map((x) => `${x.addr} — ${PEER_WHY[x.reason] || "не подошёл"}`).join("\n");
     $("pe-err").style.whiteSpace = "pre-line";
     $("pe-err").hidden = false;
+    drawSavedPeers();
   });
 
   // remove

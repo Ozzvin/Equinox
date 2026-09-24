@@ -108,6 +108,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/torrents/{hash}/peers", s.peers)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/trackers", s.addTracker)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/peers", s.addPeers)
+	s.mux.HandleFunc("GET /api/torrents/{hash}/manual-peers", s.manualPeers)
+	s.mux.HandleFunc("POST /api/torrents/{hash}/manual-peers/remove", s.removeManualPeers)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/recheck", s.recheck)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/max-connections", s.maxConns)
 	s.mux.HandleFunc("GET /api/torrents/{hash}/status", s.statusExtra)
@@ -341,6 +343,34 @@ func (s *Server) addPeers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// manualPeers lists the peers the user added by hand: each with whether it is connected and whether it has been
+// silent so long that removing it is worth suggesting.
+func (s *Server) manualPeers(w http.ResponseWriter, r *http.Request) {
+	list, err := s.m.ManualPeers(r.PathValue("hash"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// removeManualPeers forgets peers added by hand and drops their connections: {"addrs": ["203.0.113.5:6881"]}.
+func (s *Server) removeManualPeers(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Addrs []string `json:"addrs"`
+	}
+	if err := decode(r, &b); err != nil || len(b.Addrs) == 0 {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	n, err := s.m.RemoveManualPeers(r.PathValue("hash"), b.Addrs)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"removed": n})
 }
 
 // maxConns limits the peer connections of one torrent: {"limit": 20} (0 = global setting).

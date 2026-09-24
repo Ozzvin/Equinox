@@ -695,3 +695,15 @@ html[data-density="compact"] .seg-note { display: none; }
 .about-kv { grid-template-columns: 90px 1fr !important; padding: 0 0 10px !important; gap: 4px 12px !important; }
 .about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .about-links .btn { text-decoration: none; }
+
+/* peers added by hand */
+.pe-saved { margin: 12px 0 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.pe-saved h3 { margin: 0 0 6px; font-size: 13px; }
+.pe-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 4px 0; }
+.pe-addr { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pe-st { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.pe-st.ok { color: var(--ok); }
+.pe-st.bad { color: var(--bad); }
+.pe-row .btn { padding: 0 8px; min-width: 0; }
+.warn-btn { color: var(--warn); border-color: var(--warn); }
+#peer-add, #peer-stale { margin-right: 8px; }
