@@ -16,6 +16,8 @@ type rotatingLog struct {
 	max  int64
 	f    *os.File
 	size int64
+	// onOpen, when set, is called with every file the log opens (the first one and each after a rotation).
+	onOpen func(*os.File)
 }
 
 func openRotating(path string, max int64) (*rotatingLog, error) {
@@ -40,6 +42,9 @@ func (l *rotatingLog) open() error {
 		return err
 	}
 	l.f, l.size = f, fi.Size()
+	if l.onOpen != nil {
+		l.onOpen(f)
+	}
 	return nil
 }
 
@@ -67,6 +72,10 @@ func SetupLog(path string, max int64) error {
 	if err != nil {
 		return err
 	}
+	l.mu.Lock()
+	l.onOpen = setRuntimeStderr // a panic's trace goes to the file directly; after a rotation, to the new file
+	setRuntimeStderr(l.f)
+	l.mu.Unlock()
 	log.SetOutput(l)
 	pr, pw, err := os.Pipe()
 	if err != nil {
