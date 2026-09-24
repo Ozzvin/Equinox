@@ -1,4 +1,4 @@
-# Equinox
+# <img src="docs/icon.svg" alt="" width="40" height="40" align="absmiddle"> Equinox
 
 **A fast, lightweight BitTorrent client for Windows, written in Go.** Native window with a tray icon, a web interface, and no libtorrent.
 
