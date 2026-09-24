@@ -111,9 +111,14 @@ func (m *Manager) applyQueue(ts []*torrent.Torrent, recs map[string]record) {
 		byHash[t.InfoHash()] = t
 	}
 
+	// What is published is a copy: Remove deletes from the published map under m.mu while queued is still read below.
+	published := make(map[metainfo.Hash]int, len(queued))
+	for h, n := range queued {
+		published[h] = n
+	}
 	m.mu.Lock()
-	prev := m.queued
-	m.queued = queued
+	prev := m.queued // replaced now, so ours alone
+	m.queued = published
 	m.mu.Unlock()
 
 	// Only torrents whose waiting state changed need the engine told (see syncPerm).
@@ -178,8 +183,12 @@ func rankSeeds(cands []seedCand, limit int) map[metainfo.Hash]int {
 func (m *Manager) applySeedQueue(ts []*torrent.Torrent, recs map[string]record) {
 	limit := m.cfg.Get().MaxActiveSeeds
 
+	// A copy: Remove deletes from the live map under m.mu, and the loop below reads it without the lock.
 	m.mu.Lock()
-	prevHeld := m.seedHeld
+	prevHeld := make(map[metainfo.Hash]bool, len(m.seedHeld))
+	for h, v := range m.seedHeld {
+		prevHeld[h] = v
+	}
 	m.mu.Unlock()
 
 	var cands []seedCand
@@ -218,9 +227,15 @@ func (m *Manager) applySeedQueue(ts []*torrent.Torrent, recs map[string]record) 
 		}
 	}
 
+	// What is published is a copy of waiting: from here on Remove writes into the published maps under m.mu, while
+	// waiting is still read below without it.
+	published := make(map[metainfo.Hash]int, len(waiting))
+	for h, n := range waiting {
+		published[h] = n
+	}
 	m.mu.Lock()
-	prev := m.seedQueued
-	m.seedQueued, m.seedHeld = waiting, held
+	prev := m.seedQueued // replaced now, so ours alone
+	m.seedQueued, m.seedHeld = published, held
 	m.mu.Unlock()
 
 	for h := range waiting {

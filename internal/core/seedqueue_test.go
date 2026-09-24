@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
+
+	"github.com/Ozzvin/equinox/internal/config"
 )
 
 func seedCands(n int) []seedCand {
@@ -130,4 +132,93 @@ func TestSeedLimitQueuesTheRest(t *testing.T) {
 // rankSeeds reorders its argument, so the tests keep their own order to look the candidates up by.
 func rankCopy(c []seedCand, limit int) map[metainfo.Hash]int {
 	return rankSeeds(append([]seedCand(nil), c...), limit)
+}
+
+// Remove deletes from the seed maps under m.mu while the loop is inside applySeedQueue; the loop must not read
+// a map that is published to the manager without the lock (the race detector, and in a bad moment a
+// "concurrent map read and map write" crash, catch it).
+func TestApplySeedQueueDoesNotReadPublishedMapsUnlocked(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxActiveSeeds = 1 })
+	for i := 0; i < 3; i++ {
+		name := fmt.Sprintf("r%d.bin", i)
+		tp := makeTorrent(t, dir, name, 32<<10)
+		seed(t, m, dir, name)
+		h, err := m.AddFile(tp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, func() bool { s, ok := statusOf(m, h); return ok && s.Progress == 1 })
+	}
+	m.cancel() // no loop of its own: only this test drives applySeedQueue
+	<-m.done
+
+	var h metainfo.Hash
+	h[0] = 9
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			m.mu.Lock()
+			for k := range m.seedQueued {
+				m.seedQueued[k] = 1 + int(k[0])%2
+			}
+			m.seedQueued[h] = 1
+			delete(m.seedQueued, h)
+			for k := range m.seedHeld {
+				delete(m.seedHeld, k)
+			}
+			m.mu.Unlock()
+		}
+	}()
+	ts := m.cl.Torrents()
+	for i := 0; i < 3000; i++ {
+		m.applySeedQueue(ts, m.snapshotRecords())
+	}
+	close(stop)
+	<-done
+}
+
+// The same for the download queue: applyQueue reads the map it has just published while Remove deletes from it.
+func TestApplyQueueDoesNotReadPublishedMapsUnlocked(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxActiveDownloads = 1 })
+	for i := 0; i < 3; i++ {
+		if _, err := m.AddFile(makeTorrent(t, dir, fmt.Sprintf("q%d.bin", i), 32<<10)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.cancel()
+	<-m.done
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			m.mu.Lock()
+			for k := range m.queued {
+				m.queued[k] = 1 + int(k[0])%2
+				delete(m.queued, k)
+			}
+			m.mu.Unlock()
+		}
+	}()
+	ts := m.cl.Torrents()
+	for i := 0; i < 3000; i++ {
+		m.applyQueue(ts, m.snapshotRecords())
+	}
+	close(stop)
+	<-done
 }

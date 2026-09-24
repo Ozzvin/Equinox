@@ -61,6 +61,10 @@ func TestScheduleValidation(t *testing.T) {
 // until the window ends.
 func TestScheduleTogglesOnBoundariesOnly(t *testing.T) {
 	m := newManager(t, t.TempDir(), nil)
+	// The control loop evaluates the schedule by the real clock every second; between two of the made-up times below
+	// that would count as leaving the window and entering it again, and undo the manual toggle. Stop the loop.
+	m.cancel()
+	<-m.done
 	sc := config.AltSchedule{Enabled: true, From: "23:00", To: "07:00"}
 	if err := m.cfg.Update(func(s *config.Settings) { s.AltSchedule = sc }); err != nil {
 		t.Fatal(err)
