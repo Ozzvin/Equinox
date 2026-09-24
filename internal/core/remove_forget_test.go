@@ -21,6 +21,8 @@ func TestRemoveForgetsEverythingKeptPerTorrent(t *testing.T) {
 	m.seenDown[h], m.seenUp[h] = 1, 1
 	m.perm[h] = permState{}
 	m.queued[h] = 1
+	m.seedQueued[h] = 1
+	m.seedHeld[h] = true
 	m.seedPend[hash] = time.Second
 	m.activePend[hash] = time.Second
 	m.activeAt[h] = time.Now()
@@ -46,6 +48,8 @@ func TestRemoveForgetsEverythingKeptPerTorrent(t *testing.T) {
 		"seenUp":       hasKey(m.seenUp, h),
 		"perm":         hasKey(m.perm, h),
 		"queued":       hasKey(m.queued, h),
+		"seedQueued":   hasKey(m.seedQueued, h),
+		"seedHeld":     hasKey(m.seedHeld, h),
 		"seedPend":     hasKey(m.seedPend, hash),
 		"activePend":   hasKey(m.activePend, hash),
 		"activeAt":     hasKey(m.activeAt, h),

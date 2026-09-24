@@ -106,6 +106,9 @@ type Settings struct {
 
 	// MaxActiveDownloads limits simultaneous downloads; the rest wait in the queue (0 = no limit).
 	MaxActiveDownloads int `json:"maxActiveDownloads"`
+	// MaxActiveSeeds limits how many finished torrents share at the same time; the rest wait for a free
+	// place (0 = no limit). Those with someone to give to come first, then the queue order.
+	MaxActiveSeeds int `json:"maxActiveSeeds"`
 
 	// Default stop-seeding ratio, 0 disables. A torrent may override it.
 	RatioLimit float64 `json:"ratioLimit"`

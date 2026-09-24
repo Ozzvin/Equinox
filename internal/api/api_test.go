@@ -253,6 +253,31 @@ func TestSettingsScheduleAndQueueRoundTrip(t *testing.T) {
 	if res := put(`{` + base + `,"maxActiveDownloads":-1}`); res.StatusCode != 400 {
 		t.Fatalf("negative limit must be rejected, got %d", res.StatusCode)
 	}
+	// The seed limit is optional too: stored when given, left alone when omitted, refused when negative.
+	if res := put(`{` + base + `,"maxActiveDownloads":3,"maxActiveSeeds":4}`); res.StatusCode != 200 {
+		t.Fatalf("put seed limit: %d", res.StatusCode)
+	}
+	var seeds struct {
+		MaxActiveSeeds int `json:"maxActiveSeeds"`
+	}
+	getSeeds := func() {
+		r := e.do(t, "GET", "/api/settings", nil, nil)
+		_ = json.NewDecoder(r.Body).Decode(&seeds)
+	}
+	getSeeds()
+	if seeds.MaxActiveSeeds != 4 {
+		t.Fatalf("seed limit not stored: %+v", seeds)
+	}
+	if res := put(`{` + base + `,"maxActiveDownloads":3}`); res.StatusCode != 200 {
+		t.Fatalf("put without seed limit: %d", res.StatusCode)
+	}
+	getSeeds()
+	if seeds.MaxActiveSeeds != 4 {
+		t.Fatalf("omitted seed limit must stay unchanged: %+v", seeds)
+	}
+	if res := put(`{` + base + `,"maxActiveDownloads":3,"maxActiveSeeds":-1}`); res.StatusCode != 400 {
+		t.Fatalf("negative seed limit must be rejected, got %d", res.StatusCode)
+	}
 }
 
 // Info hashes come straight from the URL; garbage must give a clean 404, never a panic.

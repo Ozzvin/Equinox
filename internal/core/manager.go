@@ -63,6 +63,8 @@ type Manager struct {
 	peerSeen         map[string]time.Time
 	perm             map[metainfo.Hash]permState // what the engine was last told each torrent may do
 	queued           map[metainfo.Hash]int       // waiting torrents: 1 = next in line
+	seedQueued       map[metainfo.Hash]int       // finished torrents waiting for a place to share: 1 = next in line
+	seedHeld         map[metainfo.Hash]bool      // finished torrents that have a place to share at the moment
 	schedIn          bool                        // last evaluation of the turtle schedule window
 	schedKnown       bool
 	moves            map[string]*moveJob      // storage moves in progress or just failed, by hash
@@ -123,6 +125,8 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		seenUp:     map[metainfo.Hash]int64{},
 		perm:       map[metainfo.Hash]permState{},
 		queued:     map[metainfo.Hash]int{},
+		seedQueued: map[metainfo.Hash]int{},
+		seedHeld:   map[metainfo.Hash]bool{},
 		activeAt:   map[metainfo.Hash]time.Time{},
 		lowOn:      map[metainfo.Hash]bool{},
 		peerRates:  map[string]*peerRate{},
@@ -588,6 +592,8 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	delete(m.seenUp, h)
 	delete(m.perm, h)
 	delete(m.queued, h)
+	delete(m.seedQueued, h)
+	delete(m.seedHeld, h)
 	delete(m.activeAt, h) // flushActiveTime and List walk these maps on every refresh: what stays only grows
 	delete(m.moves, hash)
 	m.recheckQueue = dropString(m.recheckQueue, hash)

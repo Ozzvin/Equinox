@@ -94,7 +94,7 @@
   const meta = (t, v) => (t.hasMetadata ? v : "—");
   let queuePos = new Map();
   // green while downloading, blue while seeding, yellow while files are being checked, grey when stopped
-  const barState = (t) => ((t.checking || t.checkQueued > 0) ? "check" : t.paused ? "paused" : t.progress >= 1 ? "seed" : "down");
+  const barState = (t) => ((t.checking || t.checkQueued > 0) ? "check" : (t.paused || t.seedQueued > 0) ? "paused" : t.progress >= 1 ? "seed" : "down");
   // The progress bar carries the status text and the percentage inside it. The text is drawn twice,
   // dark over the empty part and light over the filled part, so it reads wherever the fill ends.
   function progressBar(t) {
@@ -168,7 +168,7 @@
       case "checking": return !!t.checking || t.checkQueued > 0;
       case "seeding": return !t.paused && t.hasMetadata && t.progress >= 1;
       case "paused": return t.paused;
-      case "queued": return t.queued > 0 || t.checkQueued > 0;
+      case "queued": return t.queued > 0 || t.checkQueued > 0 || t.seedQueued > 0;
     }
     return true;
   }
@@ -235,6 +235,7 @@
     if (!t.hasMetadata) return { cls: "wait", text: "Метаданные…" };
     if (t.paused) return { cls: "", text: t.progress >= 1 ? "Остановлено" : "Пауза" };
     if (t.queued > 0) return { cls: "wait", text: `В очереди №${t.queued}` };
+    if (t.seedQueued > 0) return { cls: "wait", text: `В очереди на раздачу №${t.seedQueued}`, title: "Раздача закончена, но одновременно раздаётся не больше заданного числа торрентов" };
     if (t.progress < 1) return t.downRate > 0 ? { cls: "down", text: "Загрузка" } : { cls: "wait", text: "Ожидание пиров" };
     return { cls: "seed", text: "Раздаётся" };
   }
@@ -1820,7 +1821,7 @@
       $("st-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`; }
 
     fillNetwork(settings.network || {});
-    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
+    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
     if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {}); $("st-copy").value = settings.copyRemovePolicy;
     $("st-data").value = settings.dataDir; $("st-movedone").value = settings.moveCompletedDir || ""; $("st-watch").value = settings.watchDir || ""; $("st-copydir").value = settings.torrentCopyDir || "";
     openLabelRows();
@@ -1881,7 +1882,7 @@
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
-        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
+        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), maxActiveSeeds: n("st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);

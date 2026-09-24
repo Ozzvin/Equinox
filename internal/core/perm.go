@@ -35,7 +35,7 @@ func (m *Manager) syncPerm(t *torrent.Torrent, hash string) {
 	}
 	want := permState{
 		down: !rec.Paused && m.queued[h] == 0,
-		up:   !rec.Paused,
+		up:   !rec.Paused && m.seedQueued[h] == 0,
 	}
 	m.perm[h] = want
 	m.mu.Unlock()

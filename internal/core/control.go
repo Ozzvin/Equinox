@@ -49,6 +49,7 @@ type Status struct {
 	MoveError     string    `json:"moveError"`     // last failed move, "" if none
 	MoveNote      string    `json:"moveNote"`      // a move that worked but left something behind
 	Queued        int       `json:"queued"`        // 0 = not waiting; N = position in the wait line (1 = next)
+	SeedQueued    int       `json:"seedQueued"`    // 0 = shares (or is not finished); N = place in the line for a place to share (1 = next)
 	Sequential    bool      `json:"sequential"`
 	HasMeta       bool      `json:"hasMetadata"`
 	CopyPath      string    `json:"copyPath,omitempty"`
@@ -437,6 +438,10 @@ func (m *Manager) List() []Status {
 	for h, q := range m.queued {
 		queued[h] = q
 	}
+	seedQueued := map[metainfo.Hash]int{}
+	for h, q := range m.seedQueued {
+		seedQueued[h] = q
+	}
 	type moveView struct {
 		name      string
 		sel       int64
@@ -482,7 +487,7 @@ func (m *Manager) List() []Status {
 		st := Status{
 			Hash: h.HexString(), Name: t.Name(), Downloaded: r.Downloaded, Uploaded: r.Uploaded,
 			Added: r.Added, Paused: r.Paused, Sequential: r.Sequential, Label: r.Label, SavePath: m.saveDir(h.HexString()), CopyPath: r.CopyPath,
-			DownRate: rates[h][0], UpRate: rates[h][1], Queued: queued[h],
+			DownRate: rates[h][0], UpRate: rates[h][1], Queued: queued[h], SeedQueued: seedQueued[h],
 			Active: time.Since(activeAt[h]) < activeHold,
 		}
 		if t.Info() != nil {
@@ -627,7 +632,9 @@ func (m *Manager) loop(ctx context.Context) {
 		if tickN++; tickN%5 == 0 {
 			m.scanWatch()
 		}
-		m.applyQueue(ts, m.snapshotRecords())
+		recs := m.snapshotRecords()
+		m.applyQueue(ts, recs)
+		m.applySeedQueue(ts, recs)
 		m.enforce(ts)
 	}
 }
@@ -675,6 +682,12 @@ func (m *Manager) enforce(ts []*torrent.Torrent) {
 		size, done := selection(t, r.FilePrios)
 		if done < size {
 			continue
+		}
+		m.mu.Lock()
+		waitingToShare := m.seedQueued[t.InfoHash()] > 0
+		m.mu.Unlock()
+		if waitingToShare {
+			continue // it is not sharing: its seeding time does not run, and no limit can be reached
 		}
 		secs := m.addSeedTime(hash, r, dt)
 		if limit > 0 {

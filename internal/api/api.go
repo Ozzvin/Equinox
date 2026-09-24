@@ -654,7 +654,8 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		AddPaused        *bool               `json:"addPaused"`            // optional
 		SpeedUnit        *string             `json:"speedUnit"`            // optional: bytes | bits
 		MaxActive        int                 `json:"maxActiveDownloads"`
-		AltSchedule      *config.AltSchedule `json:"altSchedule"` // optional: omitted = unchanged
+		MaxSeeds         *int                `json:"maxActiveSeeds"` // optional: omitted = unchanged
+		AltSchedule      *config.AltSchedule `json:"altSchedule"`    // optional: omitted = unchanged
 		// Folders and port: all optional, omitted = unchanged.
 		DataDir          *string                 `json:"dataDir"`
 		TorrentCopyDir   *string                 `json:"torrentCopyDir"`
@@ -671,6 +672,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		b.AltDownLimitKBps < 0 || b.AltUpLimitKBps < 0 || b.RatioLimit < 0 || b.MaxActive < 0 ||
 		(b.SeedTimeLimit != nil && (*b.SeedTimeLimit < 0 || *b.SeedTimeLimit > 60*24*3650)) ||
 		(b.MaxChecks != nil && (*b.MaxChecks < 0 || *b.MaxChecks > 64)) ||
+		(b.MaxSeeds != nil && (*b.MaxSeeds < 0 || *b.MaxSeeds > 100000)) ||
 		(b.SpeedUnit != nil && *b.SpeedUnit != "bytes" && *b.SpeedUnit != "bits") {
 		fail(w, core.ErrInvalidInput)
 		return
@@ -754,6 +756,12 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	if err := s.m.SetMaxActiveDownloads(b.MaxActive); err != nil {
 		fail(w, err)
 		return
+	}
+	if b.MaxSeeds != nil {
+		if err := s.m.SetMaxActiveSeeds(*b.MaxSeeds); err != nil {
+			fail(w, err)
+			return
+		}
 	}
 	if err := s.cfg.Update(func(c *config.Settings) {
 		c.RatioLimit, c.CopyRemovePolicy = b.RatioLimit, b.CopyRemovePolicy
