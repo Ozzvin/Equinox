@@ -16,6 +16,17 @@ func TestIsRelease(t *testing.T) {
 	}
 }
 
+func TestChannel(t *testing.T) {
+	old := Version
+	t.Cleanup(func() { Version = old })
+	for v, want := range map[string]string{"1.0.16": "", "beta-1.0.17": "beta", "dev": "dev", "": "dev", "1.0.17-rc": "dev"} {
+		Version = v
+		if got := Channel(); got != want {
+			t.Errorf("Channel() for %q = %q, want %q", v, got, want)
+		}
+	}
+}
+
 func TestPeerIDPrefix(t *testing.T) {
 	for v, want := range map[string]string{"1.0.0": "-EQ1000-", "1.2.3": "-EQ1230-", "dev": "-EQ0000-", "": "-EQ0000-", "12.0.1": "-EQ2010-", "beta-1.0.17": "-EQ1070-"} {
 		got := peerIDPrefix(v)

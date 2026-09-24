@@ -3,17 +3,32 @@
 package desktop
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"golang.org/x/sys/windows/registry"
+
+	"github.com/Ozzvin/equinox/internal/buildinfo"
 )
 
 const (
 	softwareRoot = `Software`
 	runSuffix    = `Microsoft\Windows\CurrentVersion\Run`
-	runName      = "Equinox"
 )
+
+// runName is the name of the startup entry. A beta has its own, so that switching autostart on or off in
+// it does not touch the entry of the real installation.
+var runName = "Equinox" + channelSuffix()
+
+func channelSuffix() string {
+	if ch := buildinfo.Channel(); ch != "" {
+		return "-" + ch
+	}
+	return ""
+}
+
+var errTestBuild = errors.New("a test build does not register itself as the program for .torrent files and magnet links: that belongs to the installed Equinox")
 
 func exePath() (string, error) { return os.Executable() }
 
@@ -60,7 +75,12 @@ func setAutostart(root string, on, hidden bool) error {
 // RegisterHandlers makes the app selectable as the program for magnet links and .torrent
 // files (under Settings → Default apps). Windows does not let a program silently take
 // over these associations, so the user still confirms the choice there.
-func RegisterHandlers() error { return registerHandlers(softwareRoot) }
+func RegisterHandlers() error {
+	if buildinfo.Channel() != "" {
+		return errTestBuild // it would take the registration over from the installed program
+	}
+	return registerHandlers(softwareRoot)
+}
 
 // registerHandlers writes everything below root (normally "Software"; tests use a scratch
 // branch so the real registry is left alone).

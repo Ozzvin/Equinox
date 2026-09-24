@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/Ozzvin/equinox/internal/app"
+	"github.com/Ozzvin/equinox/internal/buildinfo"
 	"github.com/Ozzvin/equinox/internal/core"
 	"github.com/Ozzvin/equinox/internal/desktop"
 	"github.com/Ozzvin/equinox/internal/update"
@@ -63,8 +64,14 @@ func main() {
 	}
 
 	// One instance only: a second start asks the running one to show its window.
-	name, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktop`)
-	evName, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktopShow`)
+	// The lock and the events are per channel: a beta ("EquinoxDesktop-beta") runs beside the installed
+	// program instead of just asking it to show its window. Releases keep the names the installer knows.
+	instance := ""
+	if ch := buildinfo.Channel(); ch != "" {
+		instance = "-" + ch
+	}
+	name, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktop` + instance)
+	evName, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktopShow` + instance)
 	if _, err := windows.CreateMutex(nil, false, name); err == windows.ERROR_ALREADY_EXISTS {
 		if len(args) > 0 {
 			if err := forward(*stateDir, args); err != nil {
@@ -84,7 +91,7 @@ func main() {
 	// The installer asks for a clean exit through this event instead of killing the process.
 	// A forced kill skips Manager.Close, which is what flushes the counters and settles a
 	// storage move that is halfway through (see installer/equinox.iss).
-	quitEvName, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktopQuit`)
+	quitEvName, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktopQuit` + instance)
 	quitEvent, err := windows.CreateEvent(nil, 0, 0, quitEvName)
 	if err != nil {
 		fatalBox(err)
@@ -101,8 +108,10 @@ func main() {
 	// picker Windows shows when a file type has no default yet) without the user having to
 	// visit Settings first. This does not make it the *default* — Windows only allows that
 	// through its own UI (see RegisterHandlers), which is still a separate, explicit step.
-	if err := desktop.RegisterHandlers(); err != nil {
-		log.Println("register file handlers:", err)
+	if buildinfo.Channel() == "" { // a test build leaves the installed program's registration alone
+		if err := desktop.RegisterHandlers(); err != nil {
+			log.Println("register file handlers:", err)
+		}
 	}
 	addArgs(a, args)
 
@@ -165,7 +174,7 @@ func (d *desktop_) window(dataPath string) {
 	log.Println("window: creating")
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		DataPath: dataPath, AutoFocus: true,
-		WindowOptions: webview2.WindowOptions{Title: "Equinox", Width: uint(d.place.startSize().W), Height: uint(d.place.startSize().H), Center: !d.place.hasPos()},
+		WindowOptions: webview2.WindowOptions{Title: appTitle(), Width: uint(d.place.startSize().W), Height: uint(d.place.startSize().H), Center: !d.place.hasPos()},
 	})
 	if w == nil {
 		d.mu.Unlock()
@@ -332,6 +341,15 @@ func waitForExit(pid int, limit time.Duration) {
 	_, _ = windows.WaitForSingleObject(h, uint32(limit/time.Millisecond))
 }
 
+// appTitle is the name in the window title and the tray tooltip: with the version in it for a test build,
+// so that it can be told from the installed program running beside it.
+func appTitle() string {
+	if buildinfo.Channel() != "" {
+		return "Equinox " + buildinfo.Version
+	}
+	return "Equinox"
+}
+
 // requestShow asks the main loop to open (or raise) the window.
 func (d *desktop_) requestShow() {
 	d.mu.Lock()
@@ -367,8 +385,8 @@ func (d *desktop_) closeWindow() {
 func (d *desktop_) onTrayReady() {
 	log.Println("tray: ready")
 	systray.SetIcon(desktop.Icon())
-	systray.SetTitle("Equinox")
-	systray.SetTooltip("Equinox")
+	systray.SetTitle(appTitle())
+	systray.SetTooltip(appTitle())
 	desktop.WatchNotificationClicks(d.requestShow) // clicking a notification opens the window
 
 	open := systray.AddMenuItem("Открыть Equinox", "Показать окно")
@@ -438,7 +456,7 @@ func (d *desktop_) onTrayReady() {
 			}
 			bits := d.app.Settings.Get().SpeedUnit == "bits"
 			status.SetTitle(fmt.Sprintf("↓ %s   ↑ %s", desktop.FormatRate(down, bits), desktop.FormatRate(up, bits)))
-			systray.SetTooltip(fmt.Sprintf("Equinox  ↓ %s  ↑ %s", desktop.FormatRate(down, bits), desktop.FormatRate(up, bits)))
+			systray.SetTooltip(fmt.Sprintf("%s  ↓ %s  ↑ %s", appTitle(), desktop.FormatRate(down, bits), desktop.FormatRate(up, bits)))
 			if d.app.Settings.Get().AltSpeedActive != turtle.Checked() {
 				if turtle.Checked() {
 					turtle.Uncheck()

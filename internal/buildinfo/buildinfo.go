@@ -31,6 +31,21 @@ func IsRelease() bool {
 	return true
 }
 
+// Channel says what kind of build this is: "" for an official release, "beta" for a test build
+// ("beta-1.0.17") and "dev" for anything else. Everything that is shared by the whole system rather
+// than by one folder (the single-instance lock, the startup entry, the default-program registration) is
+// kept apart per channel, so a beta can run next to the real installation without taking anything from it.
+func Channel() string {
+	switch {
+	case IsRelease():
+		return ""
+	case strings.HasPrefix(Version, BetaPrefix):
+		return "beta"
+	default:
+		return "dev"
+	}
+}
+
 // Name is how other clients see the program.
 const Name = "Equinox"
 
