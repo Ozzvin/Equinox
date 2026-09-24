@@ -588,8 +588,14 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	delete(m.seenUp, h)
 	delete(m.perm, h)
 	delete(m.queued, h)
-	delete(m.seedPend, hash)
+	delete(m.activeAt, h) // flushActiveTime and List walk these maps on every refresh: what stays only grows
+	delete(m.moves, hash)
+	m.recheckQueue = dropString(m.recheckQueue, hash)
 	m.mu.Unlock()
+	m.forgetSeedTime(hash) // the uncounted seeding and running time (seedPend, activePend)
+	m.lowMu.Lock()
+	delete(m.lowOn, h)
+	m.lowMu.Unlock()
 
 	var copyPath string
 	var errs []error
