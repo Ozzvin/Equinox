@@ -20,3 +20,15 @@ jobs:
       # binaries, which must stay CGO_ENABLED=0 — see build.yml for why. Leaving CGO_ENABLED
       # unset here is deliberate: windows-latest has a C compiler, so it defaults to on.
       - run: go test -race -count=1 ./...
+
+  # The same tests on Linux, where the server also runs (native archives, Docker, Umbrel). Windows-only
+  # code carries build tags, so this catches what only shows on another system.
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...

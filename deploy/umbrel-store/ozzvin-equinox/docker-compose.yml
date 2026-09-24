@@ -1,0 +1,29 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ozzvin-equinox_server_1
+      APP_PORT: 8080
+
+  server:
+    image: ghcr.io/ozzvin/equinox:1.0.19
+    user: "1000:1000"
+    restart: on-failure
+    stop_grace_period: 1m
+    # -open: Umbrel's app proxy signs the user in, so Equinox asks for no key of its own.
+    command:
+      - -open
+      - -listen
+      - 0.0.0.0:8080
+      - -no-browser
+      - -state
+      - /data
+      - -downloads
+      - /downloads
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+      - ${UMBREL_ROOT}/data/storage/downloads:/downloads
+    ports:
+      - 51413:51413/tcp
+      - 51413:51413/udp

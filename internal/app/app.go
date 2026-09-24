@@ -72,6 +72,13 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 				log.Println("cannot use the Downloads folder as the default:", err)
 			}
 		}
+		if opts.Open {
+			// Such a server mostly runs in a container, where UPnP cannot reach the router and only fills the log with
+			// failures; the port is forwarded by hand. It can still be switched on in the settings.
+			if err := cfg.Update(func(s *config.Settings) { s.PortMapping = false }); err != nil {
+				log.Println("cannot switch the router port mapping off:", err)
+			}
+		}
 	}
 	m, err := core.New(cfg, stateDir)
 	if err != nil {

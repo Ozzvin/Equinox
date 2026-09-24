@@ -1,0 +1,32 @@
+manifestVersion: 1
+id: ozzvin-equinox
+category: files
+name: Equinox
+version: "1.0.19"
+tagline: A fast, tidy BitTorrent client
+description: >-
+  Equinox is a lightweight BitTorrent client with a clean web interface.
+
+
+  Add torrents by magnet link or .torrent file, or make your own; queue downloads, set priorities for single files,
+  download sequentially, limit speeds and seeding by ratio or time, and cap how many torrents seed at once.
+  Labels can have their own folders, and the list can be searched, sorted and filtered. It supports DHT, PEX, uTP,
+  encryption and IPv6.
+
+
+  Sign in with your Umbrel password as usual: Equinox itself has no separate login here. For incoming connections
+  forward TCP and UDP port 51413 on your router to your Umbrel.
+developer: Ozzvin
+website: https://github.com/Ozzvin/equinox
+dependencies: []
+repo: https://github.com/Ozzvin/equinox
+support: https://github.com/Ozzvin/equinox/issues
+port: 8091
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+releaseNotes: >-
+  Unreleased in this store yet: see https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md
+submitter: Ozzvin
+submission: ""

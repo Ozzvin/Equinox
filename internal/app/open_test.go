@@ -31,6 +31,9 @@ func TestOpenServer(t *testing.T) {
 	if got := a.Settings.Get().DataDir; got != dl {
 		t.Errorf("a first start must save into %s, got %s", dl, got)
 	}
+	if a.Settings.Get().PortMapping {
+		t.Error("a first start of an open server must not try UPnP")
+	}
 	res, err := http.Get(strings.TrimSuffix(a.URL, "/") + "/session.js")
 	if err != nil {
 		t.Fatal(err)

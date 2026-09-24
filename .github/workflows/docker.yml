@@ -1,0 +1,68 @@
+name: Docker image
+run-name: Docker image ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
+
+# Manual, like the Build workflow: publishes ghcr.io/ozzvin/equinox:<version> and :latest for linux/amd64 and
+# linux/arm64. The package is private until it is made public in the package settings on GitHub.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия образа (пусто — взять из файла VERSION)"
+        required: false
+        type: string
+      push:
+        description: "Опубликовать образ в ghcr.io (иначе только собрать и проверить)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Version
+        id: v
+        run: |
+          v='${{ inputs.version }}'
+          [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build the server for both architectures
+        run: |
+          mkdir -p bin
+          for arch in amd64 arm64; do
+            GOOS=linux GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=${{ steps.v.outputs.version }}" \
+              -o bin/equinox-server-linux-$arch ./cmd/equinox-server
+          done
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to ghcr.io
+        if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (and push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.push }}
+          tags: |
+            ghcr.io/ozzvin/equinox:${{ steps.v.outputs.version }}
+            ghcr.io/ozzvin/equinox:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/Ozzvin/equinox
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}
+            org.opencontainers.image.licenses=MIT

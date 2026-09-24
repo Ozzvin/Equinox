@@ -43,3 +43,37 @@ jobs:
             dist/Equinox-server-*.zip
             dist/SHA256SUMS.txt
           retention-days: 30
+
+  # The server for Linux, as archives. It is built apart from the Windows job: no installer, no Inno Setup,
+  # and the tests run in the Test workflow (which has a Linux job too).
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the archives
+        run: |
+          v='${{ inputs.version }}'
+          [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
+          mkdir -p dist stage
+          for arch in amd64 arm64; do
+            name=Equinox-server-linux-$arch-$v
+            mkdir -p stage/$name
+            GOOS=linux GOARCH=$arch go build -trimpath               -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v"               -o stage/$name/equinox-server ./cmd/equinox-server
+            cp LICENSE stage/$name/
+            cp deploy/linux/README.txt stage/$name/
+            tar -C stage -czf dist/$name.tar.gz $name
+          done
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS-linux.txt)
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: equinox-linux-${{ inputs.version || github.sha }}
+          path: |
+            dist/Equinox-server-linux-*.tar.gz
+            dist/SHA256SUMS-linux.txt
+          retention-days: 30
