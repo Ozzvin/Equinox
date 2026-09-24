@@ -535,7 +535,7 @@ html:not([data-density="large"]) tbody td { padding: 0 8px; height: 30px; }
 html:not([data-density="large"]) td.c-name .nm { font-weight: 550; }
 html:not([data-density="large"]) .badge { font-size: 10.5px; padding: 0 5px; }
 html:not([data-density="large"]) .pbar { height: 18px; border-radius: 5px; }
-html:not([data-density="large"]) .pbar .lb { font-size: 11px; padding: 0 6px; }
+html:not([data-density="large"]) .pbar .lb { font-size: 11px; padding-inline: 6px; }
 html:not([data-density="large"]) #side { padding: 4px; }
 html:not([data-density="large"]) .side-title { padding: 8px 8px 4px; font-size: 10.5px; }
 html:not([data-density="large"]) .side-item { height: 28px; padding: 0 8px; gap: 8px; border-radius: 6px; font-size: 13px; }
@@ -707,3 +707,23 @@ html[data-density="compact"] .seg-note { display: none; }
 .pe-row .btn { padding: 0 8px; min-width: 0; }
 .warn-btn { color: var(--warn); border-color: var(--warn); }
 #peer-add, #peer-stale { margin-right: 8px; }
+
+/* The text of a progress bar and the count in the tab row, centred by the height of the digits rather than by the
+   height of the line: a line box also holds room for descenders that digits and % do not use, which made the text
+   sit a pixel or two too high (3 px above against 5 px below at 100% scaling). text-box trims the box to the digits;
+   a browser without it keeps the flex centring above. The label is cut off sideways only (overflow-x: clip, so the
+   ellipsis still works): the descenders of letters such as у and р reach below the trimmed box and must stay
+   visible; the bar itself clips whatever goes past its edge. */
+@supports (text-box: trim-both cap alphabetic) {
+  .pbar .lb { display: block; text-align: center; top: 0; bottom: 0; margin-block: auto; height: fit-content; padding-block: 0; overflow-x: clip; overflow-y: visible; text-box: trim-both cap alphabetic; }
+}
+/* the count stands on the same line as the tab names (measured: it was 4-5 px above them) */
+html:not([data-density="large"]) #peer-count { margin-bottom: 6px; }
+html[data-density="large"] #peer-count { margin-bottom: 10px; }
+/* At 100% scaling the digits of the small bars of the peers and files tables land one pixel high (3 px above, 5
+   below, measured); a whole pixel down puts them in the middle. Other scalings round differently and need nothing. */
+@media (max-resolution: 1dppx) {
+  @supports (text-box: trim-both cap alphabetic) {
+    html:not([data-density="large"]) .pt .pbar .lb, html:not([data-density="large"]) .file .pbar .lb { translate: 0 1px; }
+  }
+}
