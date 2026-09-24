@@ -22,7 +22,10 @@ import (
 
 func main() {
 	stateDir := flag.String("state", "", "state directory (default: next to the executable, or a per-user folder if that is not writable)")
-	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback)")
+	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback, unless -open)")
+	open := flag.Bool("open", false, "run behind a proxy that signs users in (Umbrel): listen on any address and ask for no key. Never expose this port to a network that is not trusted")
+	downloads := flag.String("downloads", "", "where a first start saves torrents (default: the Downloads folder)")
+	allowHosts := flag.String("allow-host", "", "with -open: extra host names to accept, comma separated (IP addresses, short names and .local names always pass)")
 	add := flag.String("add", "", ".torrent file or magnet link to add at startup")
 	noBrowser := flag.Bool("no-browser", false, "do not open the web interface in the browser")
 	flag.Parse()
@@ -39,7 +42,13 @@ func main() {
 		return
 	}
 
-	a, err := app.Start(*stateDir, *listen)
+	var hosts []string
+	for _, h := range strings.Split(*allowHosts, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			hosts = append(hosts, h)
+		}
+	}
+	a, err := app.StartWith(*stateDir, *listen, app.Options{Open: *open, AllowedHosts: hosts, Downloads: *downloads})
 	if err != nil {
 		fatal(err)
 	}
@@ -54,7 +63,11 @@ func main() {
 		shown = a.URL // nobody opens the page for you: the link must carry the key
 	}
 	fmt.Println("Web interface:", shown)
-	fmt.Println("Access key   :", filepath.Join(*stateDir, "api-token"), "(the opened link already contains it)")
+	if *open {
+		fmt.Println("Open mode    : no access key; the proxy in front must sign users in")
+	} else {
+		fmt.Println("Access key   :", filepath.Join(*stateDir, "api-token"), "(the opened link already contains it)")
+	}
 	fmt.Println("Ctrl+C stops the server.")
 
 	if *add != "" {

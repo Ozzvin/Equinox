@@ -33,11 +33,28 @@ type App struct {
 	srv *http.Server
 }
 
+// Options are the ways a server differs from the desktop application.
+type Options struct {
+	// Open is for a server behind a proxy that signs users in (Umbrel): it may listen on any address, and it asks
+	// for no personal key (see api.Server.SetOpen). Without it only loopback addresses are accepted.
+	Open bool
+	// AllowedHosts are host names accepted in open mode besides the usual ones.
+	AllowedHosts []string
+	// Downloads is where a first start saves torrents, instead of the user's Downloads folder.
+	Downloads string
+}
+
 // Start brings everything up. listen is the preferred HTTP address; if it is taken, a
 // free loopback port is used instead. Only loopback addresses are accepted.
-func Start(stateDir, listen string) (*App, error) {
-	if err := checkLoopback(listen); err != nil {
-		return nil, err
+func Start(stateDir, listen string) (*App, error) { return StartWith(stateDir, listen, Options{}) }
+
+// StartWith is Start with options. In open mode a busy address is an error, not a reason to move to another port:
+// the proxy in front looks for the server at the address it was given.
+func StartWith(stateDir, listen string, opts Options) (*App, error) {
+	if !opts.Open {
+		if err := checkLoopback(listen); err != nil {
+			return nil, err
+		}
 	}
 	cfg, err := config.Load(filepath.Join(stateDir, "settings.json"), stateDir)
 	if err != nil {
@@ -46,7 +63,11 @@ func Start(stateDir, listen string) (*App, error) {
 	// A first start saves new torrents into the user's Downloads folder rather than a folder tucked away
 	// among the application's data. Only a new settings file gets this: an existing one already has its say.
 	if cfg.Fresh() {
-		if d := config.SystemDownloads(); d != "" {
+		d := opts.Downloads
+		if d == "" {
+			d = config.SystemDownloads()
+		}
+		if d != "" {
 			if err := cfg.Update(func(s *config.Settings) { s.DataDir = d }); err != nil {
 				log.Println("cannot use the Downloads folder as the default:", err)
 			}
@@ -63,17 +84,22 @@ func Start(stateDir, listen string) (*App, error) {
 	}
 
 	ln, err := net.Listen("tcp", listen)
-	if err != nil { // preferred port is busy: take any free one
+	if err != nil && !opts.Open { // preferred port is busy: take any free one
 		ln, err = net.Listen("tcp", "127.0.0.1:0")
 	}
 	if err != nil {
 		m.Close()
 		return nil, err
 	}
+	handler := api.New(m, cfg, token, webui.Handler())
+	url := fmt.Sprintf("http://%s/#token=%s", ln.Addr(), token)
+	if opts.Open {
+		handler.SetOpen(opts.AllowedHosts)
+		token, url = api.OpenToken, fmt.Sprintf("http://%s/", ln.Addr())
+	}
 	a := &App{
-		Manager: m, Settings: cfg, Token: token, StateDir: stateDir,
-		URL: fmt.Sprintf("http://%s/#token=%s", ln.Addr(), token),
-		srv: &http.Server{Handler: api.New(m, cfg, token, webui.Handler()), ReadHeaderTimeout: 10 * time.Second},
+		Manager: m, Settings: cfg, Token: token, StateDir: stateDir, URL: url,
+		srv: &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second},
 	}
 	go func() { _ = a.srv.Serve(ln) }()
 	return a, nil

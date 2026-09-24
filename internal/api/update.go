@@ -18,6 +18,11 @@ type UpdateStatus struct {
 // automatic check, so that reloading the page does not ask again; ?force=1 bypasses that, for the "check
 // now" button and for the timer of the periodic check.
 func (s *Server) updateCheck(w http.ResponseWriter, r *http.Request) {
+	if s.open {
+		// The server is kept up to date by whatever runs it (Umbrel, Docker): a notice about a new release would only mislead.
+		writeJSON(w, http.StatusOK, UpdateStatus{})
+		return
+	}
 	info, err := update.CheckWithin(r.Context(), r.URL.Query().Get("force") == "1", s.cfg.Get().UpdateCheckEvery())
 	if err != nil {
 		fail(w, err)

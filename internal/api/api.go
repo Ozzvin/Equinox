@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +24,11 @@ import (
 
 const maxTorrentFile = 8 << 20
 
+// OpenToken is the key of a server in open mode (see SetOpen). It is no secret: the pages carry it so that they
+// send the Authorization header every request needs, which a page of another site cannot do without a
+// preflight request that this server never allows.
+const OpenToken = "open"
+
 // Server is the HTTP handler.
 type Server struct {
 	m     *core.Manager
@@ -30,6 +36,19 @@ type Server struct {
 	token string
 	ui    http.Handler
 	mux   *http.ServeMux
+
+	open       bool     // a proxy in front does the signing in: no personal key, more host names
+	extraHosts []string // host names allowed in open mode besides the usual ones
+}
+
+// SetOpen puts the server in open mode, for running behind a proxy that signs the user in (Umbrel's app proxy
+// does): nobody has to carry a personal key, every page gets OpenToken, and the host names of the requests
+// need not be loopback ones. Because DNS rebinding needs a name, a request is still refused unless it comes
+// by an IP address, a short or local name (see hostAllowed) or one of extraHosts.
+func (s *Server) SetOpen(extraHosts []string) {
+	s.open = true
+	s.token = OpenToken
+	s.extraHosts = extraHosts
 }
 
 // LoadToken returns the persistent API token stored at path, creating it if needed.
@@ -56,9 +75,18 @@ func New(m *core.Manager, cfg *config.Store, token string, ui http.Handler) *Ser
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Reject DNS-rebinding: only loopback host names are accepted.
-	if !loopbackHost(r.Host) {
+	// Reject DNS-rebinding: only loopback host names are accepted (more in open mode).
+	if !s.hostAllowed(r.Host) {
 		http.Error(w, "forbidden host", http.StatusForbidden)
+		return
+	}
+	if r.URL.Path == "/session.js" {
+		// The page loads this before its own script: it hands over the key of an open server. Elsewhere it is empty.
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		if s.open {
+			_, _ = w.Write([]byte("window.__equinoxToken = \"" + OpenToken + "\";\n"))
+		}
 		return
 	}
 	// The UI files hold no secrets; the page itself supplies the token to /api calls.
@@ -74,12 +102,46 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
-func loopbackHost(h string) bool {
+func hostName(h string) string {
 	if i := strings.LastIndexByte(h, ':'); i >= 0 && !strings.HasSuffix(h, "]") {
 		h = h[:i]
 	}
-	h = strings.Trim(h, "[]")
+	return strings.ToLower(strings.Trim(h, "[]"))
+}
+
+func loopbackHost(h string) bool {
+	h = hostName(h)
 	return h == "127.0.0.1" || h == "localhost" || h == "::1"
+}
+
+// localSuffixes end the names of hosts on a home network, an onion service or a tailnet.
+var localSuffixes = []string{".local", ".lan", ".home.arpa", ".onion", ".ts.net"}
+
+// hostAllowed decides by the Host header. Normally only loopback names pass. In open mode also an IP address
+// (it cannot be rebound), a name of one label (a container or a machine in the network), a name under
+// localSuffixes and the names given with SetOpen.
+func (s *Server) hostAllowed(host string) bool {
+	if loopbackHost(host) {
+		return true
+	}
+	if !s.open {
+		return false
+	}
+	h := hostName(host)
+	if net.ParseIP(h) != nil || (h != "" && !strings.Contains(h, ".")) {
+		return true
+	}
+	for _, suf := range localSuffixes {
+		if strings.HasSuffix(h, suf) {
+			return true
+		}
+	}
+	for _, x := range s.extraHosts {
+		if strings.EqualFold(strings.TrimSpace(x), h) {
+			return true
+		}
+	}
+	return false
 }
 
 // authorised accepts "Authorization: Bearer <token>"; players that cannot set headers
