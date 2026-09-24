@@ -213,13 +213,17 @@ func TestRecheckRespectsTheLimit(t *testing.T) {
 
 // A fresh recheck request jumps to the front of the recheck line, ahead of one already
 // waiting: b is asked for first but c, asked for afterward, must start checking before it does.
+//
+// The only slot is held by hand, so nothing depends on how long a real check lasts, and the order is read
+// from the line itself and from what is running, both under the manager's lock: the start of a short check
+// is too brief for a poll to be sure to catch it.
 func TestRecheckJumpsToTheFrontOfTheQueue(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
 	var hashes []string
-	for i, size := range []int{24 << 20, 8 << 20, 8 << 20} { // a is bigger: its check leaves a real window to queue b then c behind it
+	for i := 0; i < 3; i++ {
 		name := fmt.Sprintf("front%d.bin", i)
-		tp := makeTorrent(t, dir, name, size)
+		tp := makeTorrent(t, dir, name, 8<<20)
 		seed(t, m, dir, name)
 		h, err := m.AddFile(tp)
 		if err != nil {
@@ -230,42 +234,48 @@ func TestRecheckJumpsToTheFrontOfTheQueue(t *testing.T) {
 	}
 	a, b, c := hashes[0], hashes[1], hashes[2]
 
-	if err := m.Recheck(a); err != nil {
-		t.Fatal(err)
+	m.mu.Lock()
+	m.rechecking[a] = true // the slot is taken
+	m.mu.Unlock()
+	line := func() []string {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return append([]string(nil), m.recheckQueue...)
 	}
-	waitFor(t, func() bool { s, _ := statusOf(m, a); return s.Checking })
 
 	if err := m.Recheck(b); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, func() bool { s, _ := statusOf(m, b); return s.CheckQueued > 0 })
-
+	waitFor(t, func() bool { return len(line()) == 1 })
 	if err := m.Recheck(c); err != nil {
 		t.Fatal(err)
 	}
+	waitFor(t, func() bool { return len(line()) == 2 })
+	if l := line(); l[0] != c || l[1] != b {
+		t.Fatalf("c asked for a recheck after b but should be first in line: %v (b=%s c=%s)", l, b, c)
+	}
 
-	// Whichever of b/c is first seen with Checking=true, once a's slot frees, tells the order
-	// they actually ran in — more robust than snapshotting an exact queue position, which a
-	// fast disk could race past between polls.
-	var bAt, cAt time.Time
+	// Free the slot. While c is still waiting b must not run, and both must get through in the end.
+	m.mu.Lock()
+	delete(m.rechecking, a)
+	m.mu.Unlock()
 	deadline := time.Now().Add(60 * time.Second)
-	for time.Now().Before(deadline) && (bAt.IsZero() || cAt.IsZero()) {
-		if bAt.IsZero() {
-			if s, _ := statusOf(m, b); s.Checking {
-				bAt = time.Now()
-			}
+	for time.Now().Before(deadline) {
+		m.mu.Lock()
+		cWaits := false
+		for _, h := range m.recheckQueue {
+			cWaits = cWaits || h == c
 		}
-		if cAt.IsZero() {
-			if s, _ := statusOf(m, c); s.Checking {
-				cAt = time.Now()
-			}
+		bRuns := m.rechecking[b]
+		gone := len(m.recheckQueue) == 0 && !m.rechecking[b] && !m.rechecking[c] && !m.checking[b] && !m.checking[c]
+		m.mu.Unlock()
+		if cWaits && bRuns {
+			t.Fatal("b started checking while c, asked for later, was still waiting")
 		}
-		time.Sleep(2 * time.Millisecond)
+		if gone {
+			return
+		}
+		time.Sleep(time.Millisecond)
 	}
-	if bAt.IsZero() || cAt.IsZero() {
-		t.Fatalf("both should eventually be checked: b seen at %v, c seen at %v", bAt, cAt)
-	}
-	if !cAt.Before(bAt) {
-		t.Fatalf("c asked for a recheck after b but should have started first: b at %v, c at %v", bAt, cAt)
-	}
+	t.Fatal("b and c were not both checked in time")
 }
