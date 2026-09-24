@@ -30,12 +30,22 @@ type PortReport struct {
 	Inbound     int64     `json:"inbound"`     // inbound connections from the internet since start
 	LastInbound time.Time `json:"lastInbound"` // zero if none yet
 	WantedPort  int       `json:"wantedPort"`  // the configured port when the engine had to use another one, else 0
+	// PublicIP and PublicIPv6 are our address as the outside sees it: what the peers report, or else what
+	// the router says when that is a public one. Empty until something tells.
+	PublicIP   string `json:"publicIP,omitempty"`
+	PublicIPv6 string `json:"publicIPv6,omitempty"`
 }
 
 // PortReport returns the current reachability verdict with advice for the user.
 func (m *Manager) PortReport() PortReport {
 	_, public, last, unknown := m.inbound.snapshot()
-	return makeReport(m.PortStatus(), public, last, unknown, time.Now(), m.wantedPort)
+	st := m.PortStatus()
+	r := makeReport(st, public, last, unknown, time.Now(), m.wantedPort)
+	r.PublicIP, r.PublicIPv6 = m.self.best()
+	if r.PublicIP == "" && st.ExternalIP != "" && !externalIPNotPublic(st.ExternalIP) {
+		r.PublicIP = st.ExternalIP
+	}
+	return r
 }
 
 func makeReport(st portmap.Status, public int64, last time.Time, unknown bool, now time.Time, wanted int) PortReport {

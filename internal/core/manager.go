@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	pp "github.com/anacrolix/torrent/peer_protocol"
 	"github.com/anacrolix/torrent/storage"
 	"golang.org/x/time/rate"
 
@@ -45,6 +47,7 @@ type Manager struct {
 	portMu     sync.Mutex
 	ports      *portmap.Manager
 	inbound    *inboundTracker
+	self       selfIPs // our own address as the peers report it
 
 	upLim, downLim *rate.Limiter
 
@@ -154,6 +157,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		cc.Seed = true
 		cc.NoDefaultPortForwarding = true // portmap does it, with renewal and verification
 		cc.Callbacks.CompletedHandshake = m.inbound.onHandshake
+		cc.Callbacks.ReadExtendedHandshake = func(_ *torrent.PeerConn, msg *pp.ExtendedHandshakeMessage) { m.self.note(net.IP(msg.YourIp)) }
 		applyNetwork(cc, s.Network)
 		cc.DefaultStorage = m.store
 		cc.UploadRateLimiter = m.upLim

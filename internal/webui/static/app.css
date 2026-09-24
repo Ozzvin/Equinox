@@ -474,6 +474,8 @@ table.mini.pt th.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
 #files:focus-visible { outline: none; }
 #file-actions { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 #file-actions[hidden], .file-sel[hidden] { display: none; }
+#peer-count { margin-bottom: 11px; white-space: nowrap; }
+#peer-count[hidden] { display: none; }
 #file-actions .btn { margin: 0; height: 28px; }
 .file-sel { display: inline-flex; align-items: center; gap: 8px; margin-right: 6px; padding-right: 10px; border-right: 1px solid var(--line); }
 .file-sel select { width: auto; height: 28px; margin: 0; padding: 0 8px; font-size: 12.5px; }

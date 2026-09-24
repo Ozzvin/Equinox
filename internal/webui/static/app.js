@@ -303,7 +303,8 @@
     let more = port.advice || "";
     if (port.wantedPort) more = `Порт ${port.wantedPort} занят другой программой или недоступен, поэтому выбран порт ${port.port}. ${port.advice || ""}`.trim();
     el.lastElementChild.textContent = head; // for screen readers; the page shows only the dot
-    el.dataset.tip = more ? head + "\n" + more : head;
+    const ips = [port.publicIP && `IP: ${port.publicIP}`, port.publicIPv6 && `IPv6: ${port.publicIPv6}`].filter(Boolean);
+    el.dataset.tip = [head, more, ips.length ? ips.join("\n") : "IP: пока не известен, подскажут подключившиеся пиры"].filter(Boolean).join("\n");
     // Settings keeps its own copy of this text (shown only while the dialog is open), so a
     // manual "Проверить порт сейчас" — or just time passing — is reflected there too, not
     // only in the status-bar dot.
@@ -482,6 +483,7 @@
     for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", b.dataset.tab === tab);
     for (const [k, id] of Object.entries(PANES)) $(id).hidden = k !== tab;
     $("file-actions").hidden = tab !== "files";
+    if (tab !== "peers") $("peer-count").hidden = true;
     $("d-empty").hidden = true;
   }
   $("tabs").addEventListener("click", (e) => {
@@ -699,6 +701,10 @@
   async function renderDetails() {
     const t = cur();
     showTab();
+    // The number of peers this torrent is connected to, in the tab row, on the peers tab only.
+    const pc = $("peer-count");
+    pc.hidden = tab !== "peers" || !t;
+    if (t) pc.textContent = `Подключено пиров: ${t.peers}` + (t.seeds ? ` · из них раздающих: ${t.seeds}` : "");
     if (!t) { // the panel is always there; without one chosen torrent it only says so
       const n = chosen().length;
       $("file-actions").hidden = true;
