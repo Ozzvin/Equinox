@@ -97,6 +97,24 @@ func TestCheckReportsNewerRelease(t *testing.T) {
 	}
 }
 
+// A beta must not be told to "update" to the release before it: that installer would replace the real
+// installation with an older program. It does not even ask GitHub.
+func TestCheckSaysNothingToABetaBuild(t *testing.T) {
+	old := buildinfo.Version
+	buildinfo.Version = buildinfo.BetaPrefix + "1.0.17"
+	t.Cleanup(func() { buildinfo.Version = old })
+
+	srv := fakeGitHub(t, []byte("x"), "v1.0.16")
+	oldURL := APIURL
+	APIURL = srv.URL + "/release"
+	t.Cleanup(func() { APIURL = oldURL })
+
+	info, err := Check(context.Background(), true)
+	if err != nil || info != nil {
+		t.Fatalf("Check = %+v, %v, want nothing for a beta", info, err)
+	}
+}
+
 func TestCheckReportsNoUpdateWhenUpToDate(t *testing.T) {
 	old := buildinfo.Version
 	buildinfo.Version = "1.0.5"

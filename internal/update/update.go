@@ -94,6 +94,9 @@ func setProgress(p Progress) {
 // not (or if the check fails). A result is cached for an hour unless force is set, so opening
 // the settings repeatedly does not hit GitHub every time.
 func Check(ctx context.Context, force bool) (*Info, error) {
+	if !buildinfo.IsRelease() {
+		return nil, nil // a beta or dev build has no release to update to, and must not overwrite the real install
+	}
 	mu.Lock()
 	if !force && checked && time.Since(cachedAt) < cacheTTL {
 		info := cached
