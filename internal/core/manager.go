@@ -47,8 +47,8 @@ var (
 // m.mu and state.mu are never nested: no state.with/touch/view callback takes m.mu, and nothing calls into
 // the state store while holding m.mu. The state store writes the file under its own lock, so a callback must
 // stay short. Do not call the engine's torrent methods that block, or emit(), under any of these; emit only
-// hands the event to another goroutine. checkLine and snapshotRecords take m.mu themselves and must be called
-// without it held. A new lock, or a new nesting, belongs in this list.
+// hands the event to another goroutine. checkLine takes m.mu and snapshotRecords takes state.mu, so neither may be
+// called with m.mu held. A new lock, or a new nesting, belongs in this list.
 type Manager struct {
 	cfg        *config.Store
 	state      *stateStore
