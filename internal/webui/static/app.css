@@ -5,13 +5,13 @@
   --sel: #eaf1ff; --hover: #f1f4f8; --shadow: 0 8px 30px rgba(20, 30, 50, .18);
   --radius: 10px; color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #14171c; --panel: #1b1f26; --panel-2: #20252d; --line: #2c323c;
-    --text: #e6e9ef; --muted: #8b95a5; --accent: #5b8def; --accent-soft: #23304a;
-    --ok: #3fbf7a; --warn: #e0a83a; --bad: #ef6b6b; --seed: #a48cf5;
-    --sel: #232e45; --hover: #232830; --shadow: 0 8px 30px rgba(0, 0, 0, .5); color-scheme: dark;
-  }
+/* The theme is the data-theme attribute of <html>, "dark" or "light", always set by the script in <head> (from the
+   choice in Settings, which may be "as in the system"), so no rule here depends on prefers-color-scheme. */
+:root[data-theme="dark"] {
+  --bg: #14171c; --panel: #1b1f26; --panel-2: #20252d; --line: #2c323c;
+  --text: #e6e9ef; --muted: #8b95a5; --accent: #5b8def; --accent-soft: #23304a;
+  --ok: #3fbf7a; --warn: #e0a83a; --bad: #ef6b6b; --seed: #a48cf5;
+  --sel: #232e45; --hover: #232830; --shadow: 0 8px 30px rgba(0, 0, 0, .5); color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; max-width: 100%; overflow-x: hidden; }
@@ -56,7 +56,7 @@ code { background: var(--panel-2); border: 1px solid var(--line); border-radius:
 }
 .turtle:hover { color: var(--text); background: var(--hover); }
 .turtle[aria-pressed="true"] { background: #fff4d6; border-color: var(--warn); color: #8a5a00; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .turtle[aria-pressed="true"] { background: #3a3116; color: #f0c15a; } }
+:root[data-theme="dark"] .turtle[aria-pressed="true"] { background: #3a3116; color: #f0c15a; }
 
 /* list */
 main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -237,7 +237,7 @@ table.mini tr:hover td { background: var(--hover); }
 /* restart notice and connection settings */
 .notice { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: #fff4d6; color: #6b4700; border-bottom: 1px solid var(--warn); font-size: 13px; }
 .notice[hidden] { display: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .notice { background: #3a3116; color: #f0c15a; } }
+:root[data-theme="dark"] .notice { background: #3a3116; color: #f0c15a; }
 .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 @media (max-width: 820px) { .checks { grid-template-columns: 1fr; } }
 /* context menu */
@@ -260,7 +260,7 @@ dialog.add { max-height: calc(100vh - 32px); overflow: auto; }
 .ad-row .sz { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12.5px; }
 .ad-row .badge.warn { background: #fff4d6; color: #8a5a00; }
 .ad-row .badge.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ad-row .badge.warn { background: #3a3116; color: #f0c15a; } }
+:root[data-theme="dark"] .ad-row .badge.warn { background: #3a3116; color: #f0c15a; }
 .ad-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
 .ad-tabs { margin: 10px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 .ad-pane { min-height: 180px; }
@@ -390,7 +390,6 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 
 /* colours of labels: none of them is a state colour (green, blue, yellow, grey, red) */
 :root { --lc-violet: #7b5ce6; --lc-purple: #b03fc4; --lc-pink: #d6408f; --lc-cyan: #0e9fb0; --lc-brown: #8d6440; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lc-violet: #a48cf5; --lc-purple: #d78be6; --lc-pink: #f27bb4; --lc-cyan: #3ecfdc; --lc-brown: #c39a72; } }
 :root[data-theme="dark"] { --lc-violet: #a48cf5; --lc-purple: #d78be6; --lc-pink: #f27bb4; --lc-cyan: #3ecfdc; --lc-brown: #c39a72; }
 .lc-violet { --lc: var(--lc-violet); } .lc-purple { --lc: var(--lc-purple); } .lc-pink { --lc: var(--lc-pink); }
 .lc-cyan { --lc: var(--lc-cyan); } .lc-brown { --lc: var(--lc-brown); }
@@ -586,6 +585,8 @@ html[data-density="compact"] .file { padding: 2px 10px; }
 .seg.seg3 .seg-pill { width: calc((100% - 6px) / 3); }
 .seg.seg3:has(#dn-standard:checked) .seg-pill { transform: translateX(100%); }
 .seg.seg3:has(#dn-compact:checked) .seg-pill { transform: translateX(200%); }
+.seg.seg3:has(#th-light:checked) .seg-pill { transform: translateX(100%); }
+.seg.seg3:has(#th-system:checked) .seg-pill { transform: translateX(200%); }
 
 /* dialogs follow the density: standard is denser than the base rules, compact denser still */
 html:not([data-density="large"]) dialog { padding: 16px 18px; border-radius: 12px; }

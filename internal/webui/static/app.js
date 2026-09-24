@@ -2172,6 +2172,26 @@
     });
   });
 
+  // ---------- theme: dark (the default), light, or as in the system ----------
+  // <head> sets the attribute before the first paint; this keeps it in step with the choice and, for "as in
+  // the system", with the system.
+  const themeQuery = matchMedia("(prefers-color-scheme: dark)");
+  let theme = "dark";
+  try { const t = localStorage.getItem("uiTheme"); if (t === "light" || t === "system") theme = t; } catch (_) {}
+  function applyTheme() {
+    const light = theme === "light" || (theme === "system" && !themeQuery.matches);
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+    for (const r of document.querySelectorAll('input[name="th"]')) r.checked = r.value === theme;
+    setTimeout(syncTitleBar, 60);
+  }
+  function setTheme(t) {
+    theme = t === "light" || t === "system" ? t : "dark";
+    try { localStorage.setItem("uiTheme", theme); } catch (_) {}
+    applyTheme();
+  }
+  for (const r of document.querySelectorAll('input[name="th"]')) r.addEventListener("change", () => { if (r.checked) setTheme(r.value); });
+  themeQuery.addEventListener("change", () => { if (theme === "system") applyTheme(); });
+
   // In the desktop window the title bar takes the colours of the top bar (and follows the light or dark theme).
   function syncTitleBar() {
     if (typeof window.setTitleBar !== "function") return;
@@ -2179,8 +2199,7 @@
     if (!bar) return;
     window.setTitleBar(getComputedStyle(bar).backgroundColor, getComputedStyle(document.body).color);
   }
-  syncTitleBar();
-  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => setTimeout(syncTitleBar, 60)); } catch (_) {}
+  applyTheme();
 
   // token dialog
   $("f-token").addEventListener("submit", (e) => {
