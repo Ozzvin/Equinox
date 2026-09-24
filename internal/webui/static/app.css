@@ -730,3 +730,13 @@ html[data-density="large"] #peer-count { margin-bottom: 10px; }
     html:not([data-density="large"]) .pt .pbar .lb, html:not([data-density="large"]) .file .pbar .lb { translate: 0 1px; }
   }
 }
+
+/* the description of an update */
+.upd-info { width: min(560px, calc(100vw - 32px)); }
+.upd-notes { max-height: min(46vh, 380px); overflow: auto; margin: 8px 0; padding: 4px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); font-size: 13.5px; line-height: 1.5; }
+.upd-notes p { margin: 8px 0; }
+.upd-notes ul { margin: 8px 0; padding-left: 20px; }
+.upd-notes li { margin: 6px 0; }
+.upd-notes h4 { margin: 12px 0 4px; font-size: 13.5px; }
+.upd-notes a { color: var(--accent); }
+.upd-info a.btn { text-decoration: none; }

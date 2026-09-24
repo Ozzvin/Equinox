@@ -2061,11 +2061,48 @@
       catch (_) { /* the app is about to restart itself; the window closing is feedback enough */ }
     }, 400);
   }
-  $("btn-update-badge").onclick = () => {
-    if (window.__equinoxDesktop && typeof window.installUpdate === "function") installUpdateNow();
-    else if (lastUpdate && lastUpdate.url) window.open(lastUpdate.url, "_blank", "noopener");
-  };
-  $("ab-update-install").onclick = installUpdateNow;
+  // ---------- what is new, and the confirmation, before an update is installed ----------
+  // The description of a release is Markdown written on GitHub. It is turned into HTML here by hand for the few
+  // things that occur in it (paragraphs, lists, headings, `code`, **bold**, links); the text is escaped first, so
+  // nothing in it can become markup, and only http(s) links are made.
+  function mdLite(src) {
+    const inline = (t) => esc(t)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    const out = []; let list = false, para = [];
+    const endPara = () => { if (para.length) { out.push("<p>" + inline(para.join(" ")) + "</p>"); para = []; } };
+    const endList = () => { if (list) { out.push("</ul>"); list = false; } };
+    for (const raw of String(src).split(/\r?\n/)) {
+      const line = raw.trim(); let m;
+      if (!line) { endPara(); endList(); }
+      else if ((m = line.match(/^#{1,6}\s+(.*)$/))) { endPara(); endList(); out.push("<h4>" + inline(m[1]) + "</h4>"); }
+      else if ((m = line.match(/^[-*]\s+(.*)$/))) { endPara(); if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inline(m[1]) + "</li>"); }
+      else if (list && /^\s/.test(raw)) out[out.length - 1] = out[out.length - 1].replace(/<\/li>$/, " " + inline(line) + "</li>"); // a wrapped list item
+      else { endList(); para.push(line); }
+    }
+    endPara(); endList();
+    return out.join("");
+  }
+  async function openUpdateInfo() {
+    if (!lastUpdate || !lastUpdate.available) return;
+    const r = lastUpdate;
+    let cur = "";
+    try { cur = (await api("GET", "/api/about")).version || ""; } catch (_) {}
+    $("ui-title").textContent = `Доступна версия ${r.version}`;
+    $("ui-sub").textContent = cur ? `Сейчас установлена версия ${cur}.` : "";
+    $("ui-notes").innerHTML = r.notes && r.notes.trim() ? mdLite(r.notes) : '<p class="muted">Описание изменений не указано.</p>';
+    const canInstall = window.__equinoxDesktop && typeof window.installUpdate === "function";
+    $("ui-install").hidden = !canInstall;
+    $("ui-open").hidden = !r.url; $("ui-open").href = r.url || "#";
+    $("ui-hint").textContent = canInstall ? "Программа скачает установщик, проверит его контрольную сумму, обновится и перезапустится." : "Установка из этого окна недоступна: скачайте новую версию со страницы релиза.";
+    $("dlg-update-info").showModal();
+    $("ui-notes").scrollTop = 0;
+  }
+  $("ui-install").onclick = () => { $("dlg-update-info").close(); installUpdateNow(); };
+
+  $("btn-update-badge").onclick = openUpdateInfo;
+  $("ab-update-install").onclick = openUpdateInfo;
   $("ab-check-update").onclick = async () => { $("ab-update-status").textContent = "Проверка…"; await checkUpdate(true); };
   $("up-close").onclick = () => { stopUpdatePoll(); $("dlg-update-progress").close(); };
   // No Escape-to-cancel while it is actually doing something (only once it has failed and stopped).

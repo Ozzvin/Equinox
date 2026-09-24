@@ -535,7 +535,7 @@
           </div>
           <div id="ab-update-box" hidden>
             <p class="small" id="ab-update-text"></p>
-            <button type="button" class="btn small primary" id="ab-update-install" hidden>Установить обновление</button>
+            <button type="button" class="btn small primary" id="ab-update-install" hidden>Что нового и установить…</button>
             <a class="btn small" id="ab-update-link" href="#" target="_blank" rel="noopener" hidden>Скачать со страницы релиза</a>
           </div>
         </fieldset>
@@ -715,6 +715,19 @@
       <button class="btn danger-fill" value="ok">Удалить файлы</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="dlg-update-info" class="wide upd-info">
+  <h2 id="ui-title">Доступна новая версия</h2>
+  <p class="muted" id="ui-sub"></p>
+  <div class="upd-notes" id="ui-notes" tabindex="0"></div>
+  <p class="muted small" id="ui-hint"></p>
+  <p class="muted small">Здесь описана последняя версия; что менялось в пропущенных — в <a href="https://github.com/Ozzvin/Equinox/blob/main/CHANGELOG.md" target="_blank" rel="noopener">журнале изменений</a>.</p>
+  <div class="row-end">
+    <a class="btn" id="ui-open" href="#" target="_blank" rel="noopener" hidden>Страница релиза</a>
+    <button type="button" class="btn" data-close>Позже</button>
+    <button type="button" class="btn primary" id="ui-install" hidden>Установить</button>
+  </div>
 </dialog>
 
 <dialog id="dlg-update-progress">
