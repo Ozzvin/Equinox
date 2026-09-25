@@ -2476,7 +2476,12 @@
   if (ADD_WINDOW) {
     // the dialog is open from the start; what arrives (a file, a magnet link) is put on its list as it comes
     window.checkPendingAddNow = checkPendingAdd;
-    openAdd().then(() => { $("dlg-add").tabIndex = -1; $("dlg-add").focus(); /* not on the close button */ const again = () => checkPendingAdd().finally(() => setTimeout(again, 700)); again(); });
+    openAdd().then(() => {
+      $("dlg-add").tabIndex = -1; $("dlg-add").focus(); // not on the close button
+      // drawn: the window, which has been out of sight until now, may appear (a timer, not animation frames: a hidden
+      // window gets none)
+      setTimeout(() => { if (typeof window.addWindowReady === "function") window.addWindowReady(); }, 120);
+      const again = () => checkPendingAdd().finally(() => setTimeout(again, 700)); again(); });
   } else {
     loop();
     checkRestart(); setInterval(checkRestart, 20000);
