@@ -123,6 +123,10 @@ type Settings struct {
 
 	// SpeedUnit is how speeds are shown: "bytes" (КБ/с, МБ/с) or "bits" (Кб/с, Мб/с).
 	SpeedUnit string `json:"speedUnit"`
+	// LimitUnits maps a speed limit ("down", "up", "altDown", "altUp") to the unit its field was typed in: one
+	// of LimitUnitIDs. A limit that is not there is shown in the unit of SpeedUnit. The limits themselves are
+	// always kept in KiB/s (the *LimitKBps fields), whatever they were typed in.
+	LimitUnits map[string]string `json:"limitUnits,omitempty"`
 
 	// NotifyOnComplete makes the desktop application show a Windows notification when a download finishes.
 	NotifyOnComplete bool `json:"notifyOnComplete"`
@@ -267,6 +271,33 @@ var LabelPalette = []string{"violet", "purple", "pink", "cyan", "brown"}
 func ValidLabelColor(id string) bool {
 	for _, c := range LabelPalette {
 		if c == id {
+			return true
+		}
+	}
+	return false
+}
+
+// LimitUnitIDs are the units a speed limit can be typed in: kilobytes and megabytes (binary, as sizes are shown),
+// kilobits and megabits (decimal, as networks count them) per second.
+var LimitUnitIDs = []string{"KB", "MB", "kbit", "Mbit"}
+
+// LimitKeys are the speed limits a unit can be chosen for.
+var LimitKeys = []string{"down", "up", "altDown", "altUp"}
+
+// ValidLimitUnit tells whether id is one of LimitUnitIDs.
+func ValidLimitUnit(id string) bool {
+	for _, u := range LimitUnitIDs {
+		if u == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidLimitKey tells whether key is one of LimitKeys.
+func ValidLimitKey(key string) bool {
+	for _, k := range LimitKeys {
+		if k == key {
 			return true
 		}
 	}

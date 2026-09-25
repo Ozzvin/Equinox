@@ -54,19 +54,58 @@
   }
   const speed = (n) => (n > 0 ? (bitsMode() ? bitrate(n) : bytes(n) + "/с") : "—");
   const speedZero = () => (bitsMode() ? "0 б/с" : "0 Б/с");
-  // Speed limits are stored in KiB/s. They are shown and typed in the unit chosen for speeds: the same КБ/с
-  // as in the list, or Кбит/с (1 KiB/s = 8.192 kbit/s). A field that was not touched keeps the stored value
-  // as it is, so saving never shifts a limit by rounding.
-  const KIB_KBIT = 8.192;
-  const limitUnit = (bits) => (bits ? "Кб/с" : "КБ/с");
-  const limitShow = (kib, bits) => (bits ? Math.round(kib * KIB_KBIT) : kib);
-  const limitStore = (v, bits) => Math.max(0, bits ? Math.round(v / KIB_KBIT) : Math.floor(v));
-  // a limit field remembers the stored value; `dirty` says the person changed what it shows
-  function limitFill(id, kib, bits) { const el = $(id); el.dataset.kib = String(kib || 0); delete el.dataset.dirty; el.value = limitShow(kib || 0, bits); }
-  function limitRead(id, bits) { const el = $(id); return el.dataset.dirty ? limitStore(Number(el.value) || 0, bits) : Number(el.dataset.kib || 0); }
-  // the unit changes while the fields are shown: what was typed becomes the stored value, then it is shown in the new unit
-  function limitRefit(ids, oldBits, newBits) { for (const id of ids) limitFill(id, limitRead(id, oldBits), newBits); }
-  let limitShownBits = false; // the unit the limit fields of the settings window are shown in
+  // Speed limits are stored in KiB/s. Each one is shown and typed in a unit of its own: КБ/с, МБ/с (binary, as sizes),
+  // Кбит/с, Мбит/с (decimal, as networks count; 1 KiB/s = 8.192 kbit/s). A limit whose unit was never chosen follows
+  // the general choice of bytes or bits. A field that was not touched keeps the stored value as it is, so saving
+  // never shifts a limit by rounding.
+  const LIMIT_KEYS = ["down", "up", "altDown", "altUp"];
+  const LIMIT_CFG = { down: "downLimitKBps", up: "upLimitKBps", altDown: "altDownLimitKBps", altUp: "altUpLimitKBps" };
+  const KIB_PER = { KB: 1, MB: 1024, kbit: 1000 / 8192, Mbit: 1e6 / 8192 }; // KiB/s in one of the unit
+  const LIMIT_LABEL = { KB: "КБ/с", MB: "МБ/с", kbit: "Кбит/с", Mbit: "Мбит/с" };
+  const limitDefault = (bits) => (bits ? "kbit" : "KB");
+  const limitUnit = (bits) => LIMIT_LABEL[limitDefault(bits)];
+  const limitUnitOf = (key, bits) => (settings && settings.limitUnits && settings.limitUnits[key]) || limitDefault(bits);
+  function limitNum(x) { const d = x >= 100 ? 0 : x >= 10 ? 1 : 2; return String(Number(x.toFixed(d))); }
+  const limitShow = (kib, unit) => limitNum(kib / KIB_PER[unit]);
+  // a limit above zero never rounds down to "no limit"
+  const limitStore = (v, unit) => (v > 0 ? Math.max(1, Math.round(v * KIB_PER[unit])) : 0);
+  // "12 МБ/с", or "∞" for no limit
+  const limitText = (kib, key, bits) => { const u = limitUnitOf(key, bits); return kib ? `${limitShow(kib, u)} ${LIMIT_LABEL[u]}` : "∞"; };
+  // a limit field remembers the stored value; `dirty` says the person changed what it shows. Its unit is the select
+  // next to it (id + "-u"), when there is one; `chosen` says the person picked that unit rather than getting the default.
+  function limitFill(id, kib, unit) {
+    const el = $(id), u = $(id + "-u");
+    el.dataset.kib = String(kib || 0); delete el.dataset.dirty; el.value = limitShow(kib || 0, unit);
+    if (u) { u.value = unit; u.dataset.unit = unit; }
+  }
+  function limitRead(id, unit) { const el = $(id); return el.dataset.dirty ? limitStore(Number(el.value) || 0, unit) : Number(el.dataset.kib || 0); }
+  // the fields with their units: what is typed stays the same limit when the unit is picked anew
+  function limitBind(ids) {
+    for (const id of ids) {
+      $(id).addEventListener("input", () => { $(id).dataset.dirty = "1"; });
+      const u = $(id + "-u");
+      u.addEventListener("change", () => { const kib = limitRead(id, u.dataset.unit); u.dataset.chosen = "1"; limitFill(id, kib, u.value); });
+    }
+  }
+  // shows the four limits of a window; the unit is the one saved for the limit, else the general one
+  function limitFillAll(ids, bits) {
+    LIMIT_KEYS.forEach((key, i) => {
+      const saved = settings.limitUnits && settings.limitUnits[key], u = $(ids[i] + "-u");
+      if (saved) u.dataset.chosen = "1"; else delete u.dataset.chosen;
+      limitFill(ids[i], settings[LIMIT_CFG[key]], saved || limitDefault(bits));
+    });
+  }
+  const limitReadAll = (ids) => Object.fromEntries(LIMIT_KEYS.map((key, i) => [LIMIT_CFG[key], limitRead(ids[i], $(ids[i] + "-u").value)]));
+  // what to save: the unit of the limits the person chose one for; the others follow the general choice
+  const limitUnitsOf = (ids) => Object.fromEntries(LIMIT_KEYS.map((key, i) => [key, $(ids[i] + "-u").dataset.chosen ? $(ids[i] + "-u").value : ""]));
+  // the general choice changed: the limits with no unit of their own follow it
+  function limitFollow(ids, bits) {
+    for (const id of ids) { const u = $(id + "-u"); if (!u.dataset.chosen) limitFill(id, limitRead(id, u.dataset.unit), limitDefault(bits)); }
+  }
+  // the first-run wizard has no unit selects: its two limits are in the unit of its own choice of bytes or bits
+  function limitFillPlain(id, kib, bits) { const el = $(id); el.dataset.kib = String(kib || 0); delete el.dataset.dirty; el.value = limitShow(kib || 0, limitDefault(bits)); }
+  const limitReadPlain = (id, bits) => limitRead(id, limitDefault(bits));
+  function limitRefitPlain(ids, oldBits, newBits) { for (const id of ids) limitFillPlain(id, limitReadPlain(id, oldBits), newBits); }
   const limitFieldsDirty = (ids) => { for (const id of ids) $(id).addEventListener("input", () => { $(id).dataset.dirty = "1"; }); };
 
 
@@ -295,9 +334,9 @@
   function renderTurtle() {
     const on = !!(stats && stats.altSpeed), b = $("s-turtle");
     b.setAttribute("aria-pressed", on);
-    const lim = (v) => (v ? v : "∞");
     b.dataset.tip = (on
-      ? `Ограничение скорости включено: ↓${lim(settings && limitShow(settings.altDownLimitKBps, bitsMode()))} ↑${lim(settings && limitShow(settings.altUpLimitKBps, bitsMode()))} ${limitUnit(bitsMode())}\nЛевый клик — выключить`
+      ? `Ограничение скорости включено: ↓${settings ? limitText(settings.altDownLimitKBps, "altDown", bitsMode()) : "∞"} ↑${settings ? limitText(settings.altUpLimitKBps, "altUp", bitsMode()) : "∞"}
+Левый клик — выключить`
       : "Ограничение скорости выключено\nЛевый клик — включить") + "\nПравый клик — настроить пределы";
   }
 
@@ -1863,14 +1902,12 @@
 
   // Right click on the turtle: the limits in one small window, no trip to the settings.
   const limitsPop = $("limits-pop");
-  limitFieldsDirty(["lp-down", "lp-up", "lp-adown", "lp-aup"]);
+  const LP_IDS = ["lp-down", "lp-up", "lp-adown", "lp-aup"]; // in the order of LIMIT_KEYS
+  limitBind(LP_IDS);
   const hideLimits = () => { limitsPop.hidden = true; $("s-turtle").classList.remove("tip-off"); };
   function showLimits() {
     if (!settings) return;
-    { const bits = bitsMode();
-      limitFill("lp-down", settings.downLimitKBps, bits); limitFill("lp-up", settings.upLimitKBps, bits);
-      limitFill("lp-adown", settings.altDownLimitKBps, bits); limitFill("lp-aup", settings.altUpLimitKBps, bits);
-      $("lp-unit").textContent = limitUnit(bits); }
+    limitFillAll(LP_IDS, bitsMode());
 
     $("lp-on").checked = !!(stats && stats.altSpeed); $("lp-err").hidden = true;
     limitsPop.hidden = false;
@@ -1890,7 +1927,7 @@
     try {
       // the settings call takes the whole set of these values, so the ones that were not touched are sent back as they are
       settings = await api("PUT", "/api/settings", {
-        downLimitKBps: limitRead("lp-down", bitsMode()), upLimitKBps: limitRead("lp-up", bitsMode()), altDownLimitKBps: limitRead("lp-adown", bitsMode()), altUpLimitKBps: limitRead("lp-aup", bitsMode()),
+        ...limitReadAll(LP_IDS), limitUnits: limitUnitsOf(LP_IDS),
         ratioLimit: settings.ratioLimit || 0, maxActiveDownloads: settings.maxActiveDownloads || 0, copyRemovePolicy: settings.copyRemovePolicy,
       });
       if (!!$("lp-on").checked !== !!(stats && stats.altSpeed)) await api("POST", "/api/altspeed", { enabled: $("lp-on").checked });
@@ -1924,12 +1961,10 @@
   const openSection = () => { let id = "speed"; try { id = localStorage.getItem("setSection") || id; } catch (_) {} showSection(id); };
 
   // settings
+  const ST_LIMIT_IDS = ["st-down", "st-up", "st-altdown", "st-altup"]; // in the order of LIMIT_KEYS
   $("btn-settings").onclick = async () => {
     try { settings = await api("GET", "/api/settings"); port = await api("GET", "/api/port"); } catch (e) { return toast(e.message, true); }
-    { const bits = settings.speedUnit === "bits"; limitShownBits = bits;
-      limitFill("st-down", settings.downLimitKBps, bits); limitFill("st-up", settings.upLimitKBps, bits);
-      limitFill("st-altdown", settings.altDownLimitKBps, bits); limitFill("st-altup", settings.altUpLimitKBps, bits);
-      $("st-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`; }
+    limitFillAll(ST_LIMIT_IDS, settings.speedUnit === "bits");
 
     fillNetwork(settings.network || {});
     fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
@@ -1953,15 +1988,8 @@
     renderUpdate();
     if (!lastUpdate) checkUpdate(false);
   }
-  { const ids = ["st-down", "st-up", "st-altdown", "st-altup"];
-    limitFieldsDirty(ids);
-    for (const r of [$("st-unit-bytes"), $("st-unit-bits")]) r.addEventListener("change", () => {
-      const bits = $("st-unit-bits").checked;
-      if (bits === limitShownBits) return;
-      limitRefit(ids, limitShownBits, bits); limitShownBits = bits;
-      $("st-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
-    });
-  }
+  limitBind(ST_LIMIT_IDS);
+  for (const r of [$("st-unit-bytes"), $("st-unit-bits")]) r.addEventListener("change", () => limitFollow(ST_LIMIT_IDS, $("st-unit-bits").checked));
   $("st-mapping").onchange = async (e) => {
     try { port = await api("POST", "/api/port/mapping", { enabled: e.target.checked }); $("st-port").textContent = portDetails(port); renderPort(); }
     catch (x) { e.target.checked = !e.target.checked; toast(x.message, true); }
@@ -1983,7 +2011,6 @@
   $("f-settings").addEventListener("submit", async (e) => {
     e.preventDefault();
     const n = (id) => Number($(id).value) || 0;
-    const bitsNow = $("st-unit-bits").checked; // the unit the limit fields are shown in right now
     const updEvery = Math.round(Number($("st-updevery").value));
     if (!(updEvery >= 5 && updEvery <= 20160)) { $("st-err").textContent = "Период проверки обновлений: от 5 минут до 14 суток (20160 минут)."; $("st-err").hidden = false; return; }
     try {
@@ -1991,7 +2018,7 @@
       for (const name of lbDeleted) for (const t of torrents.filter((x) => x.label === name)) await api("POST", `/api/torrents/${t.hash}/label`, { label: "" });
       lbDeleted = new Set();
       settings = await api("PUT", "/api/settings", {
-        downLimitKBps: limitRead("st-down", bitsNow), upLimitKBps: limitRead("st-up", bitsNow), altDownLimitKBps: limitRead("st-altdown", bitsNow), altUpLimitKBps: limitRead("st-altup", bitsNow),
+        ...limitReadAll(ST_LIMIT_IDS), limitUnits: limitUnitsOf(ST_LIMIT_IDS),
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
@@ -2399,7 +2426,7 @@
   const wzUnit = () => $("wz-unit-bits").checked;
   function wzSummary() {
     const bits = wzUnit(), li = [];
-    const lim = (id) => (limitRead(id, bits) ? `${$(id).value} ${limitUnit(bits)}` : "без ограничения");
+    const lim = (id) => (limitReadPlain(id, bits) ? `${$(id).value} ${limitUnit(bits)}` : "без ограничения");
     li.push(`Папка загрузок: ${$("wz-data").value.trim() || "—"}`);
     li.push($("wz-watch").value.trim() ? `Папка автодобавления: ${$("wz-watch").value.trim()}` : "Папка автодобавления: выключена");
     li.push($("wz-copydir").value.trim() ? `Копии .torrent файлов: ${$("wz-copydir").value.trim()}` : "Копии .torrent файлов: не сохраняются");
@@ -2415,7 +2442,7 @@
     wz.bits = bits;
     $("wz-data").value = s.dataDir || ""; $("wz-watch").value = s.watchDir || ""; $("wz-copydir").value = s.torrentCopyDir || ""; $("wz-paused").checked = !!(s.add && s.add.paused);
     $("wz-unit-bits").checked = bits; $("wz-unit-bytes").checked = !bits;
-    limitFill("wz-down", s.downLimitKBps, bits); limitFill("wz-up", s.upLimitKBps, bits);
+    limitFillPlain("wz-down", s.downLimitKBps, bits); limitFillPlain("wz-up", s.upLimitKBps, bits);
     $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
     $("wz-port").value = s.listenPort; $("wz-mapping").checked = !!wz.port.enabled; $("wz-port-note").hidden = true;
     $("wz-starthidden").checked = s.startHidden !== false; $("wz-closetray").checked = s.closeToTray !== false; $("wz-notify").checked = s.notifyOnComplete !== false;
@@ -2429,7 +2456,7 @@
   for (const r of [$("wz-unit-bytes"), $("wz-unit-bits")]) r.addEventListener("change", () => {
     const bits = wzUnit();
     if (bits === wz.bits) return;
-    limitRefit(["wz-down", "wz-up"], wz.bits, bits); wz.bits = bits;
+    limitRefitPlain(["wz-down", "wz-up"], wz.bits, bits); wz.bits = bits;
     $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
   });
   // a random port from the range the system keeps for private use, away from well-known services
@@ -2457,7 +2484,7 @@
     if (port < 1 || port > 65535) { $("wz-err").textContent = "Порт должен быть от 1 до 65535."; $("wz-err").hidden = false; return; }
     const body = { ...wzBase(wz.cur), setupDone: true,
       dataDir: $("wz-data").value.trim(), watchDir: $("wz-watch").value.trim(), torrentCopyDir: $("wz-copydir").value.trim(), addPaused: $("wz-paused").checked,
-      speedUnit: bits ? "bits" : "bytes", downLimitKBps: limitRead("wz-down", bits), upLimitKBps: limitRead("wz-up", bits), listenPort: port };
+      speedUnit: bits ? "bits" : "bytes", downLimitKBps: limitReadPlain("wz-down", bits), upLimitKBps: limitReadPlain("wz-up", bits), listenPort: port };
     if (wzDesktop()) Object.assign(body, { startHidden: $("wz-starthidden").checked, closeToTray: $("wz-closetray").checked, notifyOnComplete: $("wz-notify").checked });
     $("wz-next").disabled = true;
     try {

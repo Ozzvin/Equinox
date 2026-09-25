@@ -778,6 +778,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		MaxChecks        *int                `json:"maxConcurrentChecks"`  // optional
 		AddPaused        *bool               `json:"addPaused"`            // optional
 		SpeedUnit        *string             `json:"speedUnit"`            // optional: bytes | bits
+		LimitUnits       *map[string]string  `json:"limitUnits"`           // optional: omitted = unchanged
 		MaxActive        int                 `json:"maxActiveDownloads"`
 		MaxSeeds         *int                `json:"maxActiveSeeds"` // optional: omitted = unchanged
 		AltSchedule      *config.AltSchedule `json:"altSchedule"`    // optional: omitted = unchanged
@@ -808,6 +809,19 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		fail(w, core.ErrInvalidInput)
 		return
+	}
+	var limitUnits map[string]string
+	if b.LimitUnits != nil {
+		limitUnits = map[string]string{}
+		for key, id := range *b.LimitUnits {
+			if !config.ValidLimitKey(key) || (id != "" && !config.ValidLimitUnit(id)) {
+				fail(w, core.ErrInvalidInput)
+				return
+			}
+			if id != "" { // empty: the unit follows the general choice of bytes or bits
+				limitUnits[key] = id
+			}
+		}
 	}
 	if err := s.m.SetLimits(b.DownLimitKBps, b.UpLimitKBps, b.AltDownLimitKBps, b.AltUpLimitKBps); err != nil {
 		fail(w, err)
@@ -926,6 +940,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.SpeedUnit != nil {
 			c.SpeedUnit = *b.SpeedUnit
+		}
+		if b.LimitUnits != nil {
+			c.LimitUnits = limitUnits
 		}
 	}); err != nil {
 		fail(w, err)

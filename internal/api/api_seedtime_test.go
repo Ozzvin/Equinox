@@ -118,3 +118,34 @@ func TestSpeedUnitSetting(t *testing.T) {
 		t.Fatalf("an unknown unit must give 400, got %d", code)
 	}
 }
+
+func TestLimitUnitsSetting(t *testing.T) {
+	e := setup(t)
+	put := func(extra string) (int, map[string]any) {
+		body := `{"downLimitKBps":48828,"upLimitKBps":0,"altDownLimitKBps":61,"altUpLimitKBps":0,"ratioLimit":0,"maxActiveDownloads":0,"copyRemovePolicy":"with_data"` + extra + `}`
+		r := e.do(t, "PUT", "/api/settings", strings.NewReader(body), nil)
+		defer r.Body.Close()
+		var out map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&out)
+		return r.StatusCode, out
+	}
+	if code, out := put(``); code != 200 || out["limitUnits"] != nil {
+		t.Fatalf("no units by default: %d %v", code, out["limitUnits"])
+	}
+	code, out := put(`,"limitUnits":{"down":"Mbit","altDown":"kbit","up":""}`)
+	units, _ := out["limitUnits"].(map[string]any)
+	if code != 200 || units["down"] != "Mbit" || units["altDown"] != "kbit" || len(units) != 2 {
+		t.Fatalf("units not saved (an empty one is dropped): %d %v", code, out["limitUnits"])
+	}
+	if code, out := put(``); code != 200 || len(out["limitUnits"].(map[string]any)) != 2 {
+		t.Fatalf("omitted must stay: %d %v", code, out["limitUnits"])
+	}
+	if code, out := put(`,"limitUnits":{}`); code != 200 || out["limitUnits"] != nil {
+		t.Fatalf("an empty set clears them: %d %v", code, out["limitUnits"])
+	}
+	for _, bad := range []string{`{"down":"Gbit"}`, `{"sideways":"KB"}`} {
+		if code, _ := put(`,"limitUnits":` + bad); code != 400 {
+			t.Fatalf("%s must give 400, got %d", bad, code)
+		}
+	}
+}

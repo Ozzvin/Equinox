@@ -444,12 +444,17 @@ table.mini.pt th.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
 .statusbar { gap: 8px 14px; }
 .statusbar .grow { flex: 1; }
 /* quick limits */
-.pop { position: fixed; z-index: 40; width: 330px; max-width: calc(100vw - 16px); padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.pop { position: fixed; z-index: 40; width: 460px; max-width: calc(100vw - 16px); padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
 .pop[hidden] { display: none; }
 .pop-title { font-weight: 650; margin-bottom: 10px; }
-.pop-grid { display: grid; grid-template-columns: 74px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+.pop-grid { display: grid; grid-template-columns: 66px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
 .pop-grid b { font-size: 12px; color: var(--muted); font-weight: 600; }
-.pop-grid input { margin: 0; height: 32px; min-width: 0; }
+.pop-grid input, .pop-grid select { margin: 0; height: 32px; min-width: 0; }
+/* a number and the unit it is typed in */
+.limf { display: flex; gap: 6px; margin-top: 6px; }
+.limf input { flex: 1 1 0; min-width: 0; margin: 0; }
+.limf select { flex: none; width: auto; max-width: 100px; margin: 0; padding: 0 6px; }
+.pop-grid .limf { margin-top: 0; }
 .pop .check { margin: 4px 0 10px; }
 /* segmented switch, left / right like on iOS */
 .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 380px); margin: 6px 0 10px; padding: 3px; border-radius: 11px; background: var(--panel-2); border: 1px solid var(--line); }
