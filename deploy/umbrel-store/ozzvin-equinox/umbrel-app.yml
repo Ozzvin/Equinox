@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ozzvin-equinox
 category: files
 name: Equinox
-version: "1.0.19"
+version: "1.1.0-rc1"
 tagline: A fast, tidy BitTorrent client
 description: >-
   Equinox is a lightweight BitTorrent client with a clean web interface.

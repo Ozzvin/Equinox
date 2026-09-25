@@ -36,6 +36,8 @@ jobs:
           v='${{ inputs.version }}'
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          # :latest only for a plain release number, not for a candidate such as 1.1.0-rc1
+          if echo "$v" | grep -Eq '^[0-9]+.[0-9]+.[0-9]+$'; then echo "latest=ghcr.io/ozzvin/equinox:latest" >> "$GITHUB_OUTPUT"; else echo "latest=" >> "$GITHUB_OUTPUT"; fi
       - name: Build the server for both architectures
         run: |
           mkdir -p bin
@@ -87,7 +89,7 @@ jobs:
           push: ${{ inputs.push }}
           tags: |
             ghcr.io/ozzvin/equinox:${{ steps.v.outputs.version }}
-            ghcr.io/ozzvin/equinox:latest
+            ${{ steps.v.outputs.latest }}
           labels: |
             org.opencontainers.image.source=https://github.com/Ozzvin/equinox
             org.opencontainers.image.version=${{ steps.v.outputs.version }}
