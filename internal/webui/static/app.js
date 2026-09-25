@@ -862,7 +862,14 @@
     render(); renderDetails();
   }
   $("rows").addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); }); // no text selection while ranging
-  $("rows").addEventListener("click", (e) => { const tr = e.target.closest("tr"); if (tr) select(tr.dataset.h, e); });
+  // The second click of a double click does what the toolbar button does. It is counted here rather than through the
+  // "dblclick" event, which the browser does not send when the first click has redrawn the rows under the pointer.
+  $("rows").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    select(tr.dataset.h, e);
+    if (e.detail === 2 && !e.shiftKey && !e.ctrlKey && !e.metaKey) { getSelection().removeAllRanges(); $("btn-open").onclick(); }
+  });
 
   // Run one request per selected torrent; report failures together.
   async function each(list, fn, okMsg) {
