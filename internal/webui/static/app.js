@@ -31,15 +31,23 @@
     return data;
   }
 
+  // ---------- language ----------
+  // i18n.js decides the language and, in English, translates the texts the page shows. What it cannot do is here: the
+  // numbers, units and dates that are put together from pieces are made in the language of the page.
+  const EN = window.__lang === "en";
+  const L = (ru, en) => (EN ? en : ru); // a word or a unit in the language of the page
+  const LOCALE = EN ? (/^en/i.test(navigator.language || "") ? navigator.language : "en-US") : "ru-RU";
+
   // ---------- formatting ----------
-  const fmtHours = (min) => (min % 60 === 0 ? min / 60 : (min / 60).toFixed(1)) + " ч";
+  const fmtHours = (min) => (min % 60 === 0 ? min / 60 : (min / 60).toFixed(1)) + " " + L("ч", "h");
   function fmtDuration(sec) {
     const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
-    return d ? `${d} д ` + `${h} ч` : h ? `${h} ч ${m} мин` : `${m} мин`;
+    const D = L("д", "d"), H = L("ч", "h"), M = L("мин", "min");
+    return d ? `${d} ${D} ${h} ${H}` : h ? `${h} ${H} ${m} ${M}` : `${m} ${M}`;
   }
-  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  const units = [L("Б", "B"), L("КБ", "KB"), L("МБ", "MB"), L("ГБ", "GB"), L("ТБ", "TB")];
   function bytes(n) {
-    if (!n) return "0 Б";
+    if (!n) return "0 " + units[0];
     let i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
     return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + " " + units[i];
   }
@@ -47,13 +55,13 @@
   // (decimal prefixes, as networks count them).
   const bitsMode = () => !!(typeof settings !== "undefined" && settings && settings.speedUnit === "bits");
   function bitrate(n) {
-    const units = ["б/с", "Кб/с", "Мб/с", "Гб/с"];
+    const units = EN ? ["b/s", "Kb/s", "Mb/s", "Gb/s"] : ["б/с", "Кб/с", "Мб/с", "Гб/с"];
     let v = n * 8, i = 0;
     while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
     return (i === 0 || v >= 100 ? v.toFixed(0) : v.toFixed(1)) + " " + units[i];
   }
-  const speed = (n) => (n > 0 ? (bitsMode() ? bitrate(n) : bytes(n) + "/с") : "—");
-  const speedZero = () => (bitsMode() ? "0 б/с" : "0 Б/с");
+  const speed = (n) => (n > 0 ? (bitsMode() ? bitrate(n) : bytes(n) + L("/с", "/s")) : "—");
+  const speedZero = () => (bitsMode() ? L("0 б/с", "0 b/s") : L("0 Б/с", "0 B/s"));
   // Speed limits are stored in KiB/s. Each one is shown and typed in a unit of its own: КБ/с, МБ/с (binary, as sizes),
   // Кбит/с, Мбит/с (decimal, as networks count; 1 KiB/s = 8.192 kbit/s). A limit whose unit was never chosen follows
   // the general choice of bytes or bits. A field that was not touched keeps the stored value as it is, so saving
@@ -61,7 +69,7 @@
   const LIMIT_KEYS = ["down", "up", "altDown", "altUp"];
   const LIMIT_CFG = { down: "downLimitKBps", up: "upLimitKBps", altDown: "altDownLimitKBps", altUp: "altUpLimitKBps" };
   const KIB_PER = { KB: 1, MB: 1024, kbit: 1000 / 8192, Mbit: 1e6 / 8192 }; // KiB/s in one of the unit
-  const LIMIT_LABEL = { KB: "КБ/с", MB: "МБ/с", kbit: "Кбит/с", Mbit: "Мбит/с" };
+  const LIMIT_LABEL = EN ? { KB: "KB/s", MB: "MB/s", kbit: "Kbit/s", Mbit: "Mbit/s" } : { KB: "КБ/с", MB: "МБ/с", kbit: "Кбит/с", Mbit: "Мбит/с" };
   const limitDefault = (bits) => (bits ? "kbit" : "KB");
   const limitUnit = (bits) => LIMIT_LABEL[limitDefault(bits)];
   const limitUnitOf = (key, bits) => (settings && settings.limitUnits && settings.limitUnits[key]) || limitDefault(bits);
@@ -127,13 +135,14 @@
   // drag a header to move a column. The choice is remembered by this browser or window.
   const fmtEta = (sec) => {
     if (!isFinite(sec)) return "∞";
-    if (sec < 60) return "< 1 мин";
+    const D = L("д", "d"), H = L("ч", "h"), M = L("мин", "min");
+    if (sec < 60) return "< 1 " + M;
     const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
-    return d ? `${d} д ${h} ч` : h ? `${h} ч ${m} мин` : `${m} мин`;
+    return d ? `${d} ${D} ${h} ${H}` : h ? `${h} ${H} ${m} ${M}` : `${m} ${M}`;
   };
   const etaOf = (t) => (t.progress >= 1 || !t.hasMetadata ? Infinity : t.downRate > 0 ? (t.size - t.done) / t.downRate : Infinity);
   const dateOf = (s) => (s && !s.startsWith("0001") ? Date.parse(s) : 0);
-  const shortDate = (s) => (dateOf(s) ? new Date(s).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
+  const shortDate = (s) => (dateOf(s) ? new Date(s).toLocaleDateString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
   const meta = (t, v) => (t.hasMetadata ? v : "—");
   let queuePos = new Map();
   // green while downloading, blue while seeding, yellow while files are being checked, grey when stopped
@@ -276,10 +285,10 @@
     if (t.moving) return { cls: "wait", text: t.moving > 0 ? `Перемещение ${Math.round(t.moving * 100)}%` : "Перемещение…" };
     if (t.checkQueued > 0) return { cls: "wait", text: "Ждёт проверки", title: `Стоит в очереди на проверку локальных файлов: №${t.checkQueued}` };
     if (!t.hasMetadata) return { cls: "wait", text: "Метаданные…" };
-    if (t.paused) return { cls: "", text: t.progress >= 1 ? "Остановлено" : "Пауза" };
+    if (t.paused) return { cls: "", text: t.progress >= 1 ? "Остановлено" : L("Пауза", "Paused") };
     if (t.queued > 0) return { cls: "wait", text: `В очереди №${t.queued}` };
     if (t.seedQueued > 0) return { cls: "wait", text: `В очереди на раздачу №${t.seedQueued}`, title: "Раздача закончена, но одновременно раздаётся не больше заданного числа торрентов" };
-    if (t.progress < 1) return t.downRate > 0 ? { cls: "down", text: "Загрузка" } : { cls: "wait", text: "Ожидание пиров" };
+    if (t.progress < 1) return t.downRate > 0 ? { cls: "down", text: L("Загрузка", "Downloading") } : { cls: "wait", text: "Ожидание пиров" };
     return { cls: "seed", text: "Раздаётся" };
   }
 
@@ -582,7 +591,7 @@
     }
     return out + esc(String(text).slice(last));
   }
-  const when = (s) => (s && !s.startsWith("0001") ? new Date(s).toLocaleString("ru-RU") : "—");
+  const when = (s) => (s && !s.startsWith("0001") ? new Date(s).toLocaleString(LOCALE) : "—");
   const SOURCES = { tracker: "Трекер", dht: "DHT", pex: "PEX", incoming: "Входящий", manual: "Вручную", other: "—" };
   // what each source means, for the tooltips of the "Источник" column
   const SOURCE_TIPS = {
@@ -712,11 +721,12 @@
   // ---------- the Status tab: the numbers of the torrent as a table, like in Deluge ----------
   const fmtDur = (sec) => {
     const s = Math.max(0, Math.floor(sec)), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-    if (d >= 7) return `${Math.floor(d / 7)} нед. ${d % 7} дн.`;
-    if (d > 0) return `${d} дн. ${h} ч`;
-    if (h > 0) return `${h} ч ${m} мин`;
-    if (m > 0) return `${m} мин ${s % 60} с`;
-    return `${s} с`;
+    const W = L("нед.", "wk"), D = L("дн.", "d"), H = L("ч", "h"), M = L("мин", "min"), S = L("с", "s");
+    if (d >= 7) return `${Math.floor(d / 7)} ${W} ${d % 7} ${D}`;
+    if (d > 0) return `${d} ${D} ${h} ${H}`;
+    if (h > 0) return `${h} ${H} ${m} ${M}`;
+    if (m > 0) return `${m} ${M} ${s % 60} ${S}`;
+    return `${s} ${S}`;
   };
   const stRow = (label, value, title) => `<div class="st-row"${title ? ` title="${esc(title)}"` : ""}><dt>${label}</dt><dd>${value}</dd></div>`;
   async function renderStatus(t, same) {
@@ -1984,6 +1994,7 @@
   $("btn-settings").onclick = async () => {
     try { settings = await api("GET", "/api/settings"); port = await api("GET", "/api/port"); } catch (e) { return toast(e.message, true); }
     limitFillAll(ST_LIMIT_IDS, settings.speedUnit === "bits");
+    for (const r of document.querySelectorAll('input[name="lg"]')) r.checked = r.value === window.__langPref;
 
     fillNetwork(settings.network || {});
     fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
@@ -2048,6 +2059,13 @@
         if (err) { toast("Не удалось изменить автозапуск: " + err, true); }
       }
       scheduleUpdateChecks(settings);
+      // the language is applied by a new load of the page: i18n.js reads the choice when it starts
+      const lang = (document.querySelector('input[name="lg"]:checked') || {}).value || "system";
+      if (lang !== window.__langPref) {
+        try { if (lang === "system") localStorage.removeItem("uiLang"); else localStorage.setItem("uiLang", lang); } catch (_) {}
+        location.reload();
+        return;
+      }
       $("dlg-settings").close(); toast("Настройки сохранены"); refresh(); checkRestart();
     } catch (x) { $("st-err").textContent = x.message; $("st-err").hidden = false; }
   });
@@ -2299,7 +2317,7 @@
     $("pk-path").value = d.path;
     renderPicker();
   }
-  const pkDate = (s) => { const t = Date.parse(s); return t > 31536000000 ? new Date(t).toLocaleDateString("ru-RU") + " " + new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : ""; };
+  const pkDate = (s) => { const t = Date.parse(s); return t > 31536000000 ? new Date(t).toLocaleDateString(LOCALE) + " " + new Date(t).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) : ""; };
   function renderPicker() {
     const d = pk.data; if (!d) return;
     $("pk-up").disabled = d.parent === null;

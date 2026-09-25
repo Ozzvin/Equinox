@@ -596,6 +596,8 @@ html[data-density="compact"] .file { padding: 2px 10px; }
 .seg.seg3:has(#dn-compact:checked) .seg-pill { transform: translateX(200%); }
 .seg.seg3:has(#th-light:checked) .seg-pill { transform: translateX(100%); }
 .seg.seg3:has(#th-system:checked) .seg-pill { transform: translateX(200%); }
+.seg.seg3:has(#lg-ru:checked) .seg-pill { transform: translateX(100%); }
+.seg.seg3:has(#lg-en:checked) .seg-pill { transform: translateX(200%); }
 
 /* dialogs follow the density: standard is denser than the base rules, compact denser still */
 html:not([data-density="large"]) dialog { padding: 16px 18px; border-radius: 12px; }
