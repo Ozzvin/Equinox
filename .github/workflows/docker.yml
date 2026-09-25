@@ -37,7 +37,7 @@ jobs:
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
           echo "version=$v" >> "$GITHUB_OUTPUT"
           # :latest only for a plain release number, not for a candidate such as 1.1.0-rc1
-          if echo "$v" | grep -Eq '^[0-9]+.[0-9]+.[0-9]+$'; then echo "latest=ghcr.io/ozzvin/equinox:latest" >> "$GITHUB_OUTPUT"; else echo "latest=" >> "$GITHUB_OUTPUT"; fi
+          if echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "latest=ghcr.io/ozzvin/equinox:latest" >> "$GITHUB_OUTPUT"; else echo "latest=" >> "$GITHUB_OUTPUT"; fi
       - name: Build the server for both architectures
         run: |
           mkdir -p bin
