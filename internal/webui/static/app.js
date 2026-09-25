@@ -1566,7 +1566,22 @@
   };
   const adCur = () => adItems[adSel];
 
-  async function openAdd(files) {
+  // In the desktop app the dialog is a window of its own (see ?window=add): the files that were dropped are queued for
+  // it, and the app is asked to open it. Without that (a browser) or when the app cannot (inline), the dialog is here.
+  async function openAdd(files, inline) {
+    if (!ADD_WINDOW && !inline && typeof window.openAddWindow === "function") {
+      try {
+        for (const f of files || []) {
+          const fd = new FormData(); fd.append("file", f);
+          const st = await api("POST", "/api/stage", fd);
+          await api("POST", "/api/pending-add", { stage: st.id });
+        }
+      } catch (x) { toast(x.message, true); return; }
+      let err = "";
+      try { err = await window.openAddWindow(); } catch (x) { err = String(x); }
+      if (!err) return;
+      files = undefined; // the window could not be opened: what was queued shows up here after a while, the dialog opens now
+    }
     try { addInfo = await api("GET", "/api/add-dialog"); } catch (x) { return toast(x.message, true); }
     if (!$("dlg-add").open) {
       adItems = []; adSel = -1; adTab = "files"; adBusy = false; $("ad-err").hidden = true;
@@ -1583,7 +1598,7 @@
     let items;
     try { items = await api("GET", "/api/pending-add" + (ADD_WINDOW ? "?for=window" : "")); } catch (_) { return; }
     if (!items || !items.length) return;
-    await openAdd();
+    await openAdd(undefined, true); // what has waited so long that no window came for it: the dialog is here
     for (const p of items) {
       if (p.kind === "magnet" && p.magnet) addLinks(p.magnet);
       else if (p.kind === "stage" && p.stage) await attachStaged(p.stage);

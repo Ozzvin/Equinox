@@ -266,6 +266,16 @@ func (d *desktop_) window(dataPath string) {
 	// A link to a site (the tracker page of a torrent, the project page) opens in the user's own browser, not in a
 	// window of this program. Only web addresses are passed on.
 	bindExternal(w)
+	// The "Add" button and dropped files open the window for adding torrents instead of a dialog over this one; an
+	// error text (empty on success) lets the page fall back to the dialog.
+	_ = w.Bind("openAddWindow", func() string {
+		allowForeground()
+		if err := spawnAddWindow(d.stateDir); err != nil {
+			log.Println("add window:", err)
+			return err.Error()
+		}
+		return ""
+	})
 	// The page gets the access key from here, so the window never depends on the link or on what the
 	// web view remembered. The address is then the plain one, without the key.
 	w.Init("window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true;")
