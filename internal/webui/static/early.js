@@ -3,3 +3,4 @@
 // (default-src 'self') does not allow inline scripts.
 try { var t = localStorage.getItem("uiTheme"); document.documentElement.dataset.theme = t === "light" || (t === "system" && !matchMedia("(prefers-color-scheme: dark)").matches) ? "light" : "dark"; } catch (e) { document.documentElement.dataset.theme = "dark"; }
 try { var d = localStorage.getItem("uiDensity"); if (d === "large" || d === "compact") document.documentElement.dataset.density = d; } catch (e) {}
+try { if (new URLSearchParams(location.search).get("window") === "add") document.documentElement.dataset.window = "add"; } catch (e) {}

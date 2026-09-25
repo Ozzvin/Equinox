@@ -3,6 +3,10 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // The window made for adding torrents (the desktop app opens it for a .torrent or magnet link from outside) is this
+  // same page with ?window=add: only the dialog for adding, no list, no polling of the torrents.
+  const ADD_WINDOW = document.documentElement.dataset.window === "add";
+  if (ADD_WINDOW) document.title = "Добавить раздачу — Equinox";
   // ---------- token ----------
   // The key comes, in this order, from the desktop window (injected before the page loads), from
   // the link that was opened (#token=...), from what this browser remembered. Each step stands
@@ -814,6 +818,7 @@
   }
   // ---------- data loop ----------
   async function refresh() {
+    if (ADD_WINDOW) return; // it shows no list
     try {
       [torrents, stats, port] = await Promise.all([api("GET", "/api/torrents"), api("GET", "/api/stats"), api("GET", "/api/port")]);
       dataLoaded = true;
@@ -1576,7 +1581,7 @@
   async function checkPendingAdd() {
     if (!window.__equinoxDesktop) return;
     let items;
-    try { items = await api("GET", "/api/pending-add"); } catch (_) { return; }
+    try { items = await api("GET", "/api/pending-add" + (ADD_WINDOW ? "?for=window" : "")); } catch (_) { return; }
     if (!items || !items.length) return;
     await openAdd();
     for (const p of items) {
@@ -1776,6 +1781,9 @@
     renderAdFiles();
   });
   $("dlg-add").addEventListener("cancel", (ev) => { if (adBusy) ev.preventDefault(); });
+  $("dlg-add").addEventListener("close", () => { // in the window made for adding, closing the dialog is closing the window
+    if (ADD_WINDOW) setTimeout(() => { if (!$("dlg-add").open) { if (typeof window.closeAddWindow === "function") window.closeAddWindow(); else window.close(); } }, 500);
+  });
   $("dlg-add").addEventListener("close", () => { // forget what was staged but not added
     for (const e of adItems) if (e.stage) api("DELETE", `/api/stage/${e.stage}`).catch(() => {});
     adItems = []; adSel = -1;
@@ -2447,11 +2455,17 @@
   $("dlg-wizard").addEventListener("cancel", (e) => { e.preventDefault(); wzSkip(); }); // Esc counts as "skip"
   $("st-wizard").onclick = () => { $("dlg-settings").close(); openWizard(); };
   // the first start: offer the guide once
-  (async () => { if (!token) return; try { const s = await api("GET", "/api/settings"); if (!s.setupDone) openWizard(); } catch (_) {} })();
+  if (!ADD_WINDOW) (async () => { if (!token) return; try { const s = await api("GET", "/api/settings"); if (!s.setupDone) openWizard(); } catch (_) {} })();
 
   if (!token) askToken();
-  loop();
-  checkRestart(); setInterval(checkRestart, 20000);
+  if (ADD_WINDOW) {
+    // the dialog is open from the start; what arrives (a file, a magnet link) is put on its list as it comes
+    window.checkPendingAddNow = checkPendingAdd;
+    openAdd().then(() => { $("dlg-add").tabIndex = -1; $("dlg-add").focus(); /* not on the close button */ const again = () => checkPendingAdd().finally(() => setTimeout(again, 700)); again(); });
+  } else {
+    loop();
+    checkRestart(); setInterval(checkRestart, 20000);
+  }
   // Updates: an automatic check shortly after start and then at the period from the settings (an hour unless
   // changed), unless turned off; a manual check (the About section's button) always works regardless. The
   // schedule is made again when the settings are saved. Only the first schedule after the check was off makes the
@@ -2466,7 +2480,7 @@
     updTimer = setInterval(() => checkUpdate(true), every); // the timer is due, so it must not be answered from the cache
     if (!wasOn && updStartTimer === null) updStartTimer = setTimeout(() => { updStartTimer = null; checkUpdate(false); }, 5000);
   }
-  (async () => {
+  if (!ADD_WINDOW) (async () => {
     if (!token) return;
     try { scheduleUpdateChecks(await api("GET", "/api/settings")); } catch (_) {}
   })();

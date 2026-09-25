@@ -93,7 +93,7 @@ type Manager struct {
 	watchSeen        map[string]watchStamp    // files seen in the watch folder on the previous scan
 	creates          map[string]*CreateJob    // torrent creations, by job id
 	staged           map[string]*stagedEntry  // .torrent files on the "Add torrents" list, by id
-	pending          []PendingAdd             // magnets/staged files opened from outside, waiting for the dialog
+	pending          []queuedAdd              // magnets/staged files opened from outside, waiting for the dialog
 	phase            map[string]*checkPhase   // torrents in their first check of local files
 	checkProg        map[string]float64       // check progress (0..1) of torrents being checked
 	held             map[string]*heldInfo     // torrents whose info waits for a free check slot

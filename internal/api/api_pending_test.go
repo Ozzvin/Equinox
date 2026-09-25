@@ -48,7 +48,15 @@ func TestPendingAddQueuesAStagedFileInsteadOfAdding(t *testing.T) {
 		t.Fatalf("stage/%s: %d %v", id, r.StatusCode, again)
 	}
 
+	// the main window is not given what the window for adding is about to take
 	r = e.do(t, "GET", "/api/pending-add", nil, nil)
+	var early []map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&early)
+	r.Body.Close()
+	if len(early) != 0 {
+		t.Fatalf("a fresh item must wait for the window for adding: %+v", early)
+	}
+	r = e.do(t, "GET", "/api/pending-add?for=window", nil, nil)
 	var got []map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&got)
 	r.Body.Close()
@@ -57,7 +65,7 @@ func TestPendingAddQueuesAStagedFileInsteadOfAdding(t *testing.T) {
 	}
 
 	// Taking the queue empties it.
-	r = e.do(t, "GET", "/api/pending-add", nil, nil)
+	r = e.do(t, "GET", "/api/pending-add?for=window", nil, nil)
 	var again2 []map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&again2)
 	r.Body.Close()
@@ -76,7 +84,7 @@ func TestPendingAddMagnetAndBadInput(t *testing.T) {
 	if r.StatusCode != 204 {
 		t.Fatalf("magnet: %d", r.StatusCode)
 	}
-	r = e.do(t, "GET", "/api/pending-add", nil, nil)
+	r = e.do(t, "GET", "/api/pending-add?for=window", nil, nil)
 	var got []map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&got)
 	r.Body.Close()

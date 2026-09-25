@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // QueueExternalAdd/TakePendingAdds is the hand-off from an "Open with" file or a second launch to
 // the web page's "Add torrents" dialog: nothing gets added until the page consumes the queue.
@@ -8,7 +11,7 @@ func TestPendingAddQueueRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 
-	if got := m.TakePendingAdds(); len(got) != 0 {
+	if got := m.TakePendingAdds(true); len(got) != 0 {
 		t.Fatalf("a new manager must start with nothing pending: %+v", got)
 	}
 
@@ -20,14 +23,14 @@ func TestPendingAddQueueRoundTrip(t *testing.T) {
 	m.QueueExternalAdd(PendingAdd{Kind: "stage", Stage: st.ID})
 	m.QueueExternalAdd(PendingAdd{Kind: "magnet", Magnet: "magnet:?xt=urn:btih:" + "a"})
 
-	got := m.TakePendingAdds()
+	got := m.TakePendingAdds(true)
 	if len(got) != 2 || got[0].Stage != st.ID || got[1].Magnet == "" {
 		t.Fatalf("queued items not returned in order: %+v", got)
 	}
 	if len(m.pending) != 0 {
 		t.Fatal("TakePendingAdds must clear the queue")
 	}
-	if got := m.TakePendingAdds(); len(got) != 0 {
+	if got := m.TakePendingAdds(true); len(got) != 0 {
 		t.Fatalf("taking twice must not repeat items: %+v", got)
 	}
 
@@ -59,5 +62,24 @@ func TestStagedInfoRepeatsWithoutConsuming(t *testing.T) {
 	m.Unstage(st.ID)
 	if _, ok := m.StagedInfo(st.ID); ok {
 		t.Fatal("StagedInfo must not find an unstaged entry")
+	}
+}
+
+// The main window does not get what the window for adding is about to take, only what has been left waiting.
+func TestMainWindowOnlyGetsWhatHasWaited(t *testing.T) {
+	m := newManager(t, t.TempDir(), nil)
+	m.QueueExternalAdd(PendingAdd{Kind: "magnet", Magnet: "magnet:?xt=urn:btih:" + "b"})
+	if got := m.TakePendingAdds(false); len(got) != 0 {
+		t.Fatalf("a fresh item belongs to the window for adding: %v", got)
+	}
+	m.mu.Lock()
+	m.pending[0].at = time.Now().Add(-2 * PendingGrace) // nobody came for it
+	m.mu.Unlock()
+	if got := m.TakePendingAdds(false); len(got) != 1 {
+		t.Fatalf("an item nobody took must go to the main window: %v", got)
+	}
+	m.QueueExternalAdd(PendingAdd{Kind: "magnet", Magnet: "magnet:?xt=urn:btih:" + "c"})
+	if got := m.TakePendingAdds(true); len(got) != 1 {
+		t.Fatalf("the window for adding takes everything: %v", got)
 	}
 }

@@ -552,9 +552,10 @@ func (s *Server) stagedInfo(w http.ResponseWriter, r *http.Request) {
 
 // pendingAdd returns and clears the magnets/staged files queued by a second launch or the desktop
 // app opening a file from outside (see postPendingAdd); the page polls this to open the "Add
-// torrents" dialog with them instead of adding them silently.
+// torrents" dialog with them instead of adding them silently. The window made for adding (?for=window)
+// gets everything at once; the main window only what has been waiting for core.PendingGrace.
 func (s *Server) pendingAdd(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.m.TakePendingAdds())
+	writeJSON(w, http.StatusOK, s.m.TakePendingAdds(r.URL.Query().Get("for") == "window"))
 }
 
 // postPendingAdd queues one magnet link for pendingAdd: POST {"magnet": "..."}. A .torrent file

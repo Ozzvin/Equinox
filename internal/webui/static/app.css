@@ -745,3 +745,13 @@ html[data-density="large"] #peer-count { margin-bottom: 10px; }
 .src-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
 .src-link:hover { text-decoration: underline; }
 .src-comment { white-space: pre-line; overflow-wrap: anywhere; }
+
+/* the window made for adding torrents: only the dialog, over the whole window */
+html[data-window="add"] header.topbar, html[data-window="add"] #restart-bar, html[data-window="add"] .layout,
+html[data-window="add"] .splitter, html[data-window="add"] .details, html[data-window="add"] .statusbar,
+html[data-window="add"] #push { display: none; }
+html[data-window="add"] body { background: var(--bg); }
+html[data-window="add"] dialog#dlg-add { position: fixed; inset: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: auto; }
+html[data-window="add"] dialog#dlg-add::backdrop { background: var(--bg); backdrop-filter: none; }
+html[data-window="add"] dialog#dlg-add[open] { display: flex; flex-direction: column; }
+html[data-window="add"] dialog#dlg-add > .row-end:last-child { margin-top: auto; padding-top: 12px; }

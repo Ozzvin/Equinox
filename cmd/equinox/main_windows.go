@@ -46,6 +46,7 @@ func main() {
 	stateDir := flag.String("state", "", "state directory (default: next to the executable, or a per-user folder if that is not writable)")
 	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback)")
 	hidden := flag.Bool("hidden", false, "start in the tray without opening the window")
+	addWindow := flag.Bool("addwindow", false, "internal: only open the window for adding torrents (the running program has queued them)")
 	after := flag.Int("after", 0, "internal: wait for this process to exit first (used when restarting)")
 	flag.Parse()
 	args := flag.Args() // magnet links and .torrent files passed by Windows
@@ -64,6 +65,18 @@ func main() {
 		log.Println("cannot open the log file:", err) // not fatal: run without a log
 	}
 
+	if *addWindow {
+		if err := runAddWindow(*stateDir); err != nil {
+			log.Println("add window:", err)
+			// no window of its own: the running program shows its main window, whose dialog picks the queue up
+			if ev, oerr := windows.OpenEvent(windows.EVENT_MODIFY_STATE, false, mustUTF16(`Local\EquinoxDesktopShow`+instanceSuffix())); oerr == nil {
+				_ = windows.SetEvent(ev)
+				_ = windows.CloseHandle(ev)
+			}
+		}
+		return
+	}
+
 	// One instance only: a second start asks the running one to show its window.
 	// The lock and the events are per channel: a beta ("EquinoxDesktop-beta") runs beside the installed
 	// program instead of just asking it to show its window. Releases keep the names the installer knows.
@@ -79,6 +92,16 @@ func main() {
 				log.Println("forward to running instance:", err)
 			}
 		}
+		// With files or links the window for adding torrents comes up and the main window is left alone; without
+		// them (the user started the program again) the main window is shown.
+		if len(args) > 0 {
+			if err := runAddWindow(*stateDir); err == nil {
+				return
+			} else {
+				log.Println("add window:", err)
+			}
+		}
+		allowForeground() // the process Explorer started may hand the front to the window it wakes
 		if ev, err := windows.OpenEvent(windows.EVENT_MODIFY_STATE, false, evName); err == nil {
 			_ = windows.SetEvent(ev)
 			_ = windows.CloseHandle(ev)
@@ -134,7 +157,15 @@ func main() {
 		log.Println("quit requested by the installer")
 		d.doQuit()
 	}()
-	if !*hidden || len(args) > 0 {
+	switch {
+	case len(args) > 0:
+		// Opened from outside while the program was not running: it starts in the tray and the window for adding
+		// comes up (its own process, see addwindow_windows.go); the main window is not shown.
+		if err := spawnAddWindow(*stateDir); err != nil {
+			log.Println("add window:", err)
+			d.show <- struct{}{} // the main window's dialog takes the queue after PendingGrace
+		}
+	case !*hidden:
 		d.show <- struct{}{} // open the window on start (not when autostarted into the tray)
 	}
 
@@ -234,11 +265,7 @@ func (d *desktop_) window(dataPath string) {
 	_ = w.Bind("setTitleBar", func(bg, fg string) { _ = desktop.TitleBar(hwnd, bg, fg) })
 	// A link to a site (the tracker page of a torrent, the project page) opens in the user's own browser, not in a
 	// window of this program. Only web addresses are passed on.
-	_ = w.Bind("openExternal", func(raw string) {
-		if u, err := url.Parse(raw); err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
-			_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", u.String()).Start()
-		}
-	})
+	bindExternal(w)
 	// The page gets the access key from here, so the window never depends on the link or on what the
 	// web view remembered. The address is then the plain one, without the key.
 	w.Init("window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true;")
@@ -367,9 +394,7 @@ func (d *desktop_) requestShow() {
 		// The window survives being closed or minimised to the tray (see window/watchMinimize):
 		// main's loop is blocked inside w.Run() for as long as that is true, so it never gets
 		// back to select on d.show to notice a request here. Show the existing window directly.
-		hwnd := uintptr(v.Window())
-		pShowWindow.Call(hwnd, 9) // SW_RESTORE
-		pSetForeground.Call(hwnd)
+		bringToFront(uintptr(v.Window()))
 		return
 	}
 	select {
@@ -523,4 +548,25 @@ func (d *desktop_) notify(e core.Event) {
 	if err := desktop.Notify(title, text); err != nil {
 		log.Println("notification:", err)
 	}
+}
+
+// spawnAddWindow starts the window for adding torrents as a process of its own.
+func spawnAddWindow(stateDir string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return exec.Command(exe, "-addwindow", "-state", stateDir).Start()
+}
+
+// openInBrowser hands a web address to the user's default browser; anything else is ignored.
+func openInBrowser(raw string) {
+	if u, err := url.Parse(raw); err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", u.String()).Start()
+	}
+}
+
+func mustUTF16(s string) *uint16 {
+	p, _ := windows.UTF16PtrFromString(s)
+	return p
 }
