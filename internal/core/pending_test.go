@@ -13,7 +13,7 @@ func TestPendingAddQueueRoundTrip(t *testing.T) {
 	}
 
 	mi := loadMI(t, makeTorrent(t, dir, "pending.bin", 4<<10))
-	st, err := m.Stage(mi)
+	st, err := m.Stage(mi, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestStagedInfoRepeatsWithoutConsuming(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	mi := loadMI(t, makeTorrent(t, dir, "again.bin", 4<<10))
-	st, err := m.Stage(mi)
+	st, err := m.Stage(mi, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

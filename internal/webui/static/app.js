@@ -519,6 +519,7 @@
     renderDetails();
   });
 
+  const hostOf = (u) => { try { return new URL(u).host; } catch (_) { return u; } };
   const when = (s) => (s && !s.startsWith("0001") ? new Date(s).toLocaleString("ru-RU") : "—");
   const SOURCES = { tracker: "Трекер", dht: "DHT", pex: "PEX", incoming: "Входящий", manual: "Вручную", other: "—" };
   // what each source means, for the tooltips of the "Источник" column
@@ -767,9 +768,10 @@
           <dt>Папка</dt><dd>${esc(d.savePath)}</dd>
           <dt>Копия .torrent</dt><dd>${esc(d.copyPath || "не сохранена")}</dd>
           <dt>Добавлена</dt><dd>${when(d.added)}</dd>
-          <dt>Создана</dt><dd>${when(d.createdAt)}${d.createdBy ? " · " + esc(d.createdBy) : ""}</dd>
+          <dt>Создана</dt><dd>${d.createdAt && !d.createdAt.startsWith("0001") ? when(d.createdAt) : "—"}${d.createdBy ? " · " + esc(d.createdBy) : ""}</dd>
           <dt>Тип</dt><dd>${d.private ? "Приватная" : "Публичная"}</dd>
-          ${d.comment ? `<dt>Комментарий</dt><dd>${esc(d.comment)}</dd>` : ""}
+          ${d.publisherUrl ? `<dt>Раздача на трекере</dt><dd><a class="src-link" href="${esc(d.publisherUrl)}" target="_blank" rel="noopener noreferrer" title="${esc(d.publisherUrl)}">${esc(d.publisher || hostOf(d.publisherUrl))} — открыть страницу раздачи</a></dd>` : ""}
+          ${d.comment ? `<dt>Комментарий</dt><dd class="src-comment">${esc(d.comment)}</dd>` : ""}
           <dt>Magnet-ссылка</dt><dd><button class="btn small" id="copy-magnet">Скопировать</button></dd></dl>`;
         $("copy-magnet").onclick = () => navigator.clipboard.writeText(d.magnet).then(() => toast("Magnet-ссылка скопирована"), () => toast("Не удалось скопировать", true));
       } else if (tab === "peers") {
@@ -2317,6 +2319,16 @@
   }
   for (const r of document.querySelectorAll('input[name="th"]')) r.addEventListener("change", () => { if (r.checked) setTheme(r.value); });
   themeQuery.addEventListener("change", () => { if (theme === "system") applyTheme(); });
+
+  // In the desktop window a link to another site opens in the user's browser (the program hands the address over).
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (!a || typeof window.openExternal !== "function") return;
+    const href = a.getAttribute("href") || "";
+    if (!/^https?:\/\//i.test(href) || a.origin === location.origin) return;
+    e.preventDefault();
+    window.openExternal(href);
+  });
 
   // In the desktop window the title bar takes the colours of the top bar (and follows the light or dark theme).
   function syncTitleBar() {

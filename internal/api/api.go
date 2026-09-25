@@ -3,11 +3,13 @@
 package api
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -267,12 +269,17 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer f.Close()
-		mi, merr := metainfo.Load(f)
+		raw, rerr := io.ReadAll(f)
+		if rerr != nil {
+			fail(w, errors.Join(core.ErrInvalidInput, rerr))
+			return
+		}
+		mi, merr := metainfo.Load(bytes.NewReader(raw))
 		if merr != nil {
 			fail(w, errors.Join(core.ErrInvalidInput, merr))
 			return
 		}
-		hash, err = s.m.AddMetaInfo(mi, opts...)
+		hash, err = s.m.AddMetaInfo(mi, append(opts, core.WithRawFile(raw))...)
 	} else {
 		var body struct {
 			Magnet string `json:"magnet"`
@@ -509,12 +516,17 @@ func (s *Server) stage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-	mi, err := metainfo.Load(f)
+	raw, err := io.ReadAll(f)
 	if err != nil {
 		fail(w, errors.Join(core.ErrInvalidInput, err))
 		return
 	}
-	st, err := s.m.Stage(mi)
+	mi, err := metainfo.Load(bytes.NewReader(raw))
+	if err != nil {
+		fail(w, errors.Join(core.ErrInvalidInput, err))
+		return
+	}
+	st, err := s.m.Stage(mi, raw)
 	if err != nil {
 		fail(w, err)
 		return

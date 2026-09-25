@@ -33,11 +33,11 @@ func TestBatchAddGivesEachEntryItsOwnOptions(t *testing.T) {
 
 	twoFiles := namedTwoFileTorrent(t, dir, "pack") // a.bin (32 KiB) and b.bin (48 KiB)
 	plain := loadMI(t, makeTorrent(t, dir, "plain.bin", 20<<10))
-	st1, err := m.Stage(twoFiles)
+	st1, err := m.Stage(twoFiles, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	st2, err := m.Stage(plain)
+	st2, err := m.Stage(plain, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestBatchAddGivesEachEntryItsOwnOptions(t *testing.T) {
 	}
 
 	// The same torrent added again is reported, not changed.
-	again, _ := m.Stage(twoFiles)
+	again, _ := m.Stage(twoFiles, nil)
 	if !again.Exists {
 		t.Fatal("staging must say that the torrent is already in the client")
 	}
@@ -134,7 +134,7 @@ func TestBatchRejectsBadOptions(t *testing.T) {
 	file := filepath.Join(dir, "afile")
 	_ = os.WriteFile(file, []byte("x"), 0o644)
 	mk := func(name string) string {
-		st, err := m.Stage(loadMI(t, makeTorrent(t, dir, name, 20<<10)))
+		st, err := m.Stage(loadMI(t, makeTorrent(t, dir, name, 20<<10)), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -326,7 +326,7 @@ func TestPerTorrentCompletedFolderBeatsTheGlobalOne(t *testing.T) {
 func TestStagingIsBounded(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
-	if _, err := m.Stage(&metainfo.MetaInfo{InfoBytes: []byte("garbage")}); err == nil {
+	if _, err := m.Stage(&metainfo.MetaInfo{InfoBytes: []byte("garbage")}, nil); err == nil {
 		t.Fatal("an unparsable torrent must be refused")
 	}
 	m.mu.Lock()
@@ -334,7 +334,7 @@ func TestStagingIsBounded(t *testing.T) {
 		m.staged[string(rune('a'+i%26))+repeatHex("0", i)] = &stagedEntry{at: time.Now()}
 	}
 	m.mu.Unlock()
-	if _, err := m.Stage(loadMI(t, makeTorrent(t, dir, "over.bin", 20<<10))); err == nil {
+	if _, err := m.Stage(loadMI(t, makeTorrent(t, dir, "over.bin", 20<<10)), nil); err == nil {
 		t.Fatal("the list must be bounded")
 	}
 	// Old entries are dropped instead of blocking new ones forever.
@@ -343,7 +343,7 @@ func TestStagingIsBounded(t *testing.T) {
 		e.at = time.Now().Add(-2 * stagedTTL)
 	}
 	m.mu.Unlock()
-	if _, err := m.Stage(loadMI(t, makeTorrent(t, dir, "fresh.bin", 20<<10))); err != nil {
+	if _, err := m.Stage(loadMI(t, makeTorrent(t, dir, "fresh.bin", 20<<10)), nil); err != nil {
 		t.Fatalf("expired entries must make room: %v", err)
 	}
 }

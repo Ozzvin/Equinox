@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -231,6 +232,13 @@ func (d *desktop_) window(dataPath string) {
 		_ = desktop.TitleBar(hwnd, "#ffffff", "#1a1f29")
 	}
 	_ = w.Bind("setTitleBar", func(bg, fg string) { _ = desktop.TitleBar(hwnd, bg, fg) })
+	// A link to a site (the tracker page of a torrent, the project page) opens in the user's own browser, not in a
+	// window of this program. Only web addresses are passed on.
+	_ = w.Bind("openExternal", func(raw string) {
+		if u, err := url.Parse(raw); err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+			_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", u.String()).Start()
+		}
+	})
 	// The page gets the access key from here, so the window never depends on the link or on what the
 	// web view remembered. The address is then the plain one, without the key.
 	w.Init("window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true;")

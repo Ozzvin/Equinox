@@ -32,12 +32,17 @@ func addArgs(a *app.App, args []string) {
 		case isMagnet(arg):
 			a.Manager.QueueExternalAdd(core.PendingAdd{Kind: "magnet", Magnet: arg})
 		case strings.EqualFold(filepath.Ext(arg), ".torrent"):
-			mi, err := metainfo.LoadFromFile(arg)
+			raw, err := os.ReadFile(arg)
 			if err != nil {
 				logf("open %q: %v", arg, err)
 				continue
 			}
-			st, err := a.Manager.Stage(mi)
+			mi, err := metainfo.Load(bytes.NewReader(raw))
+			if err != nil {
+				logf("open %q: %v", arg, err)
+				continue
+			}
+			st, err := a.Manager.Stage(mi, raw)
 			if err != nil {
 				logf("stage %q: %v", arg, err)
 				continue

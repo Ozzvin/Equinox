@@ -740,3 +740,8 @@ html[data-density="large"] #peer-count { margin-bottom: 10px; }
 .upd-notes h4 { margin: 12px 0 4px; font-size: 13.5px; }
 .upd-notes a { color: var(--accent); }
 .upd-info a.btn { text-decoration: none; }
+
+/* the tracker page and the comment of a torrent, in its details */
+.src-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.src-link:hover { text-decoration: underline; }
+.src-comment { white-space: pre-line; overflow-wrap: anywhere; }

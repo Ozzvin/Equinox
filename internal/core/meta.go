@@ -1,6 +1,7 @@
 package core
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 
@@ -19,7 +20,7 @@ func (m *Manager) hasMeta(hash string) bool {
 	return err == nil
 }
 
-func (m *Manager) saveMeta(mi *metainfo.MetaInfo, hash string) error {
+func (m *Manager) saveMeta(mi *metainfo.MetaInfo, hash string, raw []byte) error {
 	p := m.metaPath(hash)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
@@ -29,7 +30,7 @@ func (m *Manager) saveMeta(mi *metainfo.MetaInfo, hash string) error {
 	if err != nil {
 		return err
 	}
-	if err := mi.Write(f); err != nil {
+	if err := writeTorrent(f, mi, raw); err != nil {
 		f.Close()
 		os.Remove(tmp)
 		return err
@@ -39,4 +40,14 @@ func (m *Manager) saveMeta(mi *metainfo.MetaInfo, hash string) error {
 		return err
 	}
 	return os.Rename(tmp, p)
+}
+
+// writeTorrent writes a .torrent: the bytes it came as when they are known, which keeps everything in it, and
+// otherwise the parsed structure.
+func writeTorrent(w io.Writer, mi *metainfo.MetaInfo, raw []byte) error {
+	if len(raw) > 0 {
+		_, err := w.Write(raw)
+		return err
+	}
+	return mi.Write(w)
 }

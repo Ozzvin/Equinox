@@ -20,7 +20,9 @@ type Details struct {
 	Private         bool      `json:"private"`
 	Comment         string    `json:"comment"`
 	CreatedBy       string    `json:"createdBy"`
-	CreatedAt       time.Time `json:"createdAt"` // zero if the torrent does not say
+	Publisher       string    `json:"publisher"`    // the tracker that published it, as the file says
+	PublisherURL    string    `json:"publisherUrl"` // the page of the torrent on that tracker (http or https), "" if none
+	CreatedAt       time.Time `json:"createdAt"`    // zero if the torrent does not say
 	Added           time.Time `json:"added"`
 	SavePath        string    `json:"savePath"`
 	CopyPath        string    `json:"copyPath"`
@@ -60,21 +62,20 @@ func (m *Manager) Details(hash string) (Details, error) {
 	}
 	mi := t.Metainfo()
 	rec := m.snapshotRecords()[hash]
+	src := m.sourceOf(hash, rec)
 
 	d := Details{
 		Hash: hash, Name: t.Name(), TotalSize: t.Length(), Files: len(t.Files()),
 		Pieces: t.NumPieces(), PieceLength: info.PieceLength,
 		Private: info.Private != nil && *info.Private,
-		Comment: mi.Comment, CreatedBy: mi.CreatedBy, Added: rec.Added,
+		Comment: src.Comment, CreatedBy: src.CreatedBy, CreatedAt: src.createdTime(),
+		Publisher: src.Publisher, PublisherURL: src.PublisherURL, Added: rec.Added,
 		SavePath: m.saveDir(hash), CopyPath: rec.CopyPath,
 		Magnet:   mi.Magnet(nil, info).String(),
 		MaxConns: rec.MaxConns, ConnLimit: m.connLimit(rec),
 		RatioLimit: rec.RatioLimit, RatioInForce: rec.RatioLimit,
 		SeedTimeLimit: rec.SeedTimeLimit, SeedTimeInForce: m.seedLimit(rec), SeedSeconds: m.seedSeconds(hash, rec),
 		Sequential: rec.Sequential, EdgePieces: rec.EdgePieces, MoveDone: rec.MoveDone, Label: rec.Label,
-	}
-	if mi.CreationDate > 0 {
-		d.CreatedAt = time.Unix(mi.CreationDate, 0)
 	}
 	d.PiecesDone = t.Stats().PiecesComplete
 	if d.RatioInForce == 0 {

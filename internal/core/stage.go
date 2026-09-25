@@ -25,6 +25,7 @@ const (
 
 type stagedEntry struct {
 	mi    *metainfo.MetaInfo
+	raw   []byte // the file as it was given (may be nil)
 	at    time.Time
 	bytes int
 }
@@ -49,16 +50,16 @@ type StagedTorrent struct {
 }
 
 // Stage parses a torrent and keeps it for AddBatch.
-func (m *Manager) Stage(mi *metainfo.MetaInfo) (StagedTorrent, error) {
+func (m *Manager) Stage(mi *metainfo.MetaInfo, raw []byte) (StagedTorrent, error) {
 	info, err := mi.UnmarshalInfo()
 	if err != nil {
 		return StagedTorrent{}, fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
 	hash := mi.HashInfoBytes().HexString()
-	raw := make([]byte, 8)
-	_, _ = rand.Read(raw)
+	idb := make([]byte, 8)
+	_, _ = rand.Read(idb)
 	st := StagedTorrent{
-		ID: hex.EncodeToString(raw), Name: info.BestName(), Hash: hash, Size: info.TotalLength(),
+		ID: hex.EncodeToString(idb), Name: info.BestName(), Hash: hash, Size: info.TotalLength(),
 		Private: info.Private != nil && *info.Private, Comment: mi.Comment,
 		Trackers: len(mi.UpvertedAnnounceList().DistinctValues()), Exists: m.exists(hash),
 	}
@@ -69,11 +70,11 @@ func (m *Manager) Stage(mi *metainfo.MetaInfo) (StagedTorrent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := time.Now()
-	total := len(mi.InfoBytes) + m.sweepStagedLocked(now)
+	total := len(mi.InfoBytes) + len(raw) + m.sweepStagedLocked(now)
 	if len(m.staged) >= maxStaged || total > maxStagedBytes {
 		return StagedTorrent{}, fmt.Errorf("%w: too many torrents on the list at once, add or remove some first", ErrInvalidInput)
 	}
-	m.staged[st.ID] = &stagedEntry{mi: mi, at: now, bytes: len(mi.InfoBytes)}
+	m.staged[st.ID] = &stagedEntry{mi: mi, raw: raw, at: now, bytes: len(mi.InfoBytes) + len(raw)}
 	return st, nil
 }
 
@@ -207,6 +208,7 @@ func (m *Manager) addOne(it BatchItem) (hash, name string, err error) {
 		}
 		hash, name = e.mi.HashInfoBytes().HexString(), info.BestName()
 		if m.exists(hash) {
+			m.mergeSource(hash, e.raw, e.mi)
 			m.Unstage(it.Stage)
 			return hash, name, errAlreadyAdded
 		}
@@ -214,7 +216,7 @@ func (m *Manager) addOne(it BatchItem) (hash, name string, err error) {
 		if err != nil {
 			return hash, name, err
 		}
-		if _, err := m.AddMetaInfo(e.mi, WithOptions(it.Options), WithFilePriorities(prios)); err != nil {
+		if _, err := m.AddMetaInfo(e.mi, WithOptions(it.Options), WithFilePriorities(prios), WithRawFile(e.raw)); err != nil {
 			return hash, name, err
 		}
 		m.Unstage(it.Stage)

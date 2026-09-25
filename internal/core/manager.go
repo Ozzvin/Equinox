@@ -4,6 +4,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -292,12 +293,21 @@ func WithLabel(label string) AddOption { return func(r *record) { r.Label = labe
 
 // AddFile adds a .torrent file: the file is copied into the configured copy folder.
 func (m *Manager) AddFile(path string, opts ...AddOption) (string, error) {
-	mi, err := metainfo.LoadFromFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
-	return m.AddMetaInfo(mi, opts...)
+	mi, err := metainfo.Load(bytes.NewReader(raw))
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
+	return m.AddMetaInfo(mi, append(opts, WithRawFile(raw))...)
 }
+
+// WithRawFile hands over the .torrent file as it was given. It is what the copies are written from, so keys the
+// metainfo type does not know (a tracker's publisher-url) are not lost, and it is where the comment and the
+// publisher page of the torrent are read from.
+func WithRawFile(raw []byte) AddOption { return func(r *record) { r.rawFile = raw } }
 
 // AddMetaInfo adds torrent metadata and saves its .torrent copy.
 func (m *Manager) AddMetaInfo(mi *metainfo.MetaInfo, opts ...AddOption) (string, error) {
@@ -306,22 +316,31 @@ func (m *Manager) AddMetaInfo(mi *metainfo.MetaInfo, opts ...AddOption) (string,
 		return "", fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
 	hash := spec.InfoHash.HexString()
+	rec := &record{InfoHash: hash, Added: time.Now(), Order: newOrder()}
+	for _, o := range opts {
+		o(rec)
+	}
 	if m.exists(hash) {
+		m.mergeSource(hash, rec.rawFile, mi) // the file given again may say more than the one it was added from
 		return hash, nil
 	}
+	raw := rec.rawFile
+	rec.rawFile = nil
+	if src := parseSource(raw, mi); !src.empty() {
+		rec.Source = &src
+	} else {
+		rec.Source = &sourceMeta{} // it was added from a file that says nothing: not to be looked up again
+	}
 
-	if err := m.saveMeta(mi, hash); err != nil {
+	if err := m.saveMeta(mi, hash, raw); err != nil {
 		return "", err
 	}
-	copyPath, err := m.saveCopy(mi, hash)
+	copyPath, err := m.saveCopy(mi, hash, raw)
 	if err != nil {
 		_ = os.Remove(m.metaPath(hash))
 		return "", err
 	}
-	rec := &record{InfoHash: hash, CopyPath: copyPath, Added: time.Now(), Order: newOrder()}
-	for _, o := range opts {
-		o(rec)
-	}
+	rec.CopyPath = copyPath
 	m.applyAddPaused(rec)
 	if err := m.resolveSaveDir(rec); err != nil {
 		if copyPath != "" {
@@ -470,11 +489,11 @@ func (m *Manager) onMetadata(t *torrent.Torrent, hash string) {
 	})
 	if !m.hasMeta(hash) {
 		mi := t.Metainfo()
-		_ = m.saveMeta(&mi, hash)
+		_ = m.saveMeta(&mi, hash, nil)
 	}
 	if needCopy {
 		mi := t.Metainfo()
-		if p, err := m.saveCopy(&mi, hash); err == nil && p != "" {
+		if p, err := m.saveCopy(&mi, hash, nil); err == nil && p != "" {
 			if err := m.state.with(func(s *state) {
 				if r := s.Torrents[hash]; r != nil {
 					r.CopyPath = p
@@ -511,7 +530,7 @@ func (m *Manager) begin(t *torrent.Torrent, hash string) {
 }
 
 // saveCopy writes the .torrent copy to the configured folder and returns its path.
-func (m *Manager) saveCopy(mi *metainfo.MetaInfo, hash string) (string, error) {
+func (m *Manager) saveCopy(mi *metainfo.MetaInfo, hash string, raw []byte) (string, error) {
 	dir := m.cfg.Get().TorrentCopyDir
 	if dir == "" {
 		return "", nil
@@ -525,7 +544,7 @@ func (m *Manager) saveCopy(mi *metainfo.MetaInfo, hash string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := mi.Write(f); err != nil {
+	if err := writeTorrent(f, mi, raw); err != nil {
 		f.Close()
 		os.Remove(tmp)
 		return "", err

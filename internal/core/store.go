@@ -30,6 +30,8 @@ type record struct {
 	MaxConns       int          `json:"maxConns,omitempty"`      // connection limit of this torrent, 0 = the global setting
 	ExtraTrackers  []string     `json:"extraTrackers,omitempty"` // announce URLs the user added
 	SavePath       string       `json:"savePath,omitempty"`      // download folder of this torrent ("" = the default folder)
+	Source         *sourceMeta  `json:"source,omitempty"`        // what the .torrent file said: comment, creator, date, publisher page
+	rawFile        []byte       `json:"-"`                       // only while adding: the file as it was given
 	ManualPeers    []manualPeer `json:"manualPeers,omitempty"`   // peers the user added by hand: tried again after a restart
 	// A storage move that has started but not finished. It is written before the first file is
 	// touched and cleared when the move ends, so a crash or a forced kill in the middle leaves a
