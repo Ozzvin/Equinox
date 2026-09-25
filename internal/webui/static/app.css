@@ -223,6 +223,7 @@ tbody tr { user-select: none; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
 @media (min-width: 1000px) { .kv { grid-template-columns: 150px minmax(0, 1fr) 150px minmax(0, 1fr); gap: 6px 20px; } }
 .kv dd .btn { margin-left: 8px; }
+.kv dd #copy-magnet { margin-left: 0; } /* the edge of the button is the edge of the text above it */
 .kv dd:has(input) { word-break: normal; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .kv dd:has(input) .btn { margin-left: 0; }
 table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }

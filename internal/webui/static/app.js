@@ -563,6 +563,25 @@
   });
 
   const hostOf = (u) => { try { return new URL(u).host; } catch (_) { return u; } };
+  // Text with the web addresses in it made into links (only http and https, and "www." ones, which are taken as https);
+  // the rest is escaped as it is. The dot, comma or bracket that ends a sentence is not part of the address.
+  function linkify(text) {
+    let out = "", last = 0;
+    for (const m of String(text).matchAll(/(?:https?:\/\/|\bwww\.)[^\s<>"']+/gi)) {
+      let url = m[0];
+      for (;;) { // what closes the sentence, and a closing bracket the address did not open
+        const c = url[url.length - 1];
+        if (/[.,;:!?…»"]/.test(c) || (c === ")" && !url.includes("(")) || (c === "]" && !url.includes("[")) || c === "}") url = url.slice(0, -1); else break;
+      }
+      const href = /^www\./i.test(url) ? "https://" + url : url;
+      let ok = false;
+      try { ok = /^https?:$/.test(new URL(href).protocol); } catch (_) {}
+      if (!ok) continue;
+      out += esc(text.slice(last, m.index)) + `<a class="src-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer" title="${esc(href)}">${esc(url)}</a>`;
+      last = m.index + url.length;
+    }
+    return out + esc(String(text).slice(last));
+  }
   const when = (s) => (s && !s.startsWith("0001") ? new Date(s).toLocaleString("ru-RU") : "—");
   const SOURCES = { tracker: "Трекер", dht: "DHT", pex: "PEX", incoming: "Входящий", manual: "Вручную", other: "—" };
   // what each source means, for the tooltips of the "Источник" column
@@ -814,7 +833,7 @@
           <dt>Создана</dt><dd>${d.createdAt && !d.createdAt.startsWith("0001") ? when(d.createdAt) : "—"}${d.createdBy ? " · " + esc(d.createdBy) : ""}</dd>
           <dt>Тип</dt><dd>${d.private ? "Приватная" : "Публичная"}</dd>
           ${d.publisherUrl ? `<dt>Раздача на трекере</dt><dd><a class="src-link" href="${esc(d.publisherUrl)}" target="_blank" rel="noopener noreferrer" title="${esc(d.publisherUrl)}">${esc(d.publisher || hostOf(d.publisherUrl))} — открыть страницу раздачи</a></dd>` : ""}
-          ${d.comment ? `<dt>Комментарий</dt><dd class="src-comment">${esc(d.comment)}</dd>` : ""}
+          ${d.comment ? `<dt>Комментарий</dt><dd class="src-comment">${linkify(d.comment)}</dd>` : ""}
           <dt>Magnet-ссылка</dt><dd><button class="btn small" id="copy-magnet">Скопировать</button></dd></dl>`;
         $("copy-magnet").onclick = () => navigator.clipboard.writeText(d.magnet).then(() => toast("Magnet-ссылка скопирована"), () => toast("Не удалось скопировать", true));
       } else if (tab === "peers") {
@@ -2357,12 +2376,12 @@
     });
   });
 
-  // ---------- theme: dark (the default), light, or as in the system ----------
+  // ---------- theme: as in the system (the default), dark, or light ----------
   // <head> sets the attribute before the first paint; this keeps it in step with the choice and, for "as in
   // the system", with the system.
   const themeQuery = matchMedia("(prefers-color-scheme: dark)");
-  let theme = "dark";
-  try { const t = localStorage.getItem("uiTheme"); if (t === "light" || t === "system") theme = t; } catch (_) {}
+  let theme = "system";
+  try { const t = localStorage.getItem("uiTheme"); if (t === "light" || t === "dark") theme = t; } catch (_) {}
   function applyTheme() {
     const light = theme === "light" || (theme === "system" && !themeQuery.matches);
     document.documentElement.dataset.theme = light ? "light" : "dark";
@@ -2370,7 +2389,7 @@
     setTimeout(syncTitleBar, 60);
   }
   function setTheme(t) {
-    theme = t === "light" || t === "system" ? t : "dark";
+    theme = t === "light" || t === "dark" ? t : "system";
     try { localStorage.setItem("uiTheme", theme); } catch (_) {}
     applyTheme();
   }
