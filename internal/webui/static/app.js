@@ -370,9 +370,9 @@
   // A small joke: click the port dot several times in a row and it starts changing colours like a disco ball.
   // It goes on while the clicking goes on and for three seconds after the last click, then the dot is what it was.
   // Five quick clicks make the dot blink (disco). Five such blinks one after another, or 25 quick clicks, make the whole
-  // window blink (giga disco), in the same rhythm as the dot: ten seconds, or until Esc.
+  // window blink (giga disco), in the same rhythm as the dot: five seconds, or until Esc.
   let discoOn = false, discoClicks = 0, discoLast = 0, discoTimer = 0, discoRuns = 0, discoEnded = 0, gigaTimer = 0;
-  const GIGA_CLICKS = 25, GIGA_RUNS = 5, DISCO_RUN_GAP = 8000, GIGA_MS = 10000;
+  const GIGA_CLICKS = 25, GIGA_RUNS = 5, DISCO_RUN_GAP = 8000, GIGA_MS = 5000;
   // the colours of the dot's disco-dot, as hues for the filter (the same order: red, orange, yellow, green, blue, purple)
   const GIGA_HUES = [-38, 0, 22, 82, 200, 260];
   let gigaTick = 0;
