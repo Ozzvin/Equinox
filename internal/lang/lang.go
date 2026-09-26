@@ -78,7 +78,7 @@ var english = map[string]string{
 	"Режим «черепаха»":                            "Turtle mode",
 	"Запускать вместе с Windows":                  "Start with Windows",
 	"Запуск в трее при входе в систему":           "Start in the tray when you sign in",
-	"Сделать торрент-клиентом по умолчанию…":      "Make the default torrent client…",
+	"Сделать торрент-клиентом по умолчанию…":      "Make Equinox the default torrent client…",
 	"Выбрать Equinox в «Приложения по умолчанию»": "Choose Equinox in “Default apps”",
 	"Выход": "Exit",
 	"Остановить все раздачи и выйти": "Stop all torrents and exit",
