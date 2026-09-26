@@ -53,7 +53,8 @@ type Status struct {
 	Sequential    bool      `json:"sequential"`
 	HasMeta       bool      `json:"hasMetadata"`
 	CopyPath      string    `json:"copyPath,omitempty"`
-	Tracker       string    `json:"tracker"` // the name of its main tracker (see mainTracker), "" if it has none; for the filter by tracker
+	Tracker       string    `json:"tracker"`               // the name of its main tracker (see mainTracker), "" if it has none; for the filter by tracker
+	TrackerSite   string    `json:"trackerSite,omitempty"` // the site of that tracker, whose icon is the tracker's
 }
 
 // ---------------------------------------------------------------- speed limits
@@ -512,7 +513,7 @@ func (m *Manager) List() []Status {
 		} else if r.Source != nil {
 			announce = r.Source.Announce
 		}
-		st.Tracker = mainTracker(announce, t)
+		st.Tracker, st.TrackerSite = mainTracker(announce, t)
 		ts := t.Stats()
 		st.Peers, st.Seeds = ts.ActivePeers, ts.ConnectedSeeders
 		st.Ratio = ratio(r.Downloaded, r.Uploaded, st.Size)

@@ -254,7 +254,7 @@
     $("side-labels").innerHTML = labels.length === 0 ? "" :
       labels.map((l) => sideItem("l:" + l, esc(l), `<i class="tagdot lc-${labelColor(l)}"></i>`, torrents.filter((t) => t.label === l).length, filter.label === "l:" + l)).join("") +
       sideItem("none", "Без метки", '<i class="tagdot" style="opacity:.35"></i>', torrents.filter((t) => !t.label).length, filter.label === "none");
-    // the trackers of the torrents, the ones with most torrents first; a long list is folded after the first few
+    // the trackers of the torrents (with the icon of the site of each), the ones with most torrents first; a long list is folded after the first few
     const trs = trackerCounts();
     $("side-trackers-title").hidden = trs.length === 0; // (the torrents with no tracker are only shown next to some that have one)
     let shown = trs;
@@ -264,7 +264,7 @@
       const chosen = trs.find(([n]) => filter.tracker === "t:" + n);
       if (chosen && !shown.includes(chosen)) shown.push(chosen); // the one that is chosen is never folded away
     }
-    $("side-trackers").innerHTML = shown.map(([n, c]) => sideItem("t:" + n, esc(n), svg("i-globe"), c, filter.tracker === "t:" + n)).join("") +
+    $("side-trackers").innerHTML = shown.map(([n, c, site]) => sideItem("t:" + n, esc(n), trackerIcon(site, svg), c, filter.tracker === "t:" + n)).join("") +
       (foldable ? `<button class="side-item side-more" data-more="1"><span class="name">${trackersOpen ? "Свернуть" : "Ещё " + (trs.length - shown.length)}</span></button>` : "") +
       (trs.length && trackerless() ? sideItem("t:", "Без трекера", svg("i-globe"), trackerless(), filter.tracker === "t:") : "");
   }
@@ -274,9 +274,20 @@
   let trackersOpen = false, trackersKey = "";
   function trackerCounts() {
     const c = new Map();
-    for (const t of torrents) if (t.tracker) c.set(t.tracker, (c.get(t.tracker) || 0) + 1);
-    return [...c].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    for (const t of torrents) if (t.tracker) { const e = c.get(t.tracker) || [t.tracker, 0, t.trackerSite || ""]; e[1]++; c.set(t.tracker, e); }
+    return [...c.values()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])); // [name, number of torrents, site]
   }
+  // The icon of a tracker is the picture of its site, which the program fetches (and keeps); one that could not be loaded is a globe.
+  // The <img> cannot send the key in a header, so it is in the address, which the program accepts for this one thing.
+  const trackerIconGone = new Set();
+  function trackerIcon(site, svg) {
+    if (!site || trackerIconGone.has(site) || (settings && settings.trackerIcons === false)) return svg("i-globe");
+    return `<img class="tr-ico" src="/api/tracker-icon?site=${encodeURIComponent(site)}&token=${encodeURIComponent(token)}" alt="" width="16" height="16" data-site="${esc(site)}">`;
+  }
+  document.addEventListener("error", (e) => { // an image that did not load (the event does not bubble: heard on the way down)
+    const im = e.target;
+    if (im && im.classList && im.classList.contains("tr-ico") && !trackerIconGone.has(im.dataset.site)) { trackerIconGone.add(im.dataset.site); render(); }
+  }, true);
   const trackerless = () => torrents.filter((t) => !t.tracker).length; // in DHT only, say
   // the list of trackers for the narrow window and the compact density, where the side panel is not
   function renderTrackerFilter() {
@@ -2100,6 +2111,7 @@
     try { settings = await api("GET", "/api/settings"); port = await api("GET", "/api/port"); } catch (e) { return toast(e.message, true); }
     limitFillAll(ST_LIMIT_IDS, settings.speedUnit === "bits");
     for (const r of document.querySelectorAll('input[name="lg"]')) r.checked = r.value === window.__langPref;
+    $("st-trackericons").checked = settings.trackerIcons !== false;
 
     fillNetwork(settings.network || {});
     fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
@@ -2166,6 +2178,7 @@
       settings = await api("PUT", "/api/settings", {
         ...limitReadAll(ST_LIMIT_IDS), limitUnits: limitUnitsOf(ST_LIMIT_IDS),
         language: langChoice === "system" ? "" : langChoice, // the tray and the notifications of the program follow it
+        trackerIcons: $("st-trackericons").checked,
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),

@@ -123,6 +123,9 @@ type Settings struct {
 
 	// SpeedUnit is how speeds are shown: "bytes" (КБ/с, МБ/с) or "bits" (Кб/с, Мб/с).
 	SpeedUnit string `json:"speedUnit"`
+	// TrackerIcons lets the program fetch the icon of the site of each tracker (a request to that site), for the side panel.
+	TrackerIcons bool `json:"trackerIcons"`
+
 	// Language is the language of the interface: "" as in the system, "ru" or "en". The page keeps its own copy of the
 	// choice (it needs it before it can ask); this one is for what the program says itself, the tray and the notifications.
 	Language string `json:"language,omitempty"`
@@ -201,6 +204,7 @@ func Default(dir string) Settings {
 		EdgePieces:         4,
 		SequentialWindow:   16,
 		AutoUpdateCheck:    true,
+		TrackerIcons:       true,
 		UpdateCheckMinutes: DefaultUpdateCheckMinutes,
 	}
 }

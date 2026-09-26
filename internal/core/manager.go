@@ -54,6 +54,7 @@ type Manager struct {
 	cfg        *config.Store
 	state      *stateStore
 	stateDir   string
+	iconMu     sync.Mutex     // one fetch of a tracker's icon at a time (see TrackerIcon)
 	store      *store.Storage // the engine's file storage; kept to be told which files to trust
 	startNet   config.Network // connection settings the engine was started with
 	wantedPort int            // the port asked for at start; the engine may have had to use another

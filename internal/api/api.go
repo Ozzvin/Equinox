@@ -153,7 +153,7 @@ func (s *Server) hostAllowed(host string) bool {
 // may use ?token= on the stream URL.
 func (s *Server) authorised(r *http.Request) bool {
 	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if got == "" && strings.HasSuffix(r.URL.Path, "/stream") {
+	if got == "" && (strings.HasSuffix(r.URL.Path, "/stream") || r.URL.Path == "/api/tracker-icon") { // an <img> cannot set headers either
 		got = r.URL.Query().Get("token")
 	}
 	return subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) == 1
@@ -194,6 +194,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/stage", s.stage)
 	s.mux.HandleFunc("POST /api/stage-url", s.stageURL)
 	s.mux.HandleFunc("GET /api/changelog", s.changelog)
+	s.mux.HandleFunc("GET /api/tracker-icon", s.trackerIcon)
 	s.mux.HandleFunc("GET /api/stage/{id}", s.stagedInfo)
 	s.mux.HandleFunc("DELETE /api/stage/{id}", s.unstage)
 	s.mux.HandleFunc("GET /api/pending-add", s.pendingAdd)
@@ -549,6 +550,20 @@ func (s *Server) stage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, st)
 }
 
+// trackerIcon is the icon of a tracker's site, ?site=rutracker.org: an image, or 404 when the site has none (or icons are off).
+func (s *Server) trackerIcon(w http.ResponseWriter, r *http.Request) {
+	data, ctype, err := s.m.TrackerIcon(r.Context(), r.URL.Query().Get("site"))
+	if err != nil {
+		w.Header().Set("Cache-Control", "private, max-age=3600") // the page is not to ask again at once
+		fail(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	_, _ = w.Write(data)
+}
+
 // changelog is what each version changed, from the CHANGELOG.md the program carries: the newest first.
 func (s *Server) changelog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"current": buildinfo.Version, "releases": changelog.Parse(equinox.Changelog)})
@@ -817,6 +832,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		SeedTimeLimit    *int                `json:"seedTimeLimitMinutes"` // optional: omitted = unchanged
 		NotifyOnComplete *bool               `json:"notifyOnComplete"`     // optional
 		AutoUpdateCheck  *bool               `json:"autoUpdateCheck"`      // optional
+		TrackerIcons     *bool               `json:"trackerIcons"`         // optional
 		UpdateEvery      *int                `json:"updateCheckMinutes"`   // optional
 		StartHidden      *bool               `json:"startHidden"`          // optional
 		SetupDone        *bool               `json:"setupDone"`            // optional
@@ -960,6 +976,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.NotifyOnComplete != nil {
 			c.NotifyOnComplete = *b.NotifyOnComplete
+		}
+		if b.TrackerIcons != nil {
+			c.TrackerIcons = *b.TrackerIcons
 		}
 		if b.AutoUpdateCheck != nil {
 			c.AutoUpdateCheck = *b.AutoUpdateCheck
