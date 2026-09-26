@@ -747,6 +747,20 @@ html[data-density="large"] #peer-count { margin-bottom: 10px; }
 .upd-notes li { margin: 6px 0; }
 .upd-notes h4 { margin: 12px 0 4px; font-size: 13.5px; }
 .upd-notes a { color: var(--accent); }
+/* the changelog on the Updates page: a folded line for each version */
+.cl { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+.cl-item + .cl-item { border-top: 1px solid var(--line); }
+.cl-item summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none; user-select: none; }
+.cl-item summary::-webkit-details-marker { display: none; }
+.cl-item summary::before { content: "▸"; width: 10px; font-size: 11px; color: var(--muted); transition: transform .15s; }
+.cl-item[open] summary::before { transform: rotate(90deg); }
+.cl-item summary:hover { background: var(--hover); }
+.cl-body { padding: 0 14px 8px 30px; font-size: 13.5px; line-height: 1.5; }
+.cl-body p { margin: 6px 0; }
+.cl-body ul { margin: 6px 0; padding-left: 18px; }
+.cl-body li { margin: 5px 0; }
+.cl-body a { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .cl-item summary::before { transition: none; } }
 .upd-info a.btn { text-decoration: none; }
 
 /* the tracker page and the comment of a torrent, in its details */

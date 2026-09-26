@@ -337,6 +337,7 @@
         <button type="button" role="tab" data-sec="network" aria-selected="false">Сеть</button>
         <button type="button" role="tab" data-sec="view" aria-selected="false">Интерфейс</button>
         <button type="button" role="tab" data-sec="system" aria-selected="false" hidden id="sn-system">Системные</button>
+        <button type="button" role="tab" data-sec="updates" aria-selected="false">Обновления</button>
         <button type="button" role="tab" data-sec="about" aria-selected="false">О приложении</button>
       </nav>
       <div class="set-panes">
@@ -523,6 +524,28 @@
           <label class="check"><input type="checkbox" id="st-notify"><span>Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label>
         </fieldset>
       </section>
+      <section class="set-pane" role="tabpanel" data-sec="updates" hidden>
+        <fieldset>
+          <legend>Проверка обновлений</legend>
+          <label class="check"><input type="checkbox" id="st-autoupdate"><span>Проверять обновления автоматически</span></label>
+          <label>Период проверки, минут<input type="number" min="5" max="20160" step="1" id="st-updevery"></label>
+          <p class="muted small">От 5 минут до 14 суток, по умолчанию 60. Первая проверка — вскоре после запуска.</p>
+          <div class="row-end" style="margin:8px 0">
+            <button type="button" class="btn small" id="ab-check-update" style="margin-right:auto">Проверить обновления</button>
+            <span class="muted small" id="ab-update-status"></span>
+          </div>
+          <div id="ab-update-box" hidden>
+            <p class="small" id="ab-update-text"></p>
+            <button type="button" class="btn small primary" id="ab-update-install" hidden>Что нового и установить…</button>
+            <a class="btn small" id="ab-update-link" href="#" target="_blank" rel="noopener" hidden>Скачать со страницы релиза</a>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>История изменений</legend>
+          <p class="muted small">Что менялось в каждой версии. Нажмите на версию, чтобы развернуть.</p>
+          <div class="cl" id="up-log" data-notr></div>
+        </fieldset>
+      </section>
       <section class="set-pane" role="tabpanel" data-sec="about" hidden>
         <div class="about-head">
           <svg viewBox="0 0 32 32" width="48" height="48" aria-hidden="true" role="img" aria-label="Equinox"><rect width="32" height="32" rx="6.5" fill="#1b2130"/><g transform="rotate(-23.4 16 16)"><path d="M5.25 16A10.75 10.75 0 0 1 26.75 16Z" fill="#f0a63c"/><path d="M5.25 17A10.75 10.75 0 0 0 26.75 17Z" fill="#f4f5f8"/><circle cx="16" cy="9.5" r="1.625" fill="#1b2130"/><circle cx="16" cy="23.5" r="1.625" fill="#1b2130"/></g></svg>
@@ -539,21 +562,6 @@
           <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/LICENSE" target="_blank" rel="noopener">Лицензия MIT</a>
           <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Журнал изменений</a>
         </div>
-        <fieldset>
-          <legend>Обновления</legend>
-          <label class="check"><input type="checkbox" id="st-autoupdate"><span>Проверять обновления автоматически</span></label>
-          <label>Период проверки, минут<input type="number" min="5" max="20160" step="1" id="st-updevery"></label>
-          <p class="muted small">От 5 минут до 14 суток, по умолчанию 60. Первая проверка — вскоре после запуска.</p>
-          <div class="row-end" style="margin:8px 0">
-            <button type="button" class="btn small" id="ab-check-update" style="margin-right:auto">Проверить обновления</button>
-            <span class="muted small" id="ab-update-status"></span>
-          </div>
-          <div id="ab-update-box" hidden>
-            <p class="small" id="ab-update-text"></p>
-            <button type="button" class="btn small primary" id="ab-update-install" hidden>Что нового и установить…</button>
-            <a class="btn small" id="ab-update-link" href="#" target="_blank" rel="noopener" hidden>Скачать со страницы релиза</a>
-          </div>
-        </fieldset>
       </section>
       </div>
     </div>

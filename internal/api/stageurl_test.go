@@ -68,3 +68,25 @@ func TestStageByLink(t *testing.T) {
 		t.Errorf("without the key: %d", r.StatusCode)
 	}
 }
+
+func TestChangelogEndpoint(t *testing.T) {
+	e := setup(t)
+	r := e.do(t, "GET", "/api/changelog", nil, nil)
+	defer r.Body.Close()
+	var out struct {
+		Current  string `json:"current"`
+		Releases []struct {
+			Version string `json:"version"`
+			Body    string `json:"body"`
+		} `json:"releases"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&out); err != nil || r.StatusCode != http.StatusOK {
+		t.Fatalf("%d %v", r.StatusCode, err)
+	}
+	if len(out.Releases) == 0 || out.Releases[0].Version == "" || out.Releases[0].Body == "" {
+		t.Fatalf("the changelog the program carries: %+v", out.Releases)
+	}
+	if r := e.do(t, "GET", "/api/changelog", nil, map[string]string{"Authorization": "Bearer wrong"}); r.StatusCode != http.StatusUnauthorized {
+		t.Errorf("without the key: %d", r.StatusCode)
+	}
+}

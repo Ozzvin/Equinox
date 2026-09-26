@@ -20,6 +20,9 @@ import (
 
 	"github.com/anacrolix/torrent/metainfo"
 
+	equinox "github.com/Ozzvin/equinox"
+	"github.com/Ozzvin/equinox/internal/buildinfo"
+	"github.com/Ozzvin/equinox/internal/changelog"
 	"github.com/Ozzvin/equinox/internal/config"
 	"github.com/Ozzvin/equinox/internal/core"
 )
@@ -190,6 +193,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/fs/mkdir", s.fsMkdir)
 	s.mux.HandleFunc("POST /api/stage", s.stage)
 	s.mux.HandleFunc("POST /api/stage-url", s.stageURL)
+	s.mux.HandleFunc("GET /api/changelog", s.changelog)
 	s.mux.HandleFunc("GET /api/stage/{id}", s.stagedInfo)
 	s.mux.HandleFunc("DELETE /api/stage/{id}", s.unstage)
 	s.mux.HandleFunc("GET /api/pending-add", s.pendingAdd)
@@ -543,6 +547,11 @@ func (s *Server) stage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, st)
+}
+
+// changelog is what each version changed, from the CHANGELOG.md the program carries: the newest first.
+func (s *Server) changelog(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"current": buildinfo.Version, "releases": changelog.Parse(equinox.Changelog)})
 }
 
 // stageURL downloads the .torrent a link leads to and puts it on the list like a file that was uploaded:

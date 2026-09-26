@@ -2006,6 +2006,7 @@
     id = btn.dataset.sec;
     for (const b of btns) { b.setAttribute("aria-selected", b === btn); b.tabIndex = b === btn ? 0 : -1; }
     for (const p of document.querySelectorAll("#dlg-settings .set-pane")) p.hidden = p.dataset.sec !== id;
+    if (id === "updates") loadChangelog();
     try { localStorage.setItem("setSection", id); } catch (_) {}
   }
   $("set-nav").addEventListener("click", (e) => { const b = e.target.closest("[data-sec]"); if (b) showSection(b.dataset.sec); });
@@ -2041,6 +2042,15 @@
     loadAbout();
     $("st-err").hidden = true; $("dlg-settings").showModal();
   };
+  // The changelog of the program (the CHANGELOG.md it carries, in Russian): each version is folded, and opens on a click.
+  let changelogShown = false;
+  async function loadChangelog() {
+    if (changelogShown) return;
+    let d;
+    try { d = await api("GET", "/api/changelog"); } catch (_) { $("up-log").innerHTML = `<p class="muted small" style="padding:8px 12px">${L("Не удалось загрузить", "Could not load")}</p>`; return; }
+    changelogShown = true;
+    $("up-log").innerHTML = (d.releases || []).map((r) => `<details class="cl-item"><summary><b>${esc(r.version)}</b>${r.version === d.current ? `<span class="badge">${L("установлена", "installed")}</span>` : ""}</summary><div class="cl-body">${mdLite(r.body)}</div></details>`).join("");
+  }
   // "О приложении": fetched once and cached, since it never changes while the app is running.
   let aboutInfo = null;
   async function loadAbout() {
