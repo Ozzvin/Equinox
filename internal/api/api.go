@@ -189,6 +189,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/fs", s.fsList)
 	s.mux.HandleFunc("POST /api/fs/mkdir", s.fsMkdir)
 	s.mux.HandleFunc("POST /api/stage", s.stage)
+	s.mux.HandleFunc("POST /api/stage-url", s.stageURL)
 	s.mux.HandleFunc("GET /api/stage/{id}", s.stagedInfo)
 	s.mux.HandleFunc("DELETE /api/stage/{id}", s.unstage)
 	s.mux.HandleFunc("GET /api/pending-add", s.pendingAdd)
@@ -534,6 +535,34 @@ func (s *Server) stage(w http.ResponseWriter, r *http.Request) {
 	mi, err := metainfo.Load(bytes.NewReader(raw))
 	if err != nil {
 		fail(w, errors.Join(core.ErrInvalidInput, err))
+		return
+	}
+	st, err := s.m.Stage(mi, raw)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, st)
+}
+
+// stageURL downloads the .torrent a link leads to and puts it on the list like a file that was uploaded:
+// {"url": "https://…/file.torrent"}.
+func (s *Server) stageURL(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		URL string `json:"url"`
+	}
+	if err := decode(r, &b); err != nil {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	raw, err := core.FetchTorrent(r.Context(), b.URL)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	mi, err := metainfo.Load(bytes.NewReader(raw))
+	if err != nil {
+		fail(w, &core.CodedError{Code: "url.not_torrent", Msg: "по ссылке лежит не файл .torrent", Err: core.ErrInvalidInput})
 		return
 	}
 	st, err := s.m.Stage(mi, raw)

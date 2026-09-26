@@ -155,7 +155,7 @@
   <div class="ad-list" id="ad-list" role="listbox" aria-label="Раздачи, которые будут добавлены"></div>
   <div class="ad-buttons">
     <button type="button" class="btn" id="ad-file"><svg class="i"><use href="#i-newfile"/></svg><span>Файлы .torrent…</span></button>
-    <button type="button" class="btn" id="ad-links"><svg class="i"><use href="#i-tag"/></svg><span>Magnet / infohash…</span></button>
+    <button type="button" class="btn" id="ad-links" title="Magnet-ссылки, infohash и ссылки на .torrent"><svg class="i"><use href="#i-tag"/></svg><span>Ссылки…</span></button>
     <button type="button" class="btn" id="ad-remove" disabled>Убрать из списка</button>
     <input type="file" id="ad-fileinput" accept=".torrent,application/x-bittorrent" multiple hidden>
   </div>
@@ -199,11 +199,12 @@
 
 <!-- Ссылки и infohash -->
 <dialog id="dlg-links">
-  <h2>Magnet-ссылки и infohash</h2>
+  <h2>Magnet-ссылки, infohash и ссылки на .torrent</h2>
   <label>По одной в строке
-    <textarea id="lk-text" rows="6" spellcheck="false" placeholder="magnet:?xt=urn:btih:…&#10;0123456789abcdef0123456789abcdef01234567"></textarea>
+    <textarea id="lk-text" rows="6" spellcheck="false" placeholder="magnet:?xt=urn:btih:…&#10;0123456789abcdef0123456789abcdef01234567&#10;https://example.org/file.torrent"></textarea>
   </label>
-  <p class="err" id="lk-err" hidden></p>
+  <p class="muted small">Ссылка на .torrent должна вести прямо на файл и открываться без входа на сайт. Программа скачает файл и покажет его в списке, как выбранный с диска.</p>
+  <p class="err" id="lk-err" hidden style="white-space: pre-line"></p>
   <div class="row-end">
     <button type="button" class="btn" data-close>Отмена</button>
     <button type="button" class="btn primary" id="lk-ok">В список</button>

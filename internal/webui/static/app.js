@@ -1728,7 +1728,7 @@
   function renderAdd() {
     const n = adItems.length;
     $("ad-title").textContent = `Добавить раздачи (${n})`;
-    $("ad-list").innerHTML = n === 0 ? '<div class="none">Список пуст. Добавьте .torrent файлы, magnet-ссылки или infohash.</div>' :
+    $("ad-list").innerHTML = n === 0 ? '<div class="none">Список пуст. Добавьте .torrent файлы, ссылки (magnet или на .torrent) или infohash.</div>' :
       adItems.map((e, i) => `<div class="ad-row" role="option" data-i="${i}" aria-selected="${i === adSel}">
         <span class="nm" title="${esc(e.name)}">${esc(e.name)}</span>
         ${e.kind === "magnet" ? '<span class="badge">magnet</span>' : e.kind === "hash" ? '<span class="badge">infohash</span>' : ""}
@@ -1835,9 +1835,32 @@
     adItems.splice(adSel, 1); adSel = Math.min(adSel, adItems.length - 1); renderAdd();
   };
   $("ad-links").onclick = () => { $("lk-text").value = ""; $("lk-err").hidden = true; $("dlg-links").showModal(); $("lk-text").focus(); };
-  $("lk-ok").onclick = () => {
-    const bad = addLinks($("lk-text").value);
-    if (bad.length) { $("lk-err").textContent = `Не похоже на magnet-ссылку или infohash: ${bad.join("; ")}`; $("lk-err").hidden = false; renderAdd(); return; }
+  // A line that is a web address leads to a .torrent file: the program downloads it and it goes on the list as a file that
+  // was chosen. The magnets and infohashes are put on the list first; a link that could not be downloaded stays in the
+  // text with the reason, so the rest is not added twice when it is sent again.
+  const isWebLink = (l) => /^https?:\/\//i.test(l);
+  $("lk-ok").onclick = async () => {
+    const lines = $("lk-text").value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const links = lines.filter(isWebLink);
+    const bad = addLinks(lines.filter((l) => !isWebLink(l)).join("\n"));
+    if (bad.length) { $("lk-err").textContent = `Не похоже на ссылку или infohash: ${bad.join("; ")}`; $("lk-err").hidden = false; renderAdd(); return; }
+    const failed = [], left = [];
+    if (links.length) {
+      const ok = $("lk-ok"), label = ok.textContent;
+      ok.disabled = true; ok.textContent = "Загружаю…";
+      try {
+        for (const link of links) {
+          try {
+            const st = await api("POST", "/api/stage-url", { url: link });
+            if (adItems.some((x) => x.hash === st.hash)) { api("DELETE", `/api/stage/${st.id}`).catch(() => {}); continue; } // already on the list
+            adItems.push({ kind: "file", name: st.name, size: st.size, hash: st.hash, exists: st.exists, stage: st.id, files: st.files || [],
+              sel: (st.files || []).map(() => true), open: null, opts: optDefaults(), error: "" });
+            adSel = adItems.length - 1;
+          } catch (x) { failed.push(`${link.length > 70 ? link.slice(0, 70) + "…" : link}\n${x.message}`); left.push(link); }
+        }
+      } finally { ok.disabled = false; ok.textContent = label; }
+    }
+    if (failed.length) { $("lk-text").value = left.join("\n"); $("lk-err").textContent = failed.join("\n"); $("lk-err").hidden = false; renderAdd(); return; }
     $("dlg-links").close(); renderAdd();
   };
   $("ad-opts").addEventListener("input", readOpts);
