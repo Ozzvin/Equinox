@@ -25,6 +25,7 @@ window.__i18nEn = [
   ["В очереди", "Queued"],
   ["Все метки", "All labels"],
   ["Все трекеры", "All trackers"],
+  ["Без трекера", "No tracker"],
   ["Ещё {}", "{} more"],
   ["Свернуть", "Show less"],
   ["Поиск по названию", "Search by name"],

@@ -3,13 +3,12 @@ package core
 import (
 	"net/netip"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/anacrolix/torrent"
 )
 
-// The list of torrents can be filtered by tracker. A tracker is named the way people call it, from the address of its
+// The list of torrents can be filtered by tracker: each torrent belongs to its main one. A tracker is named the way people call it, from the address of its
 // announce: "http://bt.t-ru.org/ann?magnet" is "rutracker", "udp://tracker.opentrackr.org:1337/announce" is
 // "opentrackr". Only the host is used: an announce address of a private tracker holds the person's key.
 
@@ -55,26 +54,19 @@ func TrackerName(announce string) string {
 	return labels[n-2]
 }
 
-// trackerNames are the trackers of a torrent, each once, in the order of their names: the ones in the torrent itself and
-// the ones the person added.
-func trackerNames(t *torrent.Torrent, extra []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	add := func(announce string) {
-		if name := TrackerName(announce); name != "" && !seen[name] {
-			seen[name] = true
-			out = append(out, name)
-		}
+// mainTracker is the name of the tracker a torrent belongs to: the one its file names as the main one (the "announce" key,
+// kept when the file was added); with no such key, or for a magnet link, the first tracker of its list.
+func mainTracker(announce string, t *torrent.Torrent) string {
+	if name := TrackerName(announce); name != "" {
+		return name
 	}
 	mi := t.Metainfo()
 	for _, tier := range mi.UpvertedAnnounceList() {
 		for _, u := range tier {
-			add(u)
+			if name := TrackerName(u); name != "" {
+				return name
+			}
 		}
 	}
-	for _, u := range extra {
-		add(u)
-	}
-	sort.Strings(out)
-	return out
+	return ""
 }

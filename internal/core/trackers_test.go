@@ -1,8 +1,11 @@
 package core
 
 import (
-	"reflect"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 func TestTrackerName(t *testing.T) {
@@ -29,32 +32,47 @@ func TestTrackerName(t *testing.T) {
 	}
 }
 
-// The trackers of a torrent, each once, are in its status: from a magnet link before the metadata is there, and the ones
-// the person added later.
-func TestListShowsTheTrackers(t *testing.T) {
-	m := newManager(t, t.TempDir(), nil)
+// A torrent belongs to its main tracker: the "announce" of its file, or, with none (a magnet link), the first of its list.
+func TestListShowsTheMainTracker(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
 	defer m.Close()
-	hash, err := m.AddMagnet("magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"+
-		"&tr=http%3A%2F%2Fbt.t-ru.org%2Fann%3Fmagnet&tr=http%3A%2F%2Fbt2.t-ru.org%2Fann&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce", WithPaused())
-	if err != nil {
-		t.Fatal(err)
-	}
-	find := func() Status {
+	tracker := func(hash string) string {
 		for _, st := range m.List() {
 			if st.Hash == hash {
-				return st
+				return st.Tracker
 			}
 		}
 		t.Fatal("the torrent is not in the list")
-		return Status{}
+		return ""
 	}
-	if got, want := find().Trackers, []string{"opentrackr", "rutracker"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("trackers of the magnet: %v, want %v", got, want)
-	}
-	if err := m.AddTracker(hash, "http://tapochek.net/announce.php"); err != nil {
+	// a magnet link: the first tracker, whatever follows
+	hash, err := m.AddMagnet("magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"+
+		"&tr=http%3A%2F%2Fbt.t-ru.org%2Fann%3Fmagnet&tr=http%3A%2F%2Ftapochek.net%2Fannounce.php&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce", WithPaused())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := find().Trackers, []string{"opentrackr", "rutracker", "tapochek"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("trackers after adding one: %v, want %v", got, want)
+	if got := tracker(hash); got != "rutracker" {
+		t.Fatalf("the main tracker of the magnet: %q", got)
+	}
+	// a file: its "announce", even when the list names other trackers first
+	mi, err := metainfo.LoadFromFile(makeTorrent(t, dir, "film.bin", 40<<10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mi.Announce = "http://tapochek.net/announce.php?uk=SECRET"
+	mi.AnnounceList = [][]string{{"udp://tracker.opentrackr.org:1337/announce"}, {"http://tapochek.net/announce.php?uk=SECRET"}}
+	withAnnounce := filepath.Join(dir, "with-announce.torrent")
+	f, _ := os.Create(withAnnounce)
+	if err := mi.Write(f); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	hash, err = m.AddFile(withAnnounce, WithPaused())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tracker(hash); got != "tapochek" {
+		t.Fatalf("the main tracker of the file: %q, want the one of its announce", got)
 	}
 }

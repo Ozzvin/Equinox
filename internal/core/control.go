@@ -53,7 +53,7 @@ type Status struct {
 	Sequential    bool      `json:"sequential"`
 	HasMeta       bool      `json:"hasMetadata"`
 	CopyPath      string    `json:"copyPath,omitempty"`
-	Trackers      []string  `json:"trackers"` // the names of its trackers (see TrackerName), for the filter by tracker
+	Tracker       string    `json:"tracker"` // the name of its main tracker (see mainTracker), "" if it has none; for the filter by tracker
 }
 
 // ---------------------------------------------------------------- speed limits
@@ -506,7 +506,13 @@ func (m *Manager) List() []Status {
 			// waiting for a free slot to have its local files checked: the size is known, the info is not handed over yet
 			st.CheckQueued, st.Size, st.TotalSize = pos, size, size
 		}
-		st.Trackers = trackerNames(t, r.ExtraTrackers)
+		announce := ""
+		if st.HasMeta { // what the file says is main (read once, then it stays in the record)
+			announce = m.sourceOf(st.Hash, r).Announce
+		} else if r.Source != nil {
+			announce = r.Source.Announce
+		}
+		st.Tracker = mainTracker(announce, t)
 		ts := t.Stats()
 		st.Peers, st.Seeds = ts.ActivePeers, ts.ConnectedSeeders
 		st.Ratio = ratio(r.Downloaded, r.Uploaded, st.Size)

@@ -221,7 +221,7 @@
   function matches(t, over) {
     const f = over ? { q: "", label: "", tracker: "", state: "", ...over } : filter;
     if (f.q && !(t.name || t.hash).toLowerCase().includes(f.q.toLowerCase())) return false;
-    if (f.tracker && !(t.trackers || []).includes(f.tracker.slice(2))) return false; // "t:<name of the tracker>"
+    if (f.tracker && (t.tracker || "") !== f.tracker.slice(2)) return false; // "t:<name of the main tracker>", "t:" for none
     if (f.label === "none") { if (t.label) return false; }
     else if (f.label.startsWith("l:") && t.label !== f.label.slice(2)) return false;
     switch (f.state) {
@@ -256,7 +256,7 @@
       sideItem("none", "Без метки", '<i class="tagdot" style="opacity:.35"></i>', torrents.filter((t) => !t.label).length, filter.label === "none");
     // the trackers of the torrents, the ones with most torrents first; a long list is folded after the first few
     const trs = trackerCounts();
-    $("side-trackers-title").hidden = trs.length === 0;
+    $("side-trackers-title").hidden = trs.length === 0; // (the torrents with no tracker are only shown next to some that have one)
     let shown = trs;
     const foldable = trs.length > TRACKERS_SHOWN + 1;
     if (foldable && !trackersOpen) {
@@ -265,25 +265,29 @@
       if (chosen && !shown.includes(chosen)) shown.push(chosen); // the one that is chosen is never folded away
     }
     $("side-trackers").innerHTML = shown.map(([n, c]) => sideItem("t:" + n, esc(n), svg("i-globe"), c, filter.tracker === "t:" + n)).join("") +
-      (foldable ? `<button class="side-item side-more" data-more="1"><span class="name">${trackersOpen ? "Свернуть" : "Ещё " + (trs.length - shown.length)}</span></button>` : "");
+      (foldable ? `<button class="side-item side-more" data-more="1"><span class="name">${trackersOpen ? "Свернуть" : "Ещё " + (trs.length - shown.length)}</span></button>` : "") +
+      (trs.length && trackerless() ? sideItem("t:", "Без трекера", svg("i-globe"), trackerless(), filter.tracker === "t:") : "");
   }
-  // trackers of the torrents with the number of torrents of each: [[name, count]…], the biggest first
+  // The main trackers of the torrents with the number of torrents of each: [[name, count]…], the biggest first. A torrent
+  // belongs to one, the tracker its file names as the main one.
   const TRACKERS_SHOWN = 8;
   let trackersOpen = false, trackersKey = "";
   function trackerCounts() {
     const c = new Map();
-    for (const t of torrents) for (const n of t.trackers || []) c.set(n, (c.get(n) || 0) + 1);
+    for (const t of torrents) if (t.tracker) c.set(t.tracker, (c.get(t.tracker) || 0) + 1);
     return [...c].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }
+  const trackerless = () => torrents.filter((t) => !t.tracker).length; // in DHT only, say
   // the list of trackers for the narrow window and the compact density, where the side panel is not
   function renderTrackerFilter() {
     const names = trackerCounts().map(([n]) => n).sort((a, b) => a.localeCompare(b));
-    const key = names.join("\u0001");
+    const none = names.length && trackerless() > 0;
+    const key = names.join("\u0001") + (none ? "\u0001-" : "");
     if (key !== trackersKey) {
       trackersKey = key;
-      $("f-tracker").innerHTML = `<option value="">Все трекеры</option>` + names.map((n) => `<option value="t:${esc(n)}">${esc(n)}</option>`).join("");
+      $("f-tracker").innerHTML = `<option value="">Все трекеры</option>` + names.map((n) => `<option value="t:${esc(n)}">${esc(n)}</option>`).join("") + (none ? `<option value="t:">Без трекера</option>` : "");
     }
-    if (dataLoaded && filter.tracker && !names.includes(filter.tracker.slice(2))) { filter.tracker = ""; saveFilter(); } // the last torrent of it went away
+    if (dataLoaded && filter.tracker && (filter.tracker === "t:" ? !none : !names.includes(filter.tracker.slice(2)))) { filter.tracker = ""; saveFilter(); } // the last torrent of it went away
     $("f-tracker").value = filter.tracker;
   }
 

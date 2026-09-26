@@ -23,6 +23,7 @@ type sourceMeta struct {
 	CreatedAt    int64  `json:"createdAt,omitempty"` // Unix time
 	Publisher    string `json:"publisher,omitempty"`
 	PublisherURL string `json:"publisherUrl,omitempty"` // an http(s) address, nothing else
+	Announce     string `json:"announce,omitempty"`     // the main tracker of the file: its "announce" key
 }
 
 func (s sourceMeta) empty() bool { return s == sourceMeta{} }
@@ -38,6 +39,7 @@ func engineMade(comment, createdBy string) bool {
 func parseSource(raw []byte, mi *metainfo.MetaInfo) sourceMeta {
 	var s sourceMeta
 	if mi != nil {
+		s.Announce = strings.TrimSpace(mi.Announce)
 		s.Comment, s.CreatedBy = mi.Comment, mi.CreatedBy
 		if mi.CreationDate > 0 {
 			s.CreatedAt = mi.CreationDate
@@ -63,13 +65,16 @@ func parseSource(raw []byte, mi *metainfo.MetaInfo) sourceMeta {
 			if c := str("created by.utf-8", "created by"); c != "" {
 				s.CreatedBy = c
 			}
+			if a := str("announce"); a != "" {
+				s.Announce = a
+			}
 			s.Publisher = str("publisher.utf-8", "publisher")
 			s.PublisherURL = webAddress(str("publisher-url.utf-8", "publisher-url"))
 		}
 	}
 	s.Comment, s.CreatedBy = strings.TrimSpace(s.Comment), strings.TrimSpace(s.CreatedBy)
 	if engineMade(s.Comment, s.CreatedBy) {
-		s = sourceMeta{Publisher: s.Publisher, PublisherURL: s.PublisherURL}
+		s = sourceMeta{Publisher: s.Publisher, PublisherURL: s.PublisherURL, Announce: s.Announce}
 	}
 	return s
 }
@@ -166,6 +171,9 @@ func (m *Manager) mergeSource(hash string, raw []byte, mi *metainfo.MetaInfo) {
 		}
 		if cur.PublisherURL == "" {
 			cur.PublisherURL = add.PublisherURL
+		}
+		if cur.Announce == "" {
+			cur.Announce = add.Announce
 		}
 	})
 }
