@@ -33,13 +33,33 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+; Язык установщика выбирается по языку Windows (русский, иначе английский); окно выбора языка показывается, только
+; если язык Windows не подошёл ни к одному. При обновлении (в том числе тихом, из самой программы) остаётся язык,
+; выбранный при прошлой установке. Первым стоит английский: он и запасной вариант.
+ShowLanguageDialog=auto
+LanguageDetectionMethod=uilanguage
+UsePreviousLanguage=yes
 
 [Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
+; Тексты, которых нет в стандартных файлах языков.
+[CustomMessages]
+english.TaskDesktopIcon=Desktop icon
+russian.TaskDesktopIcon=Значок на рабочем столе
+english.TaskGroupShortcuts=Shortcuts:
+russian.TaskGroupShortcuts=Ярлыки:
+english.TaskAutostart=Start with Windows (minimized to the tray)
+russian.TaskAutostart=Запускать вместе с Windows (сворачиваться в трей)
+english.TaskGroupStartup=Startup:
+russian.TaskGroupStartup=Запуск:
+english.UninstallDataPrompt=Also delete the settings, the list of torrents and the downloaded files from the folder:%n%1%nIf you click "No", they are kept and will be found at the next install.
+russian.UninstallDataPrompt=Удалить также настройки, список раздач и скачанные файлы из папки:%n%1%nЕсли нажать «Нет», они сохранятся и будут найдены при следующей установке.
+
 [Tasks]
-Name: "desktopicon"; Description: "Значок на рабочем столе"; GroupDescription: "Ярлыки:"; Flags: unchecked
-Name: "autostart"; Description: "Запускать вместе с Windows (сворачиваться в трей)"; GroupDescription: "Запуск:"
+Name: "desktopicon"; Description: "{cm:TaskDesktopIcon}"; GroupDescription: "{cm:TaskGroupShortcuts}"; Flags: unchecked
+Name: "autostart"; Description: "{cm:TaskAutostart}"; GroupDescription: "{cm:TaskGroupStartup}"
 
 [Files]
 Source: "..\dist\Equinox.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -58,7 +78,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: 
 ; The normal, interactive install: an unchecked-by-default box on the finish page. A silent
 ; install has no finish page, so a "postinstall" entry never runs there regardless of
 ; skipifsilent; the flag is kept anyway to document that this one is for interactive use only.
-Filename: "{app}\Equinox.exe"; Description: "Запустить Equinox"; Flags: nowait postinstall skipifsilent; Check: not IsAutoUpdate
+Filename: "{app}\Equinox.exe"; Description: "{cm:LaunchProgram,Equinox}"; Flags: nowait postinstall skipifsilent; Check: not IsAutoUpdate
 ; The app's own auto-update (internal/update) runs Setup with /VERYSILENT /autoupdate=1: this
 ; entry reopens Equinox once the silent install finishes. It needs no "postinstall" (there is
 ; no finish page to skip it from) and runasoriginaluser keeps it from launching as
@@ -152,8 +172,7 @@ begin
       Found := Found + Candidates[I] + #13#10;
   if Found = '' then Exit;
   if UninstallSilent then Exit;
-  if MsgBox('Удалить также настройки, список раздач и скачанные файлы из папки:' + #13#10 + Found + #13#10 +
-            'Если нажать «Нет», они сохранятся и будут найдены при следующей установке.',
+  if MsgBox(FmtMessage(CustomMessage('UninstallDataPrompt'), [Found]),
             mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
     for I := 0 to GetArrayLength(Candidates) - 1 do
       DelTree(Candidates[I], True, True, True);
