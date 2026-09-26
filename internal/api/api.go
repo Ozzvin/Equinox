@@ -779,6 +779,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		AddPaused        *bool               `json:"addPaused"`            // optional
 		SpeedUnit        *string             `json:"speedUnit"`            // optional: bytes | bits
 		LimitUnits       *map[string]string  `json:"limitUnits"`           // optional: omitted = unchanged
+		Language         *string             `json:"language"`             // optional: "" (as in the system) | ru | en
 		MaxActive        int                 `json:"maxActiveDownloads"`
 		MaxSeeds         *int                `json:"maxActiveSeeds"` // optional: omitted = unchanged
 		AltSchedule      *config.AltSchedule `json:"altSchedule"`    // optional: omitted = unchanged
@@ -800,7 +801,8 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		(b.MaxChecks != nil && (*b.MaxChecks < 0 || *b.MaxChecks > 64)) ||
 		(b.MaxSeeds != nil && (*b.MaxSeeds < 0 || *b.MaxSeeds > 100000)) ||
 		(b.UpdateEvery != nil && (*b.UpdateEvery < config.MinUpdateCheckMinutes || *b.UpdateEvery > config.MaxUpdateCheckMinutes)) ||
-		(b.SpeedUnit != nil && *b.SpeedUnit != "bytes" && *b.SpeedUnit != "bits") {
+		(b.SpeedUnit != nil && *b.SpeedUnit != "bytes" && *b.SpeedUnit != "bits") ||
+		(b.Language != nil && *b.Language != "" && *b.Language != "ru" && *b.Language != "en") {
 		fail(w, core.ErrInvalidInput)
 		return
 	}
@@ -943,6 +945,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.LimitUnits != nil {
 			c.LimitUnits = limitUnits
+		}
+		if b.Language != nil {
+			c.Language = *b.Language
 		}
 	}); err != nil {
 		fail(w, err)

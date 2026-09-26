@@ -123,6 +123,10 @@ type Settings struct {
 
 	// SpeedUnit is how speeds are shown: "bytes" (КБ/с, МБ/с) or "bits" (Кб/с, Мб/с).
 	SpeedUnit string `json:"speedUnit"`
+	// Language is the language of the interface: "" as in the system, "ru" or "en". The page keeps its own copy of the
+	// choice (it needs it before it can ask); this one is for what the program says itself, the tray and the notifications.
+	Language string `json:"language,omitempty"`
+
 	// LimitUnits maps a speed limit ("down", "up", "altDown", "altUp") to the unit its field was typed in: one
 	// of LimitUnitIDs. A limit that is not there is shown in the unit of SpeedUnit. The limits themselves are
 	// always kept in KiB/s (the *LimitKBps fields), whatever they were typed in.

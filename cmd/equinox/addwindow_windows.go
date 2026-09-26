@@ -18,6 +18,7 @@ import (
 
 	"github.com/Ozzvin/equinox/internal/buildinfo"
 	"github.com/Ozzvin/equinox/internal/desktop"
+	"github.com/Ozzvin/equinox/internal/lang"
 )
 
 // The window for adding torrents. Opening a .torrent file or a magnet link from outside (Explorer, a browser)
@@ -180,7 +181,7 @@ func runAddWindow(stateDir string) error {
 	}
 	w := newWebViewOffscreen(webview2.WebViewOptions{
 		DataPath: filepath.Join(stateDir, "webview"), AutoFocus: true,
-		WindowOptions: webview2.WindowOptions{Title: "Добавить раздачу — " + appTitle(), Width: 900, Height: 720},
+		WindowOptions: webview2.WindowOptions{Title: lang.Tr("Добавить раздачу") + " — " + appTitle(), Width: 900, Height: 720},
 	})
 	if w == nil {
 		return errors.New("Microsoft Edge WebView2 Runtime was not found")

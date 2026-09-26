@@ -119,6 +119,33 @@ func TestSpeedUnitSetting(t *testing.T) {
 	}
 }
 
+func TestLanguageSetting(t *testing.T) {
+	e := setup(t)
+	put := func(extra string) (int, map[string]any) {
+		body := `{"downLimitKBps":0,"upLimitKBps":0,"altDownLimitKBps":0,"altUpLimitKBps":0,"ratioLimit":0,"maxActiveDownloads":0,"copyRemovePolicy":"with_data"` + extra + `}`
+		r := e.do(t, "PUT", "/api/settings", strings.NewReader(body), nil)
+		defer r.Body.Close()
+		var out map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&out)
+		return r.StatusCode, out
+	}
+	if code, out := put(``); code != 200 || out["language"] != nil {
+		t.Fatalf("no language by default (as in the system): %d %v", code, out["language"])
+	}
+	if code, out := put(`,"language":"en"`); code != 200 || out["language"] != "en" {
+		t.Fatalf("en not saved: %d %v", code, out["language"])
+	}
+	if code, out := put(``); code != 200 || out["language"] != "en" {
+		t.Fatalf("omitted must stay: %d %v", code, out["language"])
+	}
+	if code, out := put(`,"language":""`); code != 200 || out["language"] != nil {
+		t.Fatalf("an empty one goes back to the system: %d %v", code, out["language"])
+	}
+	if code, _ := put(`,"language":"de"`); code != 400 {
+		t.Fatalf("an unknown language must give 400, got %d", code)
+	}
+}
+
 func TestLimitUnitsSetting(t *testing.T) {
 	e := setup(t)
 	put := func(extra string) (int, map[string]any) {

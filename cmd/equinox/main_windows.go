@@ -26,6 +26,7 @@ import (
 	"github.com/Ozzvin/equinox/internal/buildinfo"
 	"github.com/Ozzvin/equinox/internal/core"
 	"github.com/Ozzvin/equinox/internal/desktop"
+	"github.com/Ozzvin/equinox/internal/lang"
 	"github.com/Ozzvin/equinox/internal/update"
 )
 
@@ -125,6 +126,7 @@ func main() {
 	if err != nil {
 		fatalBox(err)
 	}
+	lang.SetPreference(func() string { return a.Settings.Get().Language })
 	log.Println("engine started, api at", a.URL[:strings.Index(a.URL, "#")])
 	// Lets a second launch find this instance; like api-token, the file holds the access key.
 	_ = os.WriteFile(filepath.Join(*stateDir, "ui-url"), []byte(a.URL), 0o600)
@@ -210,7 +212,7 @@ func (d *desktop_) window(dataPath string) {
 	})
 	if w == nil {
 		d.mu.Unlock()
-		msgBox("Не удалось открыть окно: не найден Microsoft Edge WebView2 Runtime.\nПриложение продолжает работать в трее, интерфейс доступен в браузере:\n" + d.app.URL)
+		msgBox(lang.Tr("Не удалось открыть окно: не найден Microsoft Edge WebView2 Runtime.") + "\n" + lang.Tr("Приложение продолжает работать в трее, интерфейс доступен в браузере:") + "\n" + d.app.URL)
 		return
 	}
 	d.view = w
@@ -432,16 +434,39 @@ func (d *desktop_) onTrayReady() {
 	systray.SetTooltip(appTitle())
 	desktop.WatchNotificationClicks(d.requestShow) // clicking a notification opens the window
 
-	open := systray.AddMenuItem("Открыть Equinox", "Показать окно")
-	status := systray.AddMenuItem("↓ 0 Б/с   ↑ 0 Б/с", "")
+	open := systray.AddMenuItem("", "")
+	status := systray.AddMenuItem("", "")
 	status.Disable()
 	systray.AddSeparator()
-	turtle := systray.AddMenuItemCheckbox("Ограничение скорости", "Режим «черепаха»", d.app.Settings.Get().AltSpeedActive)
+	turtle := systray.AddMenuItemCheckbox("", "", d.app.Settings.Get().AltSpeedActive)
 	systray.AddSeparator()
-	auto := systray.AddMenuItemCheckbox("Запускать вместе с Windows", "Запуск в трее при входе в систему", desktop.AutostartEnabled())
-	assoc := systray.AddMenuItem("Сделать торрент-клиентом по умолчанию…", "Выбрать Equinox в «Приложения по умолчанию»")
+	auto := systray.AddMenuItemCheckbox("", "", desktop.AutostartEnabled())
+	assoc := systray.AddMenuItem("", "")
 	systray.AddSeparator()
-	quit := systray.AddMenuItem("Выход", "Остановить все раздачи и выйти")
+	quit := systray.AddMenuItem("", "")
+	// the words of the menu, in the language of the choice; done again when the choice changes
+	shown := ""
+	label := func() {
+		shown = lang.Current()
+		for _, it := range []struct {
+			item       *systray.MenuItem
+			title, tip string
+		}{
+			{open, "Открыть Equinox", "Показать окно"},
+			{turtle, "Ограничение скорости", "Режим «черепаха»"},
+			{auto, "Запускать вместе с Windows", "Запуск в трее при входе в систему"},
+			{assoc, "Сделать торрент-клиентом по умолчанию…", "Выбрать Equinox в «Приложения по умолчанию»"},
+			{quit, "Выход", "Остановить все раздачи и выйти"},
+		} {
+			it.item.SetTitle(lang.Tr(it.title))
+			it.item.SetTooltip(lang.Tr(it.tip))
+		}
+	}
+	label()
+	{
+		bits, en := d.app.Settings.Get().SpeedUnit == "bits", lang.English()
+		status.SetTitle(fmt.Sprintf("↓ %s   ↑ %s", desktop.FormatRateIn(0, bits, en), desktop.FormatRateIn(0, bits, en)))
+	}
 
 	open.Click(d.requestShow)
 	systray.SetOnClick(func(systray.IMenu) { d.requestShow() })
@@ -462,7 +487,7 @@ func (d *desktop_) onTrayReady() {
 		want := !auto.Checked()
 		if err := desktop.SetAutostart(want, d.app.Settings.Get().StartHidden); err != nil {
 			log.Println("autostart:", err)
-			msgBox("Не удалось изменить автозапуск:\n" + err.Error())
+			msgBox(lang.Tr("Не удалось изменить автозапуск:") + "\n" + err.Error())
 			return
 		}
 		if want {
@@ -474,7 +499,7 @@ func (d *desktop_) onTrayReady() {
 	assoc.Click(func() {
 		if err := desktop.RegisterHandlers(); err != nil {
 			log.Println("register handlers:", err)
-			msgBox("Не удалось зарегистрировать приложение:\n" + err.Error())
+			msgBox(lang.Tr("Не удалось зарегистрировать приложение:") + "\n" + err.Error())
 			return
 		}
 		// Windows asks the user to confirm the default app itself.
@@ -497,9 +522,12 @@ func (d *desktop_) onTrayReady() {
 				down += t.DownRate
 				up += t.UpRate
 			}
-			bits := d.app.Settings.Get().SpeedUnit == "bits"
-			status.SetTitle(fmt.Sprintf("↓ %s   ↑ %s", desktop.FormatRate(down, bits), desktop.FormatRate(up, bits)))
-			systray.SetTooltip(fmt.Sprintf("%s  ↓ %s  ↑ %s", appTitle(), desktop.FormatRate(down, bits), desktop.FormatRate(up, bits)))
+			if lang.Current() != shown {
+				label()
+			}
+			bits, en := d.app.Settings.Get().SpeedUnit == "bits", lang.English()
+			status.SetTitle(fmt.Sprintf("↓ %s   ↑ %s", desktop.FormatRateIn(down, bits, en), desktop.FormatRateIn(up, bits, en)))
+			systray.SetTooltip(fmt.Sprintf("%s  ↓ %s  ↑ %s", appTitle(), desktop.FormatRateIn(down, bits, en), desktop.FormatRateIn(up, bits, en)))
 			if d.app.Settings.Get().AltSpeedActive != turtle.Checked() {
 				if turtle.Checked() {
 					turtle.Uncheck()
@@ -534,7 +562,7 @@ func msgBox(text string) {
 
 func fatalBox(err error) {
 	log.Println("fatal:", err)
-	msgBox("Не удалось запустить Equinox:\n" + err.Error())
+	msgBox(lang.Tr("Не удалось запустить Equinox:") + "\n" + err.Error())
 	os.Exit(1)
 }
 
@@ -549,9 +577,9 @@ func (d *desktop_) notify(e core.Event) {
 	var title, text string
 	switch e.Kind {
 	case "completed":
-		title, text = "Загрузка завершена", e.Name
+		title, text = lang.Tr("Загрузка завершена"), e.Name
 	case "limit":
-		title, text = "Раздача остановлена", e.Name+" — достигнут лимит: "+e.Detail
+		title, text = lang.Tr("Раздача остановлена"), e.Name+" — "+lang.Tr("достигнут лимит:")+" "+lang.LimitDetail(e.Detail)
 	default:
 		return
 	}

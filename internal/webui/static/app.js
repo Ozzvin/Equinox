@@ -2042,6 +2042,7 @@
     e.preventDefault();
     const n = (id) => Number($(id).value) || 0;
     const updEvery = Math.round(Number($("st-updevery").value));
+    const langChoice = (document.querySelector('input[name="lg"]:checked') || {}).value || "system"; // system, ru or en
     if (!(updEvery >= 5 && updEvery <= 20160)) { $("st-err").textContent = "Период проверки обновлений: от 5 минут до 14 суток (20160 минут)."; $("st-err").hidden = false; return; }
     try {
       // labels deleted in the settings are taken off their torrents first
@@ -2049,6 +2050,7 @@
       lbDeleted = new Set();
       settings = await api("PUT", "/api/settings", {
         ...limitReadAll(ST_LIMIT_IDS), limitUnits: limitUnitsOf(ST_LIMIT_IDS),
+        language: langChoice === "system" ? "" : langChoice, // the tray and the notifications of the program follow it
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
@@ -2060,9 +2062,8 @@
       }
       scheduleUpdateChecks(settings);
       // the language is applied by a new load of the page: i18n.js reads the choice when it starts
-      const lang = (document.querySelector('input[name="lg"]:checked') || {}).value || "system";
-      if (lang !== window.__langPref) {
-        try { if (lang === "system") localStorage.removeItem("uiLang"); else localStorage.setItem("uiLang", lang); } catch (_) {}
+      if (langChoice !== window.__langPref) {
+        try { if (langChoice === "system") localStorage.removeItem("uiLang"); else localStorage.setItem("uiLang", langChoice); } catch (_) {}
         location.reload();
         return;
       }
