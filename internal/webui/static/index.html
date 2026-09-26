@@ -354,12 +354,12 @@
         <fieldset>
           <legend id="st-speed-legend">Ограничения скорости (0 — без ограничения)</legend>
           <div class="grid2">
-            <label>Загрузка<span class="limf"><input type="number" min="0" step="any" id="st-down"><select id="st-down-u" aria-label="Единица: Загрузка"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span></label>
-            <label>Отдача<span class="limf"><input type="number" min="0" step="any" id="st-up"><select id="st-up-u" aria-label="Единица: Отдача"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span></label>
-            <label>Загрузка в режиме ограничения<span class="limf"><input type="number" min="0" step="any" id="st-altdown"><select id="st-altdown-u" aria-label="Единица: Загрузка в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span></label>
-            <label>Отдача в режиме ограничения<span class="limf"><input type="number" min="0" step="any" id="st-altup"><select id="st-altup-u" aria-label="Единица: Отдача в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span></label>
+            <label>Загрузка<span class="limf"><input type="number" min="0" step="any" id="st-down"><select id="st-down-u" aria-label="Единица: Загрузка"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
+            <label>Отдача<span class="limf"><input type="number" min="0" step="any" id="st-up"><select id="st-up-u" aria-label="Единица: Отдача"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
+            <label>Загрузка в режиме ограничения<span class="limf"><input type="number" min="0" step="any" id="st-altdown"><select id="st-altdown-u" aria-label="Единица: Загрузка в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
+            <label>Отдача в режиме ограничения<span class="limf"><input type="number" min="0" step="any" id="st-altup"><select id="st-altup-u" aria-label="Единица: Отдача в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
           </div>
-          <p class="muted small">Единицу можно выбрать для каждого предела отдельно. КБ/с и МБ/с считаются так же, как размеры (1 МБ = 1024 КБ), Кбит/с и Мбит/с — как в сетях (1 Мбит = 1000 Кбит). Внутри предел хранится с точностью до 1 КБ/с (около 8 Кбит/с).</p>
+          <p class="muted small">Единица выбирается для каждого предела отдельно; в списке две единицы: килобайты и мегабайты либо килобиты и мегабиты, как выбрано выше в «Единицах скорости». 1 МБ = 1024 КБ, 1 Мбит = 1000 Кбит. Внутри предел хранится с точностью до 1 КБ/с (около 8 Кбит/с).</p>
         </fieldset>
         <fieldset>
           <legend>Расписание режима ограничения</legend>
@@ -707,8 +707,8 @@
     <div class="pop-title">Ограничение скорости <span class="muted small">(0 — без ограничения)</span></div>
     <div class="pop-grid">
       <span></span><b>Обычно</b><b>«Черепаха»</b>
-      <label for="lp-down">Загрузка</label><span class="limf"><input type="number" min="0" step="any" id="lp-down"><select id="lp-down-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span><span class="limf"><input type="number" min="0" step="any" id="lp-adown"><select id="lp-adown-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span>
-      <label for="lp-up">Отдача</label><span class="limf"><input type="number" min="0" step="any" id="lp-up"><select id="lp-up-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span><span class="limf"><input type="number" min="0" step="any" id="lp-aup"><select id="lp-aup-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option><option value="kbit">Кбит/с</option><option value="Mbit">Мбит/с</option></select></span>
+      <label for="lp-down">Загрузка</label><span class="limf"><input type="number" min="0" step="any" id="lp-down"><select id="lp-down-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span><span class="limf"><input type="number" min="0" step="any" id="lp-adown"><select id="lp-adown-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span>
+      <label for="lp-up">Отдача</label><span class="limf"><input type="number" min="0" step="any" id="lp-up"><select id="lp-up-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span><span class="limf"><input type="number" min="0" step="any" id="lp-aup"><select id="lp-aup-u" aria-label="Единица"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span>
     </div>
     <label class="check"><input type="checkbox" id="lp-on"><span>Режим «черепаха» включён</span></label>
     <p class="err small" id="lp-err" hidden></p>

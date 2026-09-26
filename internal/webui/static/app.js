@@ -72,7 +72,12 @@
   const LIMIT_LABEL = EN ? { KB: "KB/s", MB: "MB/s", kbit: "Kbit/s", Mbit: "Mbit/s" } : { KB: "КБ/с", MB: "МБ/с", kbit: "Кбит/с", Mbit: "Мбит/с" };
   const limitDefault = (bits) => (bits ? "kbit" : "KB");
   const limitUnit = (bits) => LIMIT_LABEL[limitDefault(bits)];
-  const limitUnitOf = (key, bits) => (settings && settings.limitUnits && settings.limitUnits[key]) || limitDefault(bits);
+  // The list of a limit has two units: the general choice of bytes or bits says which. A unit saved from the other
+  // pair becomes the one of the same size (kilo or mega) in this pair.
+  const LIMIT_UNITS = { bytes: ["KB", "MB"], bits: ["kbit", "Mbit"] };
+  const limitIsBits = (unit) => unit === "kbit" || unit === "Mbit";
+  const limitFamily = (unit, bits) => (bits ? { KB: "kbit", MB: "Mbit" } : { kbit: "KB", Mbit: "MB" })[unit] || unit;
+  const limitUnitOf = (key, bits) => { const saved = settings && settings.limitUnits && settings.limitUnits[key]; return saved ? limitFamily(saved, bits) : limitDefault(bits); };
   function limitNum(x) { const d = x >= 100 ? 0 : x >= 10 ? 1 : 2; return String(Number(x.toFixed(d))); }
   const limitShow = (kib, unit) => limitNum(kib / KIB_PER[unit]);
   // a limit above zero never rounds down to "no limit"
@@ -84,7 +89,11 @@
   function limitFill(id, kib, unit) {
     const el = $(id), u = $(id + "-u");
     el.dataset.kib = String(kib || 0); delete el.dataset.dirty; el.value = limitShow(kib || 0, unit);
-    if (u) { u.value = unit; u.dataset.unit = unit; }
+    if (u) {
+      const family = limitIsBits(unit) ? "bits" : "bytes";
+      if (u.dataset.family !== family) { u.innerHTML = LIMIT_UNITS[family].map((k) => `<option value="${k}">${LIMIT_LABEL[k]}</option>`).join(""); u.dataset.family = family; }
+      u.value = unit; u.dataset.unit = unit;
+    }
   }
   function limitRead(id, unit) { const el = $(id); return el.dataset.dirty ? limitStore(Number(el.value) || 0, unit) : Number(el.dataset.kib || 0); }
   // the fields with their units: what is typed stays the same limit when the unit is picked anew
@@ -100,15 +109,15 @@
     LIMIT_KEYS.forEach((key, i) => {
       const saved = settings.limitUnits && settings.limitUnits[key], u = $(ids[i] + "-u");
       if (saved) u.dataset.chosen = "1"; else delete u.dataset.chosen;
-      limitFill(ids[i], settings[LIMIT_CFG[key]], saved || limitDefault(bits));
+      limitFill(ids[i], settings[LIMIT_CFG[key]], saved ? limitFamily(saved, bits) : limitDefault(bits));
     });
   }
   const limitReadAll = (ids) => Object.fromEntries(LIMIT_KEYS.map((key, i) => [LIMIT_CFG[key], limitRead(ids[i], $(ids[i] + "-u").value)]));
   // what to save: the unit of the limits the person chose one for; the others follow the general choice
   const limitUnitsOf = (ids) => Object.fromEntries(LIMIT_KEYS.map((key, i) => [key, $(ids[i] + "-u").dataset.chosen ? $(ids[i] + "-u").value : ""]));
-  // the general choice changed: the limits with no unit of their own follow it
+  // the general choice changed: every limit goes to the pair of units of the new choice, the same limit, the same size of unit
   function limitFollow(ids, bits) {
-    for (const id of ids) { const u = $(id + "-u"); if (!u.dataset.chosen) limitFill(id, limitRead(id, u.dataset.unit), limitDefault(bits)); }
+    for (const id of ids) { const u = $(id + "-u"); limitFill(id, limitRead(id, u.dataset.unit), u.dataset.chosen ? limitFamily(u.value, bits) : limitDefault(bits)); }
   }
   // the first-run wizard has no unit selects: its two limits are in the unit of its own choice of bytes or bits
   function limitFillPlain(id, kib, bits) { const el = $(id); el.dataset.kib = String(kib || 0); delete el.dataset.dirty; el.value = limitShow(kib || 0, limitDefault(bits)); }

@@ -180,7 +180,7 @@ window.__i18nEn = [
   ["Единица: Загрузка в режиме ограничения", "Unit: Download in turtle mode"],
   ["Отдача в режиме ограничения", "Upload in turtle mode"],
   ["Единица: Отдача в режиме ограничения", "Unit: Upload in turtle mode"],
-  ["Единицу можно выбрать для каждого предела отдельно. КБ/с и МБ/с считаются так же, как размеры (1 МБ = 1024 КБ), Кбит/с и Мбит/с — как в сетях (1 Мбит = 1000 Кбит). Внутри предел хранится с точностью до 1 КБ/с (около 8 Кбит/с).", "The unit can be chosen for each limit separately. KB/s and MB/s are counted like sizes (1 MB = 1024 KB), Kbit/s and Mbit/s like networks count (1 Mbit = 1000 Kbit). A limit is kept with the accuracy of 1 KB/s (about 8 Kbit/s)."],
+  ["Единица выбирается для каждого предела отдельно; в списке две единицы: килобайты и мегабайты либо килобиты и мегабиты, как выбрано выше в «Единицах скорости». 1 МБ = 1024 КБ, 1 Мбит = 1000 Кбит. Внутри предел хранится с точностью до 1 КБ/с (около 8 Кбит/с).", "The unit is chosen for each limit separately; the list has two units: kilobytes and megabytes or kilobits and megabits, as chosen above in “Speed units”. 1 MB = 1024 KB, 1 Mbit = 1000 Kbit. A limit is kept with the accuracy of 1 KB/s (about 8 Kbit/s)."],
   ["Расписание режима ограничения", "Turtle mode schedule"],
   ["Включать ограничение по расписанию", "Turn on turtle mode by the schedule"],
   ["Ручное переключение «черепахи» остаётся в силе до ближайшей границы расписания", "Switching turtle mode by hand holds until the next edge of the schedule"],
