@@ -29,6 +29,25 @@ func validateTracker(raw string) (string, error) {
 	return "", fmt.Errorf("%w: unsupported tracker scheme %q", ErrInvalidInput, u.Scheme)
 }
 
+// usableTrackers keeps of the tiers of announce addresses the ones the engine can use: it PANICS on an address whose scheme it
+// does not know (a torrent file or a magnet link is somebody else's data and can hold "ftp://x", "bt.example/ann" or
+// "foo://"), so nothing else is handed to it. Empty tiers are dropped.
+func usableTrackers(tiers [][]string) [][]string {
+	var out [][]string
+	for _, tier := range tiers {
+		var keep []string
+		for _, raw := range tier {
+			if _, err := validateTracker(raw); err == nil {
+				keep = append(keep, raw)
+			}
+		}
+		if len(keep) > 0 {
+			out = append(out, keep)
+		}
+	}
+	return out
+}
+
 // CreateRequest describes a .torrent file to be made from local data.
 type CreateRequest struct {
 	Source      string   `json:"source"`      // a file or a folder

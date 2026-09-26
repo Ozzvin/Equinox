@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/anacrolix/torrent/metainfo"
@@ -78,5 +79,56 @@ func TestListShowsTheMainTracker(t *testing.T) {
 	}
 	if got := tracker(hash); got != "tapochek" {
 		t.Fatalf("the main tracker of the file: %q, want the one of its announce", got)
+	}
+}
+
+func TestUsableTrackers(t *testing.T) {
+	got := usableTrackers([][]string{
+		{"http://a.example/ann", "ftp://b.example/x", "bt.c.example/ann"},
+		{"foo://d.example", "*", ""},
+		{"udp://e.example:6969/announce", "wss://f.example/ann", "https://g.example/ann"},
+		{},
+	})
+	want := [][]string{{"http://a.example/ann"}, {"udp://e.example:6969/announce", "wss://f.example/ann", "https://g.example/ann"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("usableTrackers = %v, want %v", got, want)
+	}
+	if len(usableTrackers(nil)) != 0 {
+		t.Error("nothing in, nothing out")
+	}
+}
+
+// The engine panics on a tracker address it does not know the scheme of; a magnet link or a file that has one must be added
+// all the same (without the address).
+func TestTorrentWithAnUnknownTrackerSchemeIsAdded(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	defer m.Close()
+	hash, err := m.AddMagnet("magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&tr=ftp%3A%2F%2Fx.example%2Fann&tr=bt.y.example%2Fann&tr=foo%3A%2F%2Fz", WithPaused())
+	if err != nil {
+		t.Fatalf("a magnet link with trackers of no known scheme: %v", err)
+	}
+	mi, err := metainfo.LoadFromFile(makeTorrent(t, dir, "odd.bin", 40<<10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mi.Announce = "ftp://x.example/ann"
+	mi.AnnounceList = [][]string{{"bt.y.example/ann"}, {"foo://z"}}
+	odd := filepath.Join(dir, "odd-announce.torrent")
+	f, _ := os.Create(odd)
+	if err := mi.Write(f); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	hash2, err := m.AddFile(odd, WithPaused())
+	if err != nil {
+		t.Fatalf("a file with trackers of no known scheme: %v", err)
+	}
+	listed := map[string]bool{}
+	for _, st := range m.List() {
+		listed[st.Hash] = true
+	}
+	if !listed[hash] || !listed[hash2] {
+		t.Errorf("both torrents must be on the list: %v", listed)
 	}
 }

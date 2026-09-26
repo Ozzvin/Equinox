@@ -427,7 +427,7 @@ func (m *Manager) restore(r *record) error {
 			return err
 		}
 	}
-	t, _, err := m.cl.AddTorrentSpec(m.holdBack(spec))
+	t, _, err := m.cl.AddTorrentSpec(m.holdBack(cleanSpec(spec)))
 	if err != nil {
 		m.dropHeld(r.InfoHash)
 		return err
@@ -451,7 +451,7 @@ func (m *Manager) track(spec *torrent.TorrentSpec, rec *record) error {
 	if err := m.state.with(func(s *state) { s.Torrents[rec.InfoHash] = rec }); err != nil {
 		return err
 	}
-	t, _, err := m.cl.AddTorrentSpec(m.holdBack(spec))
+	t, _, err := m.cl.AddTorrentSpec(m.holdBack(cleanSpec(spec)))
 	if err != nil {
 		m.dropHeld(rec.InfoHash)
 		if serr := m.state.with(func(s *state) { delete(s.Torrents, rec.InfoHash) }); serr != nil {
@@ -467,6 +467,12 @@ func (m *Manager) track(spec *torrent.TorrentSpec, rec *record) error {
 	}
 	go m.onMetadata(t, rec.InfoHash)
 	return nil
+}
+
+// cleanSpec takes from a torrent's spec the trackers the engine cannot use (see usableTrackers).
+func cleanSpec(spec *torrent.TorrentSpec) *torrent.TorrentSpec {
+	spec.Trackers = usableTrackers(spec.Trackers)
+	return spec
 }
 
 func (m *Manager) register(t *torrent.Torrent) {
