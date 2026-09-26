@@ -121,6 +121,17 @@ label.file { display: block; padding: 0; }
 }
 .pill.disco .dot { animation: disco-dot .6s steps(1, end) infinite; }
 @media (prefers-reduced-motion: reduce) { .pill.disco .dot { animation: none; } }
+/* Giga disco: the whole window, dialogs too, is one colour of the dot's palette after another (see the click handler on #s-port). */
+@keyframes giga-disco {
+  0% { filter: sepia(1) saturate(5) hue-rotate(-38deg); }
+  16.6% { filter: sepia(1) saturate(5) hue-rotate(0deg); }
+  33.3% { filter: sepia(1) saturate(5) hue-rotate(22deg); }
+  50% { filter: sepia(1) saturate(5) hue-rotate(82deg); }
+  66.6% { filter: sepia(1) saturate(5) hue-rotate(200deg); }
+  83.3% { filter: sepia(1) saturate(5) hue-rotate(260deg); }
+}
+html.giga { animation: giga-disco 2.4s steps(1, end) infinite; }
+@media (prefers-reduced-motion: reduce) { html.giga { animation: none; } }
 
 /* dialogs */
 dialog { border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; background: var(--panel); color: var(--text); width: min(440px, calc(100vw - 32px)); box-shadow: var(--shadow); }

@@ -369,15 +369,30 @@
 
   // A small joke: click the port dot several times in a row and it starts changing colours like a disco ball.
   // It goes on while the clicking goes on and for three seconds after the last click, then the dot is what it was.
-  let discoOn = false, discoClicks = 0, discoLast = 0, discoTimer = 0;
+  // Five quick clicks make the dot blink (disco). Five such blinks one after another, or 25 quick clicks, make the whole
+  // window blink (giga disco): ten seconds, or until Esc. The colours change about twice a second, not faster.
+  let discoOn = false, discoClicks = 0, discoLast = 0, discoTimer = 0, discoRuns = 0, discoEnded = 0, gigaTimer = 0;
+  const GIGA_CLICKS = 25, GIGA_RUNS = 5, DISCO_RUN_GAP = 8000, GIGA_MS = 10000;
+  function stopGiga() { clearTimeout(gigaTimer); gigaTimer = 0; document.documentElement.classList.remove("giga"); }
+  function startGiga() {
+    discoClicks = 0; discoRuns = 0;
+    document.documentElement.classList.add("giga");
+    toast(L("ГИГА ДИСКО!", "GIGA DISCO!"));
+    clearTimeout(gigaTimer); gigaTimer = setTimeout(stopGiga, GIGA_MS);
+  }
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && gigaTimer) stopGiga(); });
   const discoClick = (e) => {
     if (e.type === "contextmenu") e.preventDefault(); // a right click counts too, and has no menu to show here
     const now = Date.now();
     discoClicks = now - discoLast < 1200 ? discoClicks + 1 : 1;
     discoLast = now;
     clearTimeout(discoTimer);
-    if (discoClicks >= 5 && !discoOn) { discoOn = true; $("s-port").classList.add("disco"); }
-    if (discoOn) discoTimer = setTimeout(() => { discoOn = false; discoClicks = 0; $("s-port").classList.remove("disco"); }, 3000);
+    if (discoClicks >= 5 && !discoOn) {
+      discoOn = true; $("s-port").classList.add("disco");
+      discoRuns = now - discoEnded < DISCO_RUN_GAP ? discoRuns + 1 : 1; // a blink that follows the last one soon enough
+    }
+    if (discoClicks >= GIGA_CLICKS && !gigaTimer || discoRuns >= GIGA_RUNS && !gigaTimer) startGiga();
+    if (discoOn) discoTimer = setTimeout(() => { discoOn = false; discoClicks = 0; discoEnded = Date.now(); $("s-port").classList.remove("disco"); }, 3000);
   };
   $("s-port").addEventListener("click", discoClick);
   $("s-port").addEventListener("contextmenu", discoClick);
