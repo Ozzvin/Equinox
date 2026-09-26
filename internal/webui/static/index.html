@@ -327,7 +327,10 @@
 <!-- Настройки -->
 <dialog id="dlg-settings" class="wide settings">
   <form method="dialog" id="f-settings">
-    <h2>Настройки</h2>
+    <div class="set-head">
+      <h2>Настройки</h2>
+      <button type="button" class="btn small" id="st-wizard" title="Пошаговая помощь: папки, скорость, порт, запуск с Windows">Быстрая настройка</button>
+    </div>
     <div class="set-layout">
       <nav class="set-nav" id="set-nav" role="tablist" aria-orientation="vertical" aria-label="Разделы настроек">
         <button type="button" role="tab" data-sec="speed" aria-selected="false">Скорость</button>
@@ -337,7 +340,6 @@
         <button type="button" role="tab" data-sec="network" aria-selected="false">Сеть</button>
         <button type="button" role="tab" data-sec="view" aria-selected="false">Интерфейс</button>
         <button type="button" role="tab" data-sec="system" aria-selected="false" hidden id="sn-system">Системные</button>
-        <button type="button" role="tab" data-sec="updates" aria-selected="false">Обновления</button>
         <button type="button" role="tab" data-sec="about" aria-selected="false">О приложении</button>
       </nav>
       <div class="set-panes">
@@ -567,7 +569,7 @@
     </div>
     <p class="err" id="st-err" hidden></p>
     <div class="row-end">
-      <button type="button" class="btn" id="st-wizard" title="Пошаговая помощь: папки, скорость, порт, запуск с Windows" style="margin-right:auto">Быстрая настройка</button>
+      <button type="button" class="btn foot-tab" id="st-updates-tab" aria-pressed="false">Обновления</button>
       <button type="button" class="btn" data-close>Отмена</button>
       <button class="btn primary" value="ok">Сохранить</button>
     </div>

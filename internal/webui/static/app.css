@@ -327,6 +327,10 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 #dlg-settings.settings[open] #f-settings { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 #dlg-settings.settings[open] .set-layout { flex: 1 1 auto; min-height: 0; }
 .set-layout { display: flex; gap: 18px; align-items: stretch; margin-top: 4px; }
+.set-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.set-head h2 { margin: 0; }
+.foot-tab { margin-right: auto; }
+.foot-tab[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
 .set-nav { flex: none; width: 178px; display: flex; flex-direction: column; gap: 2px; padding-right: 12px; border-right: 1px solid var(--line); overflow: auto; }
 .set-nav button { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .set-nav button:hover { background: var(--hover); }

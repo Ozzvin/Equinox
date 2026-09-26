@@ -2002,14 +2002,17 @@
   // ---------- sections of the settings ----------
   function showSection(id) {
     const btns = [...document.querySelectorAll("#set-nav [data-sec]")];
-    const btn = btns.find((b) => b.dataset.sec === id && !b.hidden) || btns.find((b) => !b.hidden);
-    id = btn.dataset.sec;
-    for (const b of btns) { b.setAttribute("aria-selected", b === btn); b.tabIndex = b === btn ? 0 : -1; }
+    // "Обновления" is not in the menu but a button of its own in the bottom row: no item of the menu is chosen then
+    const btn = id === "updates" ? null : btns.find((b) => b.dataset.sec === id && !b.hidden) || btns.find((b) => !b.hidden);
+    if (btn) id = btn.dataset.sec;
+    for (const b of btns) { b.setAttribute("aria-selected", b === btn); b.tabIndex = (btn ? b === btn : b === btns.find((x) => !x.hidden)) ? 0 : -1; }
+    $("st-updates-tab").setAttribute("aria-pressed", id === "updates");
     for (const p of document.querySelectorAll("#dlg-settings .set-pane")) p.hidden = p.dataset.sec !== id;
     if (id === "updates") loadChangelog();
     try { localStorage.setItem("setSection", id); } catch (_) {}
   }
   $("set-nav").addEventListener("click", (e) => { const b = e.target.closest("[data-sec]"); if (b) showSection(b.dataset.sec); });
+  $("st-updates-tab").onclick = () => showSection("updates");
   $("set-nav").addEventListener("keydown", (e) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
@@ -2041,6 +2044,7 @@
     openSection();
     loadAbout();
     $("st-err").hidden = true; $("dlg-settings").showModal();
+    (document.querySelector('#set-nav [tabindex="0"]') || $("st-updates-tab")).focus(); // the menu, not the button in the corner, gets the focus
   };
   // The changelog of the program (the CHANGELOG.md it carries, in Russian): each version is folded, and opens on a click.
   let changelogShown = false;
