@@ -32,6 +32,8 @@ func TestTrackerName(t *testing.T) {
 	}
 }
 
+// The trackers here have a scheme the engine does not know ("test://"): it starts no announcer, so the test asks nothing of the
+// network (and does not meet the race the library has when it starts announcers for torrents added one after another).
 // A torrent belongs to its main tracker: the "announce" of its file, or, with none (a magnet link), the first of its list.
 func TestListShowsTheMainTracker(t *testing.T) {
 	dir := t.TempDir()
@@ -48,7 +50,7 @@ func TestListShowsTheMainTracker(t *testing.T) {
 	}
 	// a magnet link: the first tracker, whatever follows
 	hash, err := m.AddMagnet("magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"+
-		"&tr=http%3A%2F%2Fbt.t-ru.org%2Fann%3Fmagnet&tr=http%3A%2F%2Ftapochek.net%2Fannounce.php&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce", WithPaused())
+		"&tr=test%3A%2F%2Fbt.t-ru.org%2Fann%3Fmagnet&tr=test%3A%2F%2Ftapochek.net%2Fannounce.php&tr=test%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce", WithPaused())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,8 +62,8 @@ func TestListShowsTheMainTracker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mi.Announce = "http://tapochek.net/announce.php?uk=SECRET"
-	mi.AnnounceList = [][]string{{"udp://tracker.opentrackr.org:1337/announce"}, {"http://tapochek.net/announce.php?uk=SECRET"}}
+	mi.Announce = "test://tapochek.net/announce.php?uk=SECRET"
+	mi.AnnounceList = [][]string{{"test://tracker.opentrackr.org:1337/announce"}, {"test://tapochek.net/announce.php?uk=SECRET"}}
 	withAnnounce := filepath.Join(dir, "with-announce.torrent")
 	f, _ := os.Create(withAnnounce)
 	if err := mi.Write(f); err != nil {
