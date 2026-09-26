@@ -13,7 +13,16 @@
   window.__langPref = pref;
   window.__lang = lang;
   document.documentElement.lang = lang;
+  // The text of an error or advice the server names with a code (see core.Coder): in English from __i18nCodes, where
+  // {1}, {2} stand for its arguments; otherwise (Russian, a code not known) the message the server gave.
+  window.__trCode = function (code, args, message) { return message; };
   if (lang !== "en") return;
+  var codes = window.__i18nCodes || {};
+  window.__trCode = function (code, args, message) {
+    var en = code ? codes[code] : undefined;
+    if (en === undefined) return message;
+    return en.replace(/\{(\d+)\}/g, function (m, n) { var a = args && args[Number(n) - 1]; return a === undefined ? m : a; });
+  };
 
   var dict = window.__i18nEn || [];
   var exact = Object.create(null), patterns = [];

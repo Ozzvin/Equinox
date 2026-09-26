@@ -143,7 +143,8 @@ func deleteError(path string, err error) error {
 	name := filepath.Base(path)
 	var errno syscall.Errno
 	if errors.As(err, &errno) && errno == 32 || strings.Contains(err.Error(), "used by another process") {
-		return fmt.Errorf("не удалось удалить «%s»: файл занят другой программой (плеером, предпросмотром в Проводнике, антивирусом). Закройте её и повторите", name)
+		return &CodedError{Code: "file.busy", Args: []string{name},
+			Msg: fmt.Sprintf("не удалось удалить «%s»: файл занят другой программой (плеером, предпросмотром в Проводнике, антивирусом). Закройте её и повторите", name)}
 	}
-	return fmt.Errorf("не удалось удалить «%s»: %w", name, err)
+	return &CodedError{Code: "file.delete", Args: []string{name, err.Error()}, Msg: fmt.Sprintf("не удалось удалить «%s»: %v", name, err), Err: err}
 }

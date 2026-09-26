@@ -43,7 +43,7 @@ func TestTrAndLimitDetail(t *testing.T) {
 	if got := Tr("Выход"); got != "Выход" {
 		t.Errorf("Russian must stay as it is: %q", got)
 	}
-	if got := LimitDetail("рейтинг 2.00"); got != "рейтинг 2.00" {
+	if got := LimitDetail("рейтинг 2.00", "limit.ratio", []string{"2.00"}); got != "рейтинг 2.00" {
 		t.Errorf("Russian detail must stay: %q", got)
 	}
 	lang = "en"
@@ -53,15 +53,19 @@ func TestTrAndLimitDetail(t *testing.T) {
 	if got := Tr("текст без перевода"); got != "текст без перевода" {
 		t.Errorf("a text with no English stays: %q", got)
 	}
-	for in, want := range map[string]string{
-		"рейтинг 2.00":         "ratio 2.00",
-		"время раздачи 3 дн.":  "seeding time 3 d",
-		"время раздачи 12 ч":   "seeding time 12 h",
-		"время раздачи 90 мин": "seeding time 90 min",
-		"что-то другое":        "что-то другое",
+	for _, tc := range []struct {
+		code string
+		args []string
+		want string
+	}{
+		{"limit.ratio", []string{"2.00"}, "ratio 2.00"},
+		{"limit.time", []string{"3", "d"}, "seeding time 3 d"},
+		{"limit.time", []string{"90", "min"}, "seeding time 90 min"},
+		{"limit.unknown", nil, "русский текст"}, // a code not known here: the Russian text
+		{"", nil, "русский текст"},
 	} {
-		if got := LimitDetail(in); got != want {
-			t.Errorf("LimitDetail(%q) = %q, want %q", in, got, want)
+		if got := LimitDetail("русский текст", tc.code, tc.args); got != tc.want {
+			t.Errorf("LimitDetail(%q, %v) = %q, want %q", tc.code, tc.args, got, tc.want)
 		}
 	}
 }

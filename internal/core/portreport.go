@@ -25,8 +25,11 @@ const inboundFresh = 24 * time.Hour
 // PortReport combines the router mapping with real inbound evidence.
 type PortReport struct {
 	portmap.Status
-	Verdict     string    `json:"verdict"`
-	Advice      string    `json:"advice"`
+	Verdict string `json:"verdict"`
+	Advice  string `json:"advice"`
+	// AdviceCode and AdviceArgs say the advice for a client that words it itself (see Coder).
+	AdviceCode  string    `json:"adviceCode"`
+	AdviceArgs  []string  `json:"adviceArgs,omitempty"`
 	Inbound     int64     `json:"inbound"`     // inbound connections from the internet since start
 	LastInbound time.Time `json:"lastInbound"` // zero if none yet
 	WantedPort  int       `json:"wantedPort"`  // the configured port when the engine had to use another one, else 0
@@ -57,29 +60,31 @@ func makeReport(st portmap.Status, public int64, last time.Time, unknown bool, n
 	switch {
 	case public > 0 && now.Sub(last) < inboundFresh:
 		r.Verdict = PortOpen
-		r.Advice = "К вам подключаются пиры из интернета — порт доступен."
+		r.Advice, r.AdviceCode = "К вам подключаются пиры из интернета — порт доступен.", "port.open"
 	case st.ExternalIP != "" && externalIPNotPublic(st.ExternalIP):
 		r.Verdict = PortCGNAT
 		r.Advice = fmt.Sprintf("Внешний адрес роутера %s не публичный: провайдер использует общий адрес (CGNAT). "+
 			"Проброс порта в таком случае невозможен. Попросите у провайдера «белый» IP или используйте VPN с пробросом порта.", st.ExternalIP)
+		r.AdviceCode, r.AdviceArgs = "port.cgnat", []string{st.ExternalIP}
 	case !st.Enabled:
 		r.Verdict = PortManual
-		r.Advice = "Автопроброс выключен. Включите его или пробросьте порт на роутере вручную."
+		r.Advice, r.AdviceCode = "Автопроброс выключен. Включите его или пробросьте порт на роутере вручную.", "port.manual"
 	case st.Mapped:
 		r.Verdict = PortMapped
-		r.Advice = "Порт проброшен на роутере. Ждём первого входящего подключения — при малом числе раздач это может занять время."
+		r.Advice, r.AdviceCode = "Порт проброшен на роутере. Ждём первого входящего подключения — при малом числе раздач это может занять время.", "port.mapped"
 		if unknown {
-			r.Advice = "Порт проброшен на роутере (входящие подключения определить не удалось)."
+			r.Advice, r.AdviceCode = "Порт проброшен на роутере (входящие подключения определить не удалось).", "port.mapped_unknown"
 		}
 	case st.Failures > 0:
 		r.Verdict = PortClosed
-		r.Advice = "Роутер не отвечает на запросы проброса. Включите UPnP или NAT-PMP в настройках роутера либо пробросьте порт вручную."
+		r.Advice, r.AdviceCode = "Роутер не отвечает на запросы проброса. Включите UPnP или NAT-PMP в настройках роутера либо пробросьте порт вручную.", "port.closed"
 		if st.LastError != "" {
 			r.Advice += " Ответ: " + st.LastError
+			r.AdviceCode, r.AdviceArgs = "port.closed_answer", []string{st.LastError}
 		}
 	default:
 		r.Verdict = PortChecking
-		r.Advice = "Проверяем роутер…"
+		r.Advice, r.AdviceCode = "Проверяем роутер…", "port.checking"
 	}
 	return r
 }

@@ -579,7 +579,7 @@ func (d *desktop_) notify(e core.Event) {
 	case "completed":
 		title, text = lang.Tr("Загрузка завершена"), e.Name
 	case "limit":
-		title, text = lang.Tr("Раздача остановлена"), e.Name+" — "+lang.Tr("достигнут лимит:")+" "+lang.LimitDetail(e.Detail)
+		title, text = lang.Tr("Раздача остановлена"), e.Name+" — "+lang.Tr("достигнут лимит:")+" "+lang.LimitDetail(e.Detail, e.DetailCode, e.DetailArgs)
 	default:
 		return
 	}

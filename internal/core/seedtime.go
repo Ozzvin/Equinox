@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -81,19 +82,21 @@ func (m *Manager) forgetSeedTime(hash string) {
 	m.mu.Unlock()
 }
 
-func limitReason(kind string, v float64) string {
+func limitReason(kind string, v float64) (text, code string, args []string) {
 	if kind == "time" {
-		return fmt.Sprintf("время раздачи %s", fmtMinutes(int(v)))
+		n, unit, ru := fmtMinutes(int(v))
+		return "время раздачи " + ru, "limit.time", []string{strconv.Itoa(n), unit}
 	}
-	return fmt.Sprintf("рейтинг %.2f", v)
+	return fmt.Sprintf("рейтинг %.2f", v), "limit.ratio", []string{fmt.Sprintf("%.2f", v)}
 }
 
-func fmtMinutes(min int) string {
+// fmtMinutes gives a length of time in the biggest whole unit: the number, the unit ("d", "h", "min") and the Russian text.
+func fmtMinutes(min int) (n int, unit, ru string) {
 	switch {
 	case min%1440 == 0:
-		return fmt.Sprintf("%d дн.", min/1440)
+		return min / 1440, "d", fmt.Sprintf("%d дн.", min/1440)
 	case min%60 == 0:
-		return fmt.Sprintf("%d ч", min/60)
+		return min / 60, "h", fmt.Sprintf("%d ч", min/60)
 	}
-	return fmt.Sprintf("%d мин", min)
+	return min, "min", fmt.Sprintf("%d мин", min)
 }

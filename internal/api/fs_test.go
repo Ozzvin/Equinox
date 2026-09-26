@@ -92,17 +92,18 @@ func TestFolderPickerMkdir(t *testing.T) {
 	if st, err := os.Stat(out["path"]); err != nil || !st.IsDir() {
 		t.Fatal("the folder was not created")
 	}
-	for name, tc := range map[string][2]string{
-		"exists":       {e.dir, "Новая папка"},
-		"empty":        {e.dir, "  "},
-		"dots":         {e.dir, ".."},
-		"separator":    {e.dir, `a/b`},
-		"bad char":     {e.dir, `a:b`},
-		"trailing dot": {e.dir, "abc."},
-		"no parent":    {filepath.Join(e.dir, "missing"), "x"},
+	// every refusal has a message and a code, so a client in another language can word it itself
+	for name, tc := range map[string][3]string{
+		"exists":       {e.dir, "Новая папка", "fs.exists"},
+		"empty":        {e.dir, "  ", "fs.name_empty"},
+		"dots":         {e.dir, "..", "fs.name_empty"},
+		"separator":    {e.dir, `a/b`, "fs.name_chars"},
+		"bad char":     {e.dir, `a:b`, "fs.name_chars"},
+		"trailing dot": {e.dir, "abc.", "fs.name_end"},
+		"no parent":    {filepath.Join(e.dir, "missing"), "x", "fs.parent_missing"},
 	} {
-		if code, out := mk(tc[0], tc[1]); code != http.StatusBadRequest || out["error"] == "" {
-			t.Errorf("%s: %d %v, want 400 with a message", name, code, out)
+		if code, out := mk(tc[0], tc[1]); code != http.StatusBadRequest || out["error"] == "" || out["code"] != tc[2] {
+			t.Errorf("%s: %d %v, want 400 with a message and the code %s", name, code, out, tc[2])
 		}
 	}
 	if r := e.do(t, "GET", "/api/fs", nil, map[string]string{"Authorization": "Bearer wrong"}); r.StatusCode != http.StatusUnauthorized {

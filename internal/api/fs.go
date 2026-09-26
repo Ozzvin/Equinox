@@ -36,8 +36,9 @@ type fsListing struct {
 	Parent    *string   `json:"parent"` // null when there is no level above
 	Crumbs    []fsPlace `json:"crumbs"` // the way from the top to Path
 	Entries   []fsEntry `json:"entries"`
-	Places    []fsPlace `json:"places"`          // quick links for the side list
-	Error     string    `json:"error,omitempty"` // why the folder could not be read
+	Places    []fsPlace `json:"places"`              // quick links for the side list
+	Error     string    `json:"error,omitempty"`     // why the folder could not be read
+	ErrorCode string    `json:"errorCode,omitempty"` // the same as a code (see core.Coder), when there is one
 	Truncated bool      `json:"truncated,omitempty"`
 }
 
@@ -103,7 +104,7 @@ func (l *fsListing) readInto(p string) {
 
 	des, err := os.ReadDir(p)
 	if err != nil {
-		l.Error = friendlyFsError(err)
+		l.Error, l.ErrorCode = friendlyFsError(err)
 		return
 	}
 	for _, de := range des {
@@ -140,14 +141,15 @@ func (l *fsListing) readInto(p string) {
 	})
 }
 
-func friendlyFsError(err error) string {
+// friendlyFsError words a failure to read a folder, with its code ("" when it is only the text of the system).
+func friendlyFsError(err error) (msg, code string) {
 	switch {
 	case os.IsPermission(err):
-		return "Нет доступа к этой папке."
+		return "Нет доступа к этой папке.", "fs.no_access"
 	case os.IsNotExist(err):
-		return "Папка не найдена."
+		return "Папка не найдена.", "fs.not_found"
 	}
-	return err.Error()
+	return err.Error(), ""
 }
 
 // crumbsOf splits a path into clickable steps: "C:\a\b" gives the computer, "C:\", "a", "b".
@@ -213,35 +215,48 @@ func (s *Server) fsMkdir(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(b.Name)
 	switch {
 	case name == "" || name == "." || name == "..":
-		fail(w, badInput("Введите имя папки."))
+		fail(w, badInputCode("fs.name_empty", "Введите имя папки."))
 		return
 	case strings.ContainsAny(name, `<>:"/\|?*`) || strings.ContainsRune(name, 0):
-		fail(w, badInput(`Имя не должно содержать символы < > : " / \ | ? *`))
+		fail(w, badInputCode("fs.name_chars", `Имя не должно содержать символы < > : " / \ | ? *`))
 		return
 	case strings.HasSuffix(name, ".") || strings.HasSuffix(name, " "):
-		fail(w, badInput("Имя не должно заканчиваться точкой или пробелом."))
+		fail(w, badInputCode("fs.name_end", "Имя не должно заканчиваться точкой или пробелом."))
 		return
 	}
 	parent := filepath.Clean(strings.TrimSpace(b.Parent))
 	if st, err := os.Stat(parent); err != nil || !st.IsDir() {
-		fail(w, badInput("Папка, в которой нужно создать новую, не найдена."))
+		fail(w, badInputCode("fs.parent_missing", "Папка, в которой нужно создать новую, не найдена."))
 		return
 	}
 	full := filepath.Join(parent, name)
 	if err := os.Mkdir(full, 0o755); err != nil {
 		if os.IsExist(err) {
-			fail(w, badInput("Такая папка уже есть."))
+			fail(w, badInputCode("fs.exists", "Такая папка уже есть."))
 			return
 		}
-		fail(w, badInput(friendlyFsError(err)))
+		msg, code := friendlyFsError(err)
+		fail(w, badInputCode(code, msg))
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"path": full})
 }
 
 // inputError is an ErrInvalidInput with a message meant for the person using the page.
-type inputError struct{ msg string }
+type inputError struct {
+	msg  string
+	code string
+	args []string
+}
 
-func badInput(msg string) error       { return &inputError{msg} }
+func badInput(msg string) error { return &inputError{msg: msg} }
+
+// badInputCode is badInput with a code and the pieces of the text that change (see core.Coder); an empty code is none.
+func badInputCode(code, msg string, args ...string) error {
+	return &inputError{msg: msg, code: code, args: args}
+}
 func (e *inputError) Error() string   { return e.msg }
 func (e *inputError) Is(t error) bool { return t == core.ErrInvalidInput }
+
+// ErrCode makes the error a core.Coder; without a code it is not one (the client gets the text only).
+func (e *inputError) ErrCode() (string, []string) { return e.code, e.args }

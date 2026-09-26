@@ -55,23 +55,17 @@ func Tr(ru string) string {
 	return ru
 }
 
-// LimitDetail translates the reason a torrent stopped seeding, as the engine words it in Russian:
-// "рейтинг 2.00", "время раздачи 3 дн.".
-func LimitDetail(detail string) string {
+// LimitDetail words the reason a torrent stopped seeding from the code and the arguments the engine gives
+// ("limit.ratio" [2.00], "limit.time" [3, d]); detail is the Russian text, used in Russian and for a code not known here.
+func LimitDetail(detail, code string, args []string) string {
 	if !English() {
 		return detail
 	}
-	if v, ok := strings.CutPrefix(detail, "рейтинг "); ok {
-		return "ratio " + v
-	}
-	if v, ok := strings.CutPrefix(detail, "время раздачи "); ok {
-		for _, u := range [][2]string{{" дн.", " d"}, {" ч", " h"}, {" мин", " min"}} {
-			if s, ok := strings.CutSuffix(v, u[0]); ok {
-				v = s + u[1]
-				break
-			}
-		}
-		return "seeding time " + v
+	switch {
+	case code == "limit.ratio" && len(args) == 1:
+		return "ratio " + args[0]
+	case code == "limit.time" && len(args) == 2:
+		return "seeding time " + args[0] + " " + args[1]
 	}
 	return detail
 }

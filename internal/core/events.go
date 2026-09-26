@@ -7,6 +7,9 @@ type Event struct {
 	Hash   string
 	Name   string
 	Detail string // for "limit": what was reached
+	// DetailCode and DetailArgs say it for a client that words it itself: "limit.ratio" [ratio], "limit.time" [number, unit d/h/min].
+	DetailCode string
+	DetailArgs []string
 }
 
 // OnEvent sets the function that receives events (nil removes it). It is called on its own

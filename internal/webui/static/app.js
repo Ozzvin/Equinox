@@ -27,7 +27,7 @@
     if (res.status === 401) { askToken(); throw new Error("Нет доступа"); }
     if (res.status === 204) return null;
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error((data && data.error) || res.statusText);
+    if (!res.ok) throw new Error(window.__trCode(data && data.code, data && data.args, (data && data.error) || res.statusText));
     return data;
   }
 
@@ -379,8 +379,9 @@
     const ui = PORT_UI[port.verdict] || PORT_UI.checking;
     el.className = "pill tip-host " + ui.cls + (discoOn ? " disco" : "");
     const head = ui.text(port) + (port.wantedPort ? ` · нужный ${port.wantedPort} занят` : "");
-    let more = port.advice || "";
-    if (port.wantedPort) more = `Порт ${port.wantedPort} занят другой программой или недоступен, поэтому выбран порт ${port.port}. ${port.advice || ""}`.trim();
+    const advice = window.__trCode(port.adviceCode, port.adviceArgs, port.advice || "");
+    let more = advice;
+    if (port.wantedPort) more = `Порт ${port.wantedPort} занят другой программой или недоступен, поэтому выбран порт ${port.port}. ${advice}`.trim();
     el.lastElementChild.textContent = head; // for screen readers; the page shows only the dot
     const ips = [port.publicIP && `IP: ${port.publicIP}`, port.publicIPv6 && `IPv6: ${port.publicIPv6}`].filter(Boolean);
     el.dataset.tip = [head, more, ips.length ? ips.join("\n") : "IP: пока не известен, подскажут подключившиеся пиры"].filter(Boolean).join("\n");
@@ -391,7 +392,7 @@
   }
 
   function portDetails(p) {
-    let t = p.advice || "";
+    let t = window.__trCode(p.adviceCode, p.adviceArgs, p.advice || "");
     if (p.mapped) t += ` Метод: ${p.method}, внешний IP ${p.externalIP}.`;
     if (p.remaps) t += ` Проброс пришлось восстанавливать после потери: ${p.remaps}.`;
     return t;
@@ -2338,7 +2339,7 @@
       `<div class="pk-row dir" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-folder"/></svg><span>${esc(e.name)}</span></span><span class="r dt"></span><span class="dt">${pkDate(e.modified)}</span></div>` :
       pk.any ? `<div class="pk-row file pick" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-newfile"/></svg><span>${esc(e.name)}</span></span><span class="r dt">${bytes(e.size)}</span><span class="dt">${pkDate(e.modified)}</span></div>` :
       `<div class="pk-row file" aria-disabled="true"><span class="nm"><svg class="i"><use href="#i-newfile"/></svg><span>${esc(e.name)}</span></span><span class="r dt">${bytes(e.size)}</span><span class="dt">${pkDate(e.modified)}</span></div>`);
-    $("pk-list").innerHTML = (d.error ? `<div class="pk-msg">${esc(d.error)}</div>` : "") + rows.join("") +
+    $("pk-list").innerHTML = (d.error ? `<div class="pk-msg">${esc(window.__trCode(d.errorCode, null, d.error))}</div>` : "") + rows.join("") +
       (!d.error && d.entries.length === 0 ? '<div class="pk-msg">Здесь пусто. Можно выбрать эту папку или создать в ней новую.</div>' : "") +
       (d.truncated ? '<div class="pk-msg">Показаны первые записи, остальные скрыты.</div>' : "");
     $("pk-ok").disabled = !$("pk-path").value.trim();

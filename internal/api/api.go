@@ -230,7 +230,17 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, core.ErrNoMetadata), errors.Is(err, core.ErrBusy):
 		code = http.StatusConflict
 	}
-	writeJSON(w, code, map[string]string{"error": err.Error()})
+	body := map[string]any{"error": err.Error()}
+	var coded core.Coder
+	if errors.As(err, &coded) { // the code and the blanks of the text, for a client that words it itself
+		if c, args := coded.ErrCode(); c != "" {
+			body["code"] = c
+			if len(args) > 0 {
+				body["args"] = args
+			}
+		}
+	}
+	writeJSON(w, code, body)
 }
 
 func decode(r *http.Request, v any) error {
@@ -861,7 +871,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if !config.ValidLabelColor(id) {
-				fail(w, badInput("Неизвестный цвет метки: "+id))
+				fail(w, badInputCode("label.color_unknown", "Неизвестный цвет метки: "+id, id))
 				return
 			}
 			colors[l] = id

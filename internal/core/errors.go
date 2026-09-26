@@ -61,6 +61,25 @@ func (m *Manager) onWriteError(t *torrent.Torrent, hash string, err error) {
 	m.setPaused(t, hash, true)
 }
 
+// Coder is an error that names itself with a code and gives the pieces of its text that change (a file name, an
+// address). A client that speaks another language than the message builds the text from them: the code says which
+// text, the arguments fill in the blanks. The message stays what the person reads in Russian, and the log.
+type Coder interface {
+	ErrCode() (code string, args []string)
+}
+
+// CodedError is a plain Coder.
+type CodedError struct {
+	Code string
+	Args []string
+	Msg  string
+	Err  error // what caused it, if anything
+}
+
+func (e *CodedError) Error() string               { return e.Msg }
+func (e *CodedError) Unwrap() error               { return e.Err }
+func (e *CodedError) ErrCode() (string, []string) { return e.Code, e.Args }
+
 // errInvalid builds an ErrInvalidInput error with a message.
 func errInvalid(format string, a ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{ErrInvalidInput}, a...)...)

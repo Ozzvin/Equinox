@@ -713,13 +713,15 @@ func (m *Manager) enforce(ts []*torrent.Torrent) {
 			m.mu.Unlock()
 			if ratio(down, up, t.Length()) >= limit {
 				m.setPaused(t, hash, true)
-				m.emit(Event{Kind: "limit", Hash: hash, Name: t.Name(), Detail: limitReason("ratio", limit)})
+				text, code, args := limitReason("ratio", limit)
+				m.emit(Event{Kind: "limit", Hash: hash, Name: t.Name(), Detail: text, DetailCode: code, DetailArgs: args})
 				continue
 			}
 		}
 		if lim := m.seedLimit(r); lim > 0 && secs >= int64(lim)*60 {
 			m.setPaused(t, hash, true)
-			m.emit(Event{Kind: "limit", Hash: hash, Name: t.Name(), Detail: limitReason("time", float64(lim))})
+			text, code, args := limitReason("time", float64(lim))
+			m.emit(Event{Kind: "limit", Hash: hash, Name: t.Name(), Detail: text, DetailCode: code, DetailArgs: args})
 		}
 	}
 }
