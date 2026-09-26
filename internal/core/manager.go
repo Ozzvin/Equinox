@@ -111,6 +111,10 @@ type Manager struct {
 	done   chan struct{}
 }
 
+// disableTrackersForTests keeps the engine from announcing to trackers, for the tests that add torrents with tracker addresses
+// in them (they must not ask the network, and the engine has a race in starting announcers for torrents added one after another).
+var disableTrackersForTests bool
+
 // New starts the engine. stateDir holds state.json and the piece-completion database.
 func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	st, err := loadState(filepath.Join(stateDir, "state.json"))
@@ -181,6 +185,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		cc.UpnpID = buildinfo.ClientVersion()
 		cc.Seed = true
 		cc.NoDefaultPortForwarding = true // portmap does it, with renewal and verification
+		cc.DisableTrackers = disableTrackersForTests
 		cc.Callbacks.CompletedHandshake = m.inbound.onHandshake
 		cc.Callbacks.ReadExtendedHandshake = func(_ *torrent.PeerConn, msg *pp.ExtendedHandshakeMessage) { m.self.note(net.IP(msg.YourIp)) }
 		applyNetwork(cc, s.Network)
