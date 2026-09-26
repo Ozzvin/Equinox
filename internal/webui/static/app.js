@@ -213,14 +213,15 @@
   }
 
   // ---------- filters ----------
-  const filter = { q: "", state: "", label: "" };
+  const filter = { q: "", state: "", label: "", tracker: "" };
   try { Object.assign(filter, JSON.parse(localStorage.getItem("filter") || "{}")); } catch (_) {}
   if (filter.state === "done") filter.state = "seeding"; // the "finished" view was merged into "seeding"
   const saveFilter = () => { try { localStorage.setItem("filter", JSON.stringify(filter)); } catch (_) {} };
 
   function matches(t, over) {
-    const f = over ? { q: "", label: "", state: "", ...over } : filter;
+    const f = over ? { q: "", label: "", tracker: "", state: "", ...over } : filter;
     if (f.q && !(t.name || t.hash).toLowerCase().includes(f.q.toLowerCase())) return false;
+    if (f.tracker && !(t.trackers || []).includes(f.tracker.slice(2))) return false; // "t:<name of the tracker>"
     if (f.label === "none") { if (t.label) return false; }
     else if (f.label.startsWith("l:") && t.label !== f.label.slice(2)) return false;
     switch (f.state) {
@@ -247,12 +248,43 @@
     const svg = (id) => `<svg class="i"><use href="#${id}"/></svg>`;
     $("side-states").innerHTML = VIEWS.filter(([k]) => !gone.has(k)).map(([k, n, ic]) =>
       sideItem("s:" + k, n, svg(ic), k ? torrents.filter((t) => matches(t, { state: k })).length : torrents.length,
-        !filter.label && filter.state === k)).join("");
+        !filter.label && !filter.tracker && filter.state === k)).join("");
     const labels = allLabels();
     $("side-labels-title").hidden = labels.length === 0;
     $("side-labels").innerHTML = labels.length === 0 ? "" :
       labels.map((l) => sideItem("l:" + l, esc(l), `<i class="tagdot lc-${labelColor(l)}"></i>`, torrents.filter((t) => t.label === l).length, filter.label === "l:" + l)).join("") +
       sideItem("none", "Без метки", '<i class="tagdot" style="opacity:.35"></i>', torrents.filter((t) => !t.label).length, filter.label === "none");
+    // the trackers of the torrents, the ones with most torrents first; a long list is folded after the first few
+    const trs = trackerCounts();
+    $("side-trackers-title").hidden = trs.length === 0;
+    let shown = trs;
+    const foldable = trs.length > TRACKERS_SHOWN + 1;
+    if (foldable && !trackersOpen) {
+      shown = trs.slice(0, TRACKERS_SHOWN);
+      const chosen = trs.find(([n]) => filter.tracker === "t:" + n);
+      if (chosen && !shown.includes(chosen)) shown.push(chosen); // the one that is chosen is never folded away
+    }
+    $("side-trackers").innerHTML = shown.map(([n, c]) => sideItem("t:" + n, esc(n), svg("i-globe"), c, filter.tracker === "t:" + n)).join("") +
+      (foldable ? `<button class="side-item side-more" data-more="1"><span class="name">${trackersOpen ? "Свернуть" : "Ещё " + (trs.length - shown.length)}</span></button>` : "");
+  }
+  // trackers of the torrents with the number of torrents of each: [[name, count]…], the biggest first
+  const TRACKERS_SHOWN = 8;
+  let trackersOpen = false, trackersKey = "";
+  function trackerCounts() {
+    const c = new Map();
+    for (const t of torrents) for (const n of t.trackers || []) c.set(n, (c.get(n) || 0) + 1);
+    return [...c].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }
+  // the list of trackers for the narrow window and the compact density, where the side panel is not
+  function renderTrackerFilter() {
+    const names = trackerCounts().map(([n]) => n).sort((a, b) => a.localeCompare(b));
+    const key = names.join("\u0001");
+    if (key !== trackersKey) {
+      trackersKey = key;
+      $("f-tracker").innerHTML = `<option value="">Все трекеры</option>` + names.map((n) => `<option value="t:${esc(n)}">${esc(n)}</option>`).join("");
+    }
+    if (dataLoaded && filter.tracker && !names.includes(filter.tracker.slice(2))) { filter.tracker = ""; saveFilter(); } // the last torrent of it went away
+    $("f-tracker").value = filter.tracker;
   }
 
   let labelsKey = "";
@@ -305,6 +337,7 @@
   function render() {
     const rows = $("rows");
     renderLabelFilter();
+    renderTrackerFilter();
     // The views that describe a passing state ("Проверяются", "На паузе", "В очереди") are there only while some
     // torrent is in it. When the last one leaves while its view is the chosen one, go back to all the torrents
     // rather than leave an empty list with no explanation.
@@ -1295,11 +1328,14 @@
   $("files").addEventListener("click", (e) => {
     const b = e.target.closest("[data-play]"); if (b) copyLink(Number(b.dataset.play));
   });
-  // sidebar: one view at a time (a state or a label)
+  // sidebar: one view at a time (a state, a label or a tracker)
   $("side").addEventListener("click", (e) => {
+    if (e.target.closest("[data-more]")) { trackersOpen = !trackersOpen; render(); return; }
     const b = e.target.closest("[data-view]"); if (!b) return;
     const v = b.dataset.view;
-    if (v.startsWith("s:")) { filter.state = v.slice(2); filter.label = ""; } else { filter.label = v; filter.state = ""; }
+    if (v.startsWith("s:")) { filter.state = v.slice(2); filter.label = ""; filter.tracker = ""; }
+    else if (v.startsWith("t:")) { filter.tracker = v; filter.state = ""; filter.label = ""; }
+    else { filter.label = v; filter.state = ""; filter.tracker = ""; }
     saveFilter(); render();
   });
 
@@ -1553,6 +1589,7 @@
 
   $("f-state").addEventListener("change", (e) => { filter.state = e.target.value; saveFilter(); render(); });
   $("f-label").addEventListener("change", (e) => { filter.label = e.target.value; saveFilter(); render(); });
+  $("f-tracker").addEventListener("change", (e) => { filter.tracker = e.target.value; saveFilter(); render(); });
 
   // label
   $("btn-label").onclick = () => {
