@@ -121,17 +121,19 @@ label.file { display: block; padding: 0; }
 }
 .pill.disco .dot { animation: disco-dot .6s steps(1, end) infinite; }
 @media (prefers-reduced-motion: reduce) { .pill.disco .dot { animation: none; } }
-/* Giga disco: the whole window, dialogs too, is one colour of the dot's palette after another (see the click handler on #s-port). */
-@keyframes giga-disco {
-  0% { filter: sepia(1) saturate(5) hue-rotate(-38deg); }
-  16.6% { filter: sepia(1) saturate(5) hue-rotate(0deg); }
-  33.3% { filter: sepia(1) saturate(5) hue-rotate(22deg); }
-  50% { filter: sepia(1) saturate(5) hue-rotate(82deg); }
-  66.6% { filter: sepia(1) saturate(5) hue-rotate(200deg); }
-  83.3% { filter: sepia(1) saturate(5) hue-rotate(260deg); }
+/* Giga disco: the whole window, the dialogs too, is one colour of the dot's palette after another, every 0.1 s like the dot
+   (the hue comes from the click handler on #s-port in app.js). */
+html.giga, html.giga dialog[open] { filter: sepia(1) saturate(5) hue-rotate(var(--giga-hue, -38deg)); }
+/* ... and neon outlines along the borders of every part of the interface: white and glowing, so that in the colour of the
+   moment (the filter above tints them like all the rest) they are the brightest thing on the screen. */
+html.giga .topbar, html.giga #side, html.giga main, html.giga .details, html.giga .statusbar, html.giga dialog[open], html.giga .pop {
+  box-shadow: inset 0 0 0 2px #fff, inset 0 0 16px 3px #fff;
 }
-html.giga { animation: giga-disco 2.4s steps(1, end) infinite; }
-@media (prefers-reduced-motion: reduce) { html.giga { animation: none; } }
+html.giga .btn, html.giga input:not([type=checkbox]):not([type=radio]), html.giga select, html.giga textarea, html.giga fieldset, html.giga .cl, html.giga .upd-notes {
+  border-color: #fff; box-shadow: 0 0 5px 1px #fff, inset 0 0 5px #fff;
+}
+html.giga .pill, html.giga .side-item[aria-current="true"], html.giga .tabs button[aria-selected="true"] { box-shadow: 0 0 5px 1px #fff, inset 0 0 5px #fff; }
+html.giga thead th, html.giga .details-head, html.giga .set-nav { border-color: #fff; box-shadow: 0 1px 6px #fff; }
 
 /* dialogs */
 dialog { border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; background: var(--panel); color: var(--text); width: min(440px, calc(100vw - 32px)); box-shadow: var(--shadow); }

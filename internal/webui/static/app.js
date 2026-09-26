@@ -370,14 +370,26 @@
   // A small joke: click the port dot several times in a row and it starts changing colours like a disco ball.
   // It goes on while the clicking goes on and for three seconds after the last click, then the dot is what it was.
   // Five quick clicks make the dot blink (disco). Five such blinks one after another, or 25 quick clicks, make the whole
-  // window blink (giga disco): ten seconds, or until Esc. The colours change about twice a second, not faster.
+  // window blink (giga disco), in the same rhythm as the dot: ten seconds, or until Esc.
   let discoOn = false, discoClicks = 0, discoLast = 0, discoTimer = 0, discoRuns = 0, discoEnded = 0, gigaTimer = 0;
   const GIGA_CLICKS = 25, GIGA_RUNS = 5, DISCO_RUN_GAP = 8000, GIGA_MS = 10000;
-  function stopGiga() { clearTimeout(gigaTimer); gigaTimer = 0; document.documentElement.classList.remove("giga"); }
+  // the colours of the dot's disco-dot, as hues for the filter (the same order: red, orange, yellow, green, blue, purple)
+  const GIGA_HUES = [-38, 0, 22, 82, 200, 260];
+  let gigaTick = 0;
+  function stopGiga() {
+    clearTimeout(gigaTimer); clearInterval(gigaTick); gigaTimer = 0;
+    document.documentElement.classList.remove("giga"); document.documentElement.style.removeProperty("--giga-hue");
+  }
   function startGiga() {
     discoClicks = 0; discoRuns = 0;
-    document.documentElement.classList.add("giga");
     toast(L("ГИГА ДИСКО!", "GIGA DISCO!"));
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return; // the person asked the system for no animation: the words only
+    // The hue is changed from here, not by a CSS animation: the dialogs are drawn apart from the page, and an animation of
+    // their own would start when they open; one hue for all keeps them in step, every 0.1 s as the dot.
+    const root = document.documentElement; let i = 0;
+    const next = () => root.style.setProperty("--giga-hue", GIGA_HUES[i++ % GIGA_HUES.length] + "deg");
+    clearInterval(gigaTick); next(); gigaTick = setInterval(next, 100);
+    root.classList.add("giga");
     clearTimeout(gigaTimer); gigaTimer = setTimeout(stopGiga, GIGA_MS);
   }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && gigaTimer) stopGiga(); });
