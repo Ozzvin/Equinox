@@ -400,6 +400,20 @@ func (m *Manager) finalCounters(t *torrent.Torrent, hash string) (down, up int64
 	return down + r.Downloaded, up + r.Uploaded
 }
 
+// torrentLength is the total size of a torrent whose metadata is known (t.Info() != nil), read safely.
+//
+// t.Length() itself is not: the engine caches it in a field of its own (cacheLength, called from setInfo) that is
+// written without a lock, once nameMu has already been released and Torrent.Info() has started reporting the
+// metadata as known — so a reader that calls Info() then Length() right after can race with that write (caught by
+// go test -race, see BACKLOG.md). info.TotalLength() computes the same sum from the *metainfo.Info the caller
+// already holds, which the engine treats as immutable once published, so no further synchronization is needed.
+func torrentLength(info *metainfo.Info) int64 {
+	if info == nil {
+		return 0
+	}
+	return info.TotalLength()
+}
+
 func ratio(down, up, size int64) float64 {
 	den := down
 	if den == 0 {
@@ -492,9 +506,9 @@ func (m *Manager) List() []Status {
 			DownRate: rates[h][0], UpRate: rates[h][1], Queued: queued[h], SeedQueued: seedQueued[h],
 			Active: time.Since(activeAt[h]) < activeHold,
 		}
-		if t.Info() != nil {
+		if info := t.Info(); info != nil {
 			st.HasMeta = true
-			st.TotalSize = t.Length()
+			st.TotalSize = torrentLength(info)
 			st.Size, st.Done = selection(t, r.FilePrios)
 			if st.Size > 0 {
 				st.Progress = float64(st.Done) / float64(st.Size)
@@ -691,7 +705,8 @@ func (m *Manager) enforce(ts []*torrent.Torrent) {
 				r = *x
 			}
 		})
-		if r.Paused || t.Info() == nil {
+		info := t.Info()
+		if r.Paused || info == nil {
 			continue
 		}
 		m.addActiveTime(hash, dt)
@@ -720,7 +735,7 @@ func (m *Manager) enforce(ts []*torrent.Torrent) {
 			down := r.Downloaded + d - m.seenDown[t.InfoHash()]
 			up := r.Uploaded + u - m.seenUp[t.InfoHash()]
 			m.mu.Unlock()
-			if ratio(down, up, t.Length()) >= limit {
+			if ratio(down, up, torrentLength(info)) >= limit {
 				m.setPaused(t, hash, true)
 				text, code, args := limitReason("ratio", limit)
 				m.emit(Event{Kind: "limit", Hash: hash, Name: t.Name(), Detail: text, DetailCode: code, DetailArgs: args})

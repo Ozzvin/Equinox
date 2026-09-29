@@ -91,6 +91,50 @@ func TestRaisingTheLimitReleasesTheLine(t *testing.T) {
 	waitFor(t, func() bool { return waiting(m) == 0 })
 }
 
+// The window between a torrent's metadata becoming visible (Torrent.Info() != nil) and the engine's own cached total
+// size finishing its write is where List() used to read Torrent.Length() unsynchronized: go test -race caught it here
+// once, by chance, in TestRemovingAWaitingTorrentLeavesTheLine (see BACKLOG.md's former "Гонка данных" entry). List()
+// itself has not called Length() since (control.go computes the size from the *metainfo.Info it already holds, which
+// needs no further synchronization). This hammers List() from another goroutine while several torrents move through
+// the gate one at a time, so -race would still catch a regression, and checks that a torrent never reports the wrong
+// size once it has metadata.
+func TestListDuringGateReleaseHasNoDataRace(t *testing.T) {
+	dir := t.TempDir()
+	const size = 40 << 10
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
+	hashes := addOnDisk(t, m, dir, 6)
+
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			for _, st := range m.List() {
+				if st.HasMeta && st.TotalSize != size {
+					t.Errorf("a torrent with known metadata must report its real size, got %d", st.TotalSize)
+					return
+				}
+			}
+		}
+	}()
+
+	waitFor(t, func() bool {
+		for _, h := range hashes {
+			s, ok := statusOf(m, h)
+			if !ok || (!s.HasMeta && s.CheckQueued == 0) {
+				return false // still waiting for a check slot, or gone from the list for a moment
+			}
+		}
+		return true
+	})
+	close(stop)
+	<-done
+}
+
 func TestRemovingAWaitingTorrentLeavesTheLine(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
