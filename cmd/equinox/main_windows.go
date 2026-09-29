@@ -38,6 +38,8 @@ var (
 	pSendMessage     = user32.NewProc("SendMessageW")
 	pCreateIconFromR = user32.NewProc("CreateIconFromResourceEx")
 	pMessageBox      = user32.NewProc("MessageBoxW")
+	pIsHungAppWindow = user32.NewProc("IsHungAppWindow")
+	pIsWindowVisible = user32.NewProc("IsWindowVisible")
 )
 
 func main() {
@@ -255,6 +257,7 @@ func (d *desktop_) window(dataPath string) {
 	})
 	stopWatch := make(chan struct{})
 	go d.watchMinimize(w, hwnd, stopWatch)
+	go d.watchForHang(stopWatch)
 	go d.place.watch(stopWatch)
 	setWindowIcon(hwnd)
 	// Title bar in the colours of the page: first by the system theme (no white flash), then by what the
@@ -320,6 +323,73 @@ func (d *desktop_) watchMinimize(w webview2.WebView, hwnd uintptr, stop <-chan s
 			}
 		}
 	}
+}
+
+// hung reports whether the main window exists and has stopped responding to Windows: WebView2 has been seen to
+// wedge like this after running a long time (its render or GPU process deadlocks while the rest of the program,
+// including the HTTP API, keeps working fine). Window() is just a stored handle, never a cross-thread call, so
+// this is safe to call at any time, hang or not.
+func (d *desktop_) hung() bool {
+	d.mu.Lock()
+	v := d.view
+	d.mu.Unlock()
+	if v == nil {
+		return false
+	}
+	r, _, _ := pIsHungAppWindow.Call(uintptr(v.Window()))
+	return r != 0
+}
+
+// watchForHang checks a few times an hour whether the window, while sitting hidden in the tray, has stopped
+// responding, and restarts the program if it has — see recoverHungWindow. Two checks in a row have to agree (a
+// few minutes apart) before it acts, so a single busy moment is not mistaken for a real hang; it never touches a
+// window that is on screen, so it cannot interrupt anyone actually looking at it.
+func (d *desktop_) watchForHang(stop <-chan struct{}) {
+	tick := time.NewTicker(2 * time.Minute)
+	defer tick.Stop()
+	strikes := 0
+	for {
+		select {
+		case <-stop:
+			return
+		case <-tick.C:
+		}
+		d.mu.Lock()
+		v := d.view
+		d.mu.Unlock()
+		if v == nil {
+			return
+		}
+		if vis, _, _ := pIsWindowVisible.Call(uintptr(v.Window())); vis != 0 {
+			strikes = 0
+			continue
+		}
+		if d.hung() {
+			strikes++
+		} else {
+			strikes = 0
+		}
+		if strikes >= 2 {
+			d.recoverHungWindow()
+			return
+		}
+	}
+}
+
+// recoverHungWindow restarts the whole program: once the window's own thread has wedged, nothing above this can
+// unstick it, including the graceful shutdown restart() itself asks for (it posts the request to that same
+// thread, which never gets to it). A fresh copy is started first, exactly as a normal restart does; this one
+// then exits at once rather than waiting on a close that will not come. Every write this program makes to disk
+// is already crash-safe (internal/atomicfile, the recovery of an interrupted move on the next start), so this
+// is no different from the abrupt ends those already answer for.
+func (d *desktop_) recoverHungWindow() {
+	log.Println("window: not responding, restarting")
+	if msg := d.restart(); msg != "" {
+		log.Println("window: could not restart:", msg)
+		return
+	}
+	time.Sleep(time.Second)
+	os.Exit(1)
 }
 
 // doQuit shuts the application down (once, whoever asks first).
@@ -403,6 +473,10 @@ func (d *desktop_) requestShow() {
 	v := d.view
 	d.mu.Unlock()
 	if v != nil {
+		if d.hung() { // asking a dead window to come forward would do nothing visible; restart instead
+			d.recoverHungWindow()
+			return
+		}
 		// The window survives being closed or minimised to the tray (see window/watchMinimize):
 		// main's loop is blocked inside w.Run() for as long as that is true, so it never gets
 		// back to select on d.show to notice a request here. Show the existing window directly.

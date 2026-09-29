@@ -180,7 +180,11 @@ func runAddWindow(stateDir string) error {
 		return err
 	}
 	w := newWebViewOffscreen(webview2.WebViewOptions{
-		DataPath: filepath.Join(stateDir, "webview"), AutoFocus: true,
+		// Its own profile folder, not the main window's: two WebView2 processes sharing one profile while both are
+		// alive is unsupported by Chromium and a plausible cause of instability in either (contention on the
+		// profile's lock file, disk cache, GPU process). This runs as a separate process from the main window, so
+		// there is no other way to keep them apart than a folder of its own.
+		DataPath: filepath.Join(stateDir, "webview-add"), AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{Title: lang.Tr("Добавить раздачу") + " — " + appTitle(), Width: 900, Height: 720},
 	})
 	if w == nil {
