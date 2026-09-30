@@ -37,6 +37,39 @@ func TestDiskFullStopsTheTorrentAndSaysWhy(t *testing.T) {
 	}
 }
 
+// A torrent that would fit the free space by itself must still be refused if, together with what every other
+// active torrent on the same disk still has left to download, there would not be room for both — otherwise two
+// large torrents added one after another could each pass their own check and only run out of room once both are
+// well under way (the bug the ledger in otherNeededBytes closes; see BACKLOG.md).
+func TestPreallocateAccountsForOtherActiveTorrentsOnTheSameDisk(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	orig := diskFree
+	diskFree = func(string) (uint64, error) { return 100 << 10, nil } // "the disk has 100 KiB left"
+	defer func() { diskFree = orig }()
+
+	first, err := m.AddFile(makeTorrent(t, dir, "first.bin", 60<<10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return exists(filepath.Join(m.cfg.Get().DataDir, "first.bin")) })
+	if s, _ := statusOf(m, first); s.Error != "" {
+		t.Fatalf("the first torrent fits the free space alone: %+v", s)
+	}
+
+	second, err := m.AddFile(makeTorrent(t, dir, "second.bin", 60<<10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, ok := statusOf(m, second); return ok && s.Paused && s.ErrorKind == ErrKindDiskFull })
+	if exists(filepath.Join(m.cfg.Get().DataDir, "second.bin")) {
+		t.Fatal("the second torrent must get no space while the first still needs its own 60 KiB of the same 100 KiB")
+	}
+	if s, _ := statusOf(m, first); s.Error != "" || s.Paused {
+		t.Fatalf("the second torrent's refusal must not touch the first: %+v", s)
+	}
+}
+
 func TestWriteErrorIsReportedOnceAndPauses(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)

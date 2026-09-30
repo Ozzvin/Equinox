@@ -712,27 +712,17 @@ func removeAll(path string) error {
 
 // ---------------------------------------------------------------- preallocation
 
-// preallocate reserves the full size of every wanted file. It fails early, before any
-// data is downloaded, if the disk cannot hold the torrent.
-func (m *Manager) preallocate(t *torrent.Torrent, prios []int8) error {
-	s := m.cfg.Get()
-	if !m.preallocEnabled(t.InfoHash().HexString()) {
-		return nil
-	}
-	base, err := filepath.Abs(m.saveDir(t.InfoHash().HexString()))
-	if err != nil {
-		return err
-	}
+type preallocJob struct {
+	path string
+	size int64
+}
 
-	type job struct {
-		path string
-		size int64
-	}
-	var jobs []job
-	var need int64
+// neededBytes is how much more a torrent's wanted files need to reach their final size, and the files that need
+// it, given the on-disk state right now. base is the torrent's own, already-resolved save folder.
+func neededBytes(t *torrent.Torrent, base string, prios []int8) (need int64, jobs []preallocJob, err error) {
 	paths, err := store.Paths(base, t.Info())
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	for i, f := range t.Files() {
 		if prioAt(prios, i) == PrioSkip {
@@ -744,8 +734,69 @@ func (m *Manager) preallocate(t *torrent.Torrent, prios []int8) error {
 		}
 		if have < f.Length() {
 			need += f.Length() - have
-			jobs = append(jobs, job{paths[i], f.Length()})
+			jobs = append(jobs, preallocJob{paths[i], f.Length()})
 		}
+	}
+	return need, jobs, nil
+}
+
+// otherNeededBytes sums up how much more every other torrent that would compete with base for the same disk's
+// free space still has left to download: preallocation turned on for it, its metadata known (nothing to reserve
+// for one still being fetched), and its own save folder on the same volume as base. hash is t's own, to leave it
+// out of the sum.
+//
+// This counts wanted-but-not-yet-verified bytes (Length minus BytesCompleted, as selection does for the same
+// torrent's own progress), not what neededBytes above would say by looking at file size on disk: once a torrent
+// has been preallocated, its files already have their final size (sparse, mostly zero) regardless of how much of
+// them is actually downloaded, so a size-on-disk check would see it as finished from the moment it was added.
+func (m *Manager) otherNeededBytes(hash, base string) int64 {
+	m.mu.Lock()
+	others := make([]*torrent.Torrent, 0, len(m.torrents))
+	for h, t := range m.torrents {
+		if h.HexString() != hash {
+			others = append(others, t)
+		}
+	}
+	m.mu.Unlock()
+
+	vol := volumeKey(base)
+	var total int64
+	for _, t2 := range others {
+		h2 := t2.InfoHash().HexString()
+		if !m.preallocEnabled(h2) || t2.Info() == nil {
+			continue
+		}
+		base2, err := filepath.Abs(m.saveDir(h2))
+		if err != nil || volumeKey(base2) != vol {
+			continue
+		}
+		rec2, _ := m.record(h2)
+		size2, done2 := selection(t2, rec2.FilePrios)
+		if size2 > done2 {
+			total += size2 - done2
+		}
+	}
+	return total
+}
+
+// preallocate reserves the full size of every wanted file. It fails early, before any data is downloaded, if the
+// disk could not hold the torrent together with what every other active torrent on the same disk still has left
+// to download — one torrent's own check alone would miss two large torrents that each fit the free space by
+// themselves but not together, and only run out of room once both are well under way.
+func (m *Manager) preallocate(t *torrent.Torrent, prios []int8) error {
+	s := m.cfg.Get()
+	hash := t.InfoHash().HexString()
+	if !m.preallocEnabled(hash) {
+		return nil
+	}
+	base, err := filepath.Abs(m.saveDir(hash))
+	if err != nil {
+		return err
+	}
+
+	need, jobs, err := neededBytes(t, base, prios)
+	if err != nil {
+		return err
 	}
 	if len(jobs) == 0 {
 		return nil
@@ -753,8 +804,9 @@ func (m *Manager) preallocate(t *torrent.Torrent, prios []int8) error {
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return err
 	}
-	if free, err := diskFree(base); err == nil && uint64(need) > free {
-		return fmt.Errorf("%w: need %d bytes, %d free", ErrNoDiskSpace, need, free)
+	total := uint64(need) + uint64(m.otherNeededBytes(hash, base))
+	if free, err := diskFree(base); err == nil && total > free {
+		return fmt.Errorf("%w: need %d bytes (%d more for other active torrents on the same disk), %d free", ErrNoDiskSpace, need, total-uint64(need), free)
 	}
 	for _, j := range jobs {
 		// A torrent removed meanwhile (with its data) must not get its files back.

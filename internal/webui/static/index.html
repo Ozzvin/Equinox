@@ -392,7 +392,7 @@
           <label>Копии .torrent файлов (пусто — не сохранять)
             <span class="pick"><input id="st-copydir" autocomplete="off"><button type="button" class="btn small" data-pick="st-copydir">Обзор…</button></span>
           </label>
-          <label class="check"><input type="checkbox" id="st-prealloc"><span>Резервировать место на диске при добавлении</span></label>
+          <label class="check"><input type="checkbox" id="st-prealloc"><span>Проверять место на диске перед добавлением<br><span class="muted small">Откажет сразу, если места не хватит на эту раздачу вместе с тем, что ещё не докачано у остальных активных раздач на этом же диске. Место под файл выделяется сразу, но физически не занимается до первой записи в него — в это время его может занять что-то ещё.</span></span></label>
           <label class="check"><input type="checkbox" id="st-addpaused"><span>Добавлять торренты на паузе<br><span class="muted small">Раздача не начнёт скачиваться сама: можно сначала выбрать файлы и папку. Относится и к папке автодобавления, magnet-ссылкам и запуску из командной строки; в окне добавления для каждой раздачи это можно поменять.</span></span></label>
         </fieldset>
         <fieldset>

@@ -91,7 +91,10 @@ type Settings struct {
 	// PortMapping keeps the port forwarded on the router (UPnP / NAT-PMP) and renews it.
 	PortMapping bool `json:"portMapping"`
 
-	// Preallocate reserves the full file size on disk when a torrent is added.
+	// Preallocate checks, when a torrent is added, that the disk has room for it together with what every other
+	// active torrent on the same disk still has left to download, and refuses early if not; each file is then set
+	// to its final size up front (sparse, unless PreallocateZeroFill), so the check does not by itself hold that
+	// space against anything outside Equinox that might use the disk in the meantime.
 	Preallocate bool `json:"preallocate"`
 	// PreallocateZeroFill additionally writes zeros so the space is physically allocated.
 	PreallocateZeroFill bool `json:"preallocateZeroFill"`
