@@ -120,12 +120,14 @@ func TestTrackerIconCacheAndSwitch(t *testing.T) {
 	if b, ct, err := m.TrackerIcon(context.Background(), "Kept.Example"); err != nil || ct != "image/png" || len(b) != len(pngBytes) {
 		t.Fatalf("the kept icon: %d bytes, %q, %v", len(b), ct, err)
 	}
-	// a site that was found to have none, lately: not asked again
+	// a site that was found to have none, lately: not asked again, and the answer is a confirmed absence, not a
+	// pending fetch — the HTTP handler caches the two very differently (see api.trackerIcon), so mixing them up
+	// (as happened once already) makes a confirmed-absent icon get re-asked every few seconds forever.
 	if err := os.WriteFile(filepath.Join(icons, "none.example.none"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := m.TrackerIcon(context.Background(), "none.example"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("a site with no icon: %v", err)
+	if _, _, err := m.TrackerIcon(context.Background(), "none.example"); !errors.Is(err, ErrNotFound) || errors.Is(err, ErrIconPending) {
+		t.Errorf("a site with a confirmed-fresh absence: %v, want plain ErrNotFound, not ErrIconPending", err)
 	}
 	// what is not a site
 	for _, bad := range []string{"", "localhost", "a b.example", "../x.example", "x.example/../y", "127.0.0.1:80", strings.Repeat("a", 120) + ".org"} {
@@ -173,15 +175,15 @@ func TestTrackerIconDoesNotBlockOnASlowSite(t *testing.T) {
 	defer m.Close()
 
 	t0 := time.Now()
-	if _, _, err := m.TrackerIcon(context.Background(), site); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("first call: %v", err)
+	if _, _, err := m.TrackerIcon(context.Background(), site); !errors.Is(err, ErrIconPending) {
+		t.Fatalf("first call: %v, want ErrIconPending (a fetch is now in flight)", err)
 	}
 	if since := time.Since(t0); since > 100*time.Millisecond {
 		t.Errorf("TrackerIcon waited %v for a site that takes 300ms to answer", since)
 	}
 	// a second call for the same site, right away, must not start a second fetch
-	if _, _, err := m.TrackerIcon(context.Background(), site); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("second call: %v", err)
+	if _, _, err := m.TrackerIcon(context.Background(), site); !errors.Is(err, ErrIconPending) {
+		t.Fatalf("second call: %v, want ErrIconPending", err)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)

@@ -42,8 +42,13 @@ func TestTrackerIconEndpoint(t *testing.T) {
 	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("without the key: %v", resp)
 	}
-	if r := e.do(t, "GET", "/api/tracker-icon?site=none.example", nil, nil); r.StatusCode != http.StatusNotFound {
-		t.Errorf("a site with no icon: %d", r.StatusCode)
+	if r := e.do(t, "GET", "/api/tracker-icon?site=none.example", nil, nil); r.StatusCode != http.StatusNotFound || r.Header.Get("Cache-Control") != "private, max-age=3600" {
+		t.Errorf("a site with a confirmed absence: %d, cache-control %q, want a long one (it is not about to change)", r.StatusCode, r.Header.Get("Cache-Control"))
+	}
+	// unlike a confirmed absence, a site never asked before (a fetch is now starting in the background) must not
+	// be cached for long: the page needs to come back and ask again soon, once the fetch has had time to finish.
+	if r := e.do(t, "GET", "/api/tracker-icon?site=pending.example", nil, nil); r.StatusCode != http.StatusNotFound || r.Header.Get("Cache-Control") != "private, max-age=3" {
+		t.Errorf("a site not asked before: %d, cache-control %q, want a short one", r.StatusCode, r.Header.Get("Cache-Control"))
 	}
 	if r := e.do(t, "GET", "/api/tracker-icon?site=../etc", nil, nil); r.StatusCode != http.StatusBadRequest {
 		t.Errorf("not a site: %d", r.StatusCode)

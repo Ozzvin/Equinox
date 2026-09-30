@@ -554,7 +554,11 @@ func (s *Server) stage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) trackerIcon(w http.ResponseWriter, r *http.Request) {
 	data, ctype, err := s.m.TrackerIcon(r.Context(), r.URL.Query().Get("site"))
 	if err != nil {
-		w.Header().Set("Cache-Control", "private, max-age=3") // a background fetch may just now be in flight; retry soon
+		maxAge := "private, max-age=3600" // a confirmed absence: the page is not to ask again soon
+		if errors.Is(err, core.ErrIconPending) {
+			maxAge = "private, max-age=3" // a fetch may just now be in flight; retry soon
+		}
+		w.Header().Set("Cache-Control", maxAge)
 		fail(w, err)
 		return
 	}

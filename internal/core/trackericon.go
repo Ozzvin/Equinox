@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -25,6 +26,11 @@ const (
 	iconDirName   = "icons"
 	iconFetchWait = 25 * time.Second
 )
+
+// ErrIconPending is ErrNotFound with the added meaning that a fetch of the icon was just started (or was already
+// running) in the background: unlike a confirmed absence, a caller must not remember this answer for long, since
+// the icon (or the confirmed absence) may be ready within moments.
+var ErrIconPending = fmt.Errorf("%w: fetching in the background", ErrNotFound)
 
 // iconScheme is how a site is asked for its icon; only the tests change it.
 var iconScheme = "https"
@@ -51,8 +57,9 @@ func IconType(data []byte) string {
 	return ""
 }
 
-// TrackerIcon returns the icon of a site (its domain, "rutracker.org"): from the folder of the icons, or fetched now. ErrNotFound
-// says there is none (or that icons are switched off).
+// TrackerIcon returns the icon of a site (its domain, "rutracker.org"): from the folder of the icons, or fetched in
+// the background. A confirmed absence (or icons switched off) is ErrNotFound; a fetch still in flight is the more
+// specific ErrIconPending, so a caller can tell the two apart (see its doc).
 func (m *Manager) TrackerIcon(ctx context.Context, site string) (data []byte, contentType string, err error) {
 	site = strings.ToLower(strings.TrimSpace(site))
 	if !siteRe.MatchString(site) || len(site) > 100 {
@@ -99,7 +106,7 @@ func (m *Manager) TrackerIcon(ctx context.Context, site string) (data []byte, co
 	if !already {
 		go m.fetchIconInBackground(site, dir, file, miss)
 	}
-	return nil, "", ErrNotFound
+	return nil, "", ErrIconPending
 }
 
 // fetchIconInBackground fetches the icon of a site and writes it (or the negative marker) to the state folder, for
