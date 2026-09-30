@@ -22,10 +22,9 @@ import (
 
 func main() {
 	stateDir := flag.String("state", "", "state directory (default: next to the executable, or a per-user folder if that is not writable)")
-	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback, unless -open)")
-	open := flag.Bool("open", false, "run behind a proxy that signs users in (Umbrel): listen on any address and ask for no key. Never expose this port to a network that is not trusted")
+	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback on Windows; a non-loopback address needs -open where that flag exists)")
+	open, allowHosts := openFlags() // see open_windows.go: not registered at all on a Windows build
 	downloads := flag.String("downloads", "", "where a first start saves torrents (default: the Downloads folder)")
-	allowHosts := flag.String("allow-host", "", "with -open: extra host names to accept, comma separated (IP addresses, short names and .local names always pass)")
 	add := flag.String("add", "", ".torrent file or magnet link to add at startup")
 	noBrowser := flag.Bool("no-browser", false, "do not open the web interface in the browser")
 	flag.Parse()
