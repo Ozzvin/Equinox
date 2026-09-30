@@ -32,15 +32,18 @@ import (
 )
 
 var (
-	user32           = windows.NewLazySystemDLL("user32.dll")
-	pShowWindow      = user32.NewProc("ShowWindow")
-	pIsIconic        = user32.NewProc("IsIconic")
-	pSetForeground   = user32.NewProc("SetForegroundWindow")
-	pSendMessage     = user32.NewProc("SendMessageW")
-	pCreateIconFromR = user32.NewProc("CreateIconFromResourceEx")
-	pMessageBox      = user32.NewProc("MessageBoxW")
-	pIsHungAppWindow = user32.NewProc("IsHungAppWindow")
-	pIsWindowVisible = user32.NewProc("IsWindowVisible")
+	user32                    = windows.NewLazySystemDLL("user32.dll")
+	pShowWindow               = user32.NewProc("ShowWindow")
+	pIsIconic                 = user32.NewProc("IsIconic")
+	pSetForeground            = user32.NewProc("SetForegroundWindow")
+	pSendMessage              = user32.NewProc("SendMessageW")
+	pCreateIconFromR          = user32.NewProc("CreateIconFromResourceEx")
+	pMessageBox               = user32.NewProc("MessageBoxW")
+	pIsHungAppWindow          = user32.NewProc("IsHungAppWindow")
+	pIsWindowVisible          = user32.NewProc("IsWindowVisible")
+	pEnumWindows              = user32.NewProc("EnumWindows")
+	pGetClassName             = user32.NewProc("GetClassNameW")
+	pGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
 )
 
 func main() {
@@ -351,36 +354,83 @@ func (d *desktop_) hung() bool {
 	return r != 0
 }
 
-// watchForHang checks a few times an hour whether the window, while sitting hidden in the tray, has stopped
-// responding, and restarts the program if it has — see recoverHungWindow. Two checks in a row have to agree (a
-// few minutes apart) before it acts, so a single busy moment is not mistaken for a real hang; it never touches a
-// window that is on screen, so it cannot interrupt anyone actually looking at it.
+// trayWindowHandle finds this process's own tray icon window (energye/systray's message-only window, class
+// "SystrayClass"): the library keeps no handle of its own to ask for. 0 if it cannot be found (the tray has not
+// been created yet, or never will be, e.g. -hidden was not used and this build has none).
+func trayWindowHandle() uintptr {
+	pid := uint32(os.Getpid())
+	var found uintptr
+	cb := windows.NewCallback(func(h, _ uintptr) uintptr {
+		var owner uint32
+		pGetWindowThreadProcessId.Call(h, uintptr(unsafe.Pointer(&owner)))
+		if owner != pid {
+			return 1 // keep enumerating
+		}
+		var cls [64]uint16
+		n, _, _ := pGetClassName.Call(h, uintptr(unsafe.Pointer(&cls[0])), uintptr(len(cls)))
+		if windows.UTF16ToString(cls[:n]) == "SystrayClass" {
+			found = h
+			return 0 // stop: found it
+		}
+		return 1
+	})
+	pEnumWindows.Call(cb, 0)
+	return found
+}
+
+// trayHung reports whether the tray icon's own window has stopped responding to Windows. It runs on the same
+// message loop as a click (see main's systray.SetOnClick), all the way inside the window procedure: if that loop
+// is stuck, the tray stops reacting to anything — clicks, the right-click menu, icon and tooltip updates — until
+// the whole program is restarted, same as the main window hanging (see hung/recoverHungWindow), just a different
+// window. EnumWindows/IsHungAppWindow are not cross-thread calls to the tray itself, so this is always safe to call.
+func (d *desktop_) trayHung() bool {
+	h := trayWindowHandle()
+	if h == 0 {
+		return false
+	}
+	r, _, _ := pIsHungAppWindow.Call(h)
+	return r != 0
+}
+
+// watchForHang checks a few times an hour whether the window, while sitting hidden in the tray, or the tray icon
+// itself, has stopped responding, and restarts the program if either has — see recoverHungWindow. Two checks in a
+// row have to agree (a few minutes apart) before it acts, so a single busy moment is not mistaken for a real hang.
+// The main window's check never touches one that is on screen, so it alone cannot interrupt anyone actually
+// looking at it; the tray's check is not conditioned on that (a hung tray is invisible either way), so recovering
+// from one can still close a window that was open and fine — there is no way to unstick only the tray.
 func (d *desktop_) watchForHang(stop <-chan struct{}) {
 	tick := time.NewTicker(2 * time.Minute)
 	defer tick.Stop()
-	strikes := 0
+	winStrikes, trayStrikes := 0, 0
 	for {
 		select {
 		case <-stop:
 			return
 		case <-tick.C:
 		}
+		if d.trayHung() {
+			trayStrikes++
+		} else {
+			trayStrikes = 0
+		}
+
 		d.mu.Lock()
 		v := d.view
 		d.mu.Unlock()
 		if v == nil {
+			if trayStrikes >= 2 {
+				d.recoverHungWindow()
+			}
 			return
 		}
 		if vis, _, _ := pIsWindowVisible.Call(uintptr(v.Window())); vis != 0 {
-			strikes = 0
-			continue
-		}
-		if d.hung() {
-			strikes++
+			winStrikes = 0
+		} else if d.hung() {
+			winStrikes++
 		} else {
-			strikes = 0
+			winStrikes = 0
 		}
-		if strikes >= 2 {
+		if winStrikes >= 2 || trayStrikes >= 2 {
 			d.recoverHungWindow()
 			return
 		}
@@ -496,7 +546,16 @@ func (d *desktop_) requestShow() {
 		// The window survives being closed or minimised to the tray (see window/watchMinimize):
 		// main's loop is blocked inside w.Run() for as long as that is true, so it never gets
 		// back to select on d.show to notice a request here. Show the existing window directly.
-		bringToFront(uintptr(v.Window()))
+		//
+		// Dispatch, not a direct call: ShowWindow/SetForegroundWindow (inside bringToFront) wait on the target
+		// window's own thread the way SendMessage does, so calling them here would block whatever thread asked
+		// to show the window — the tray icon's, for a click, and requestShow runs inside its own message
+		// handling (systray's wndProc calls the click callback straight from its message loop). A momentary
+		// stall in the window (not yet long enough for hung() above to catch) would then wedge that loop for as
+		// long as the stall lasts, and it would stop answering clicks until the whole program is restarted, same
+		// as a real hang — this happened once already. Dispatch only ever queues the call and returns.
+		hwnd := uintptr(v.Window())
+		v.Dispatch(func() { bringToFront(hwnd) })
 		return
 	}
 	select {
