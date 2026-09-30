@@ -555,11 +555,15 @@ func (m *Manager) List() []Status {
 			continue
 		}
 		r := recs[hsh]
-		out = append(out, Status{
+		st := Status{
 			Hash: hsh, Name: v.name, Size: v.sel, TotalSize: v.sel, Done: v.sel, Progress: 1,
 			Downloaded: r.Downloaded, Uploaded: r.Uploaded, Ratio: ratio(r.Downloaded, r.Uploaded, v.sel),
 			Paused: r.Paused, Label: r.Label, SavePath: m.saveDir(hsh), HasMeta: true, Moving: v.frac,
-		})
+		}
+		if r.Source != nil { // no live *torrent.Torrent to fall back to here (see mainTracker), only what was recorded
+			st.Tracker, st.TrackerSite = splitTracker(r.Source.Announce)
+		}
+		out = append(out, st)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := recs[out[i].Hash], recs[out[j].Hash]

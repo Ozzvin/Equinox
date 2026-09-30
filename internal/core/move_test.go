@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/anacrolix/torrent/metainfo"
+
 	"github.com/Ozzvin/equinox/internal/config"
 )
 
@@ -285,5 +287,63 @@ func TestMoveStorageClearsItsTrail(t *testing.T) {
 	m.recoverMoves()
 	if !exists(filepath.Join(target, "trail.bin")) {
 		t.Error("recoverMoves removed the data of a move that had finished")
+	}
+}
+
+// A torrent being moved is briefly out of the engine (see List's "keep showing them" fallback below) and, until
+// this was fixed, that placeholder Status never got a Tracker/TrackerSite at all, so the sidebar filed a torrent
+// with a perfectly good tracker under "Без трекера" for as long as its move took. Reproduced here without needing
+// a move slow enough to poll mid-flight (a same-drive move is a near-instant rename): simulate the exact state
+// List() sees during a real one directly, since that is the only part of a move this is really about.
+func TestListShowsTheTrackerWhileMoving(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	defer m.Close()
+
+	mi, err := metainfo.LoadFromFile(makeTorrent(t, dir, "moving.bin", 32<<10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mi.Announce = "http://tapochek.net/announce.php?uk=SECRET"
+	withAnnounce := filepath.Join(dir, "with-announce.torrent")
+	f, err := os.Create(withAnnounce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mi.Write(f); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	seed(t, m, dir, "moving.bin")
+	hash, err := m.AddFile(withAnnounce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 })
+	before, ok := statusOf(m, hash)
+	if !ok || before.Tracker != "tapochek" {
+		t.Fatalf("need a torrent with a known tracker before simulating a move: %+v", before)
+	}
+
+	m.mu.Lock()
+	var ih metainfo.Hash
+	for h := range m.torrents {
+		if h.HexString() == hash {
+			ih = h
+		}
+	}
+	delete(m.torrents, ih) // exactly what a real move does while it runs
+	m.moves[hash] = &moveJob{name: before.Name, selSize: before.Size, running: true}
+	m.mu.Unlock()
+
+	during, ok := statusOf(m, hash)
+	if !ok {
+		t.Fatal("a torrent being moved must stay in the list")
+	}
+	if during.Moving == 0 {
+		t.Fatalf("the fallback status must report as moving: %+v", during)
+	}
+	if during.Tracker != "tapochek" || during.TrackerSite != "tapochek.net" {
+		t.Fatalf("the tracker must not be lost while a torrent is being moved: %+v", during)
 	}
 }
