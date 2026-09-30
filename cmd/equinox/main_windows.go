@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -195,6 +196,11 @@ type desktop_ struct {
 
 	mu   sync.Mutex
 	view webview2.WebView // current window, nil when hidden in the tray
+
+	// checkingUpdate is set while installUpdate's own update.Check call (up to 30s, synchronous on the window
+	// thread: see installUpdate) is running, so requestShow knows a window that briefly stops answering
+	// IsHungAppWindow then is busy, not actually hung (see requestShow).
+	checkingUpdate atomic.Bool
 }
 
 // window opens the UI window and blocks until it is closed (or the app quits).
@@ -429,6 +435,8 @@ func (d *desktop_) restart() string {
 // page's progress dialog); this only returns an error text (empty on success) once the check
 // that finds the release to install is done.
 func (d *desktop_) installUpdate() string {
+	d.checkingUpdate.Store(true)
+	defer d.checkingUpdate.Store(false)
 	checkCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	info, err := update.Check(checkCtx, false)
@@ -478,7 +486,10 @@ func (d *desktop_) requestShow() {
 	v := d.view
 	d.mu.Unlock()
 	if v != nil {
-		if d.hung() { // asking a dead window to come forward would do nothing visible; restart instead
+		// installUpdate's own check (see checkingUpdate) blocks the window thread for up to 30s: Windows would
+		// call that a hang too, and unlike a real one it is expected to pass, so it must not be mistaken for one
+		// here and used as a reason to kill the process mid-update.
+		if !d.checkingUpdate.Load() && d.hung() { // asking a dead window to come forward would do nothing visible; restart instead
 			d.recoverHungWindow()
 			return
 		}
