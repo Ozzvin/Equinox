@@ -29,6 +29,9 @@ const (
 // iconScheme is how a site is asked for its icon; only the tests change it.
 var iconScheme = "https"
 
+// iconPort, appended to the host when set, points a fetch at a local test server; only the tests change it.
+var iconPort string
+
 var siteRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 
 // the images that may be shown as an icon (not SVG: it can carry scripts)
@@ -81,38 +84,58 @@ func (m *Manager) TrackerIcon(ctx context.Context, site string) (data []byte, co
 		return nil, "", ErrNotFound
 	}
 
-	m.iconMu.Lock() // one at a time: a sidebar of many trackers must not be many requests at once
-	defer m.iconMu.Unlock()
-	if fresh(file, iconKeep) { // another request got it while this one waited
-		if b, t, ok := read(); ok {
-			return b, t, nil
-		}
+	// Not cached: ask for it in the background and say now that there is none yet, rather than hold the request
+	// (an <img> connection, one of Chromium's 6 per host) open for up to iconFetchWait. A stalled or unreachable
+	// tracker site must not be able to queue up behind the ones this page keeps polling, like /api/torrents.
+	m.iconMu.Lock()
+	if m.iconFetching == nil {
+		m.iconFetching = map[string]bool{}
 	}
-	ctx, cancel := context.WithTimeout(ctx, iconFetchWait)
+	already := m.iconFetching[site]
+	if !already {
+		m.iconFetching[site] = true
+	}
+	m.iconMu.Unlock()
+	if !already {
+		go m.fetchIconInBackground(site, dir, file, miss)
+	}
+	return nil, "", ErrNotFound
+}
+
+// fetchIconInBackground fetches the icon of a site and writes it (or the negative marker) to the state folder, for
+// a later TrackerIcon call to pick up. It runs detached from any one request: ctx does not come from a caller, since
+// that would be cancelled the moment the caller's own HTTP response is sent.
+func (m *Manager) fetchIconInBackground(site, dir, file, miss string) {
+	defer func() {
+		m.iconMu.Lock()
+		delete(m.iconFetching, site)
+		m.iconMu.Unlock()
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), iconFetchWait)
 	defer cancel()
 	b := fetchSiteIcon(ctx, site)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, "", ErrNotFound
+		return
 	}
 	if t := IconType(b); t != "" {
 		_ = os.WriteFile(file, b, 0o644)
 		_ = os.Remove(miss)
-		return b, t, nil
+		return
 	}
 	_ = os.WriteFile(miss, nil, 0o644)
-	if b, t, ok := read(); ok { // the site is not answering now, the old icon is better than none
-		return b, t, nil
-	}
-	return nil, "", ErrNotFound
 }
 
 // fetchSiteIcon finds the icon of a site: /favicon.ico, else the one the front page names.
 func fetchSiteIcon(ctx context.Context, site string) []byte {
 	for _, host := range []string{site, "www." + site} {
-		if b, _ := fetchImage(ctx, iconScheme+"://"+host+"/favicon.ico"); IconType(b) != "" {
+		addr := host
+		if iconPort != "" {
+			addr += ":" + iconPort
+		}
+		if b, _ := fetchImage(ctx, iconScheme+"://"+addr+"/favicon.ico"); IconType(b) != "" {
 			return b
 		}
-		page, base := fetchPage(ctx, iconScheme+"://"+host+"/")
+		page, base := fetchPage(ctx, iconScheme+"://"+addr+"/")
 		if page == "" {
 			continue
 		}

@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Ozzvin/equinox/internal/config"
 )
@@ -137,5 +139,65 @@ func TestTrackerIconCacheAndSwitch(t *testing.T) {
 	}
 	if _, _, err := m.TrackerIcon(context.Background(), "kept.example"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("with the icons off: %v", err)
+	}
+}
+
+// A slow or unreachable tracker site must not make TrackerIcon itself wait: the fetch runs in the background, and a
+// concurrent second call for the same, not-yet-cached site must not start a second fetch of its own.
+func TestTrackerIconDoesNotBlockOnASlowSite(t *testing.T) {
+	defer AllowLocalFetches(false)
+	AllowLocalFetches(true)
+	old := iconScheme
+	iconScheme = "http"
+	defer func() { iconScheme = old }()
+
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		time.Sleep(300 * time.Millisecond) // longer than a caller should ever be made to wait
+		if r.URL.Path == "/favicon.ico" {
+			_, _ = w.Write(pngBytes)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	_, port, _ := strings.Cut(strings.TrimPrefix(srv.URL, "http://"), ":")
+	oldPort := iconPort
+	iconPort = port
+	defer func() { iconPort = oldPort }()
+	site := "127.0.0.1" // a valid siteRe host, and iconPort points the actual connection at srv
+
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	defer m.Close()
+
+	t0 := time.Now()
+	if _, _, err := m.TrackerIcon(context.Background(), site); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("first call: %v", err)
+	}
+	if since := time.Since(t0); since > 100*time.Millisecond {
+		t.Errorf("TrackerIcon waited %v for a site that takes 300ms to answer", since)
+	}
+	// a second call for the same site, right away, must not start a second fetch
+	if _, _, err := m.TrackerIcon(context.Background(), site); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second call: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if b, ct, err := m.TrackerIcon(context.Background(), site); err == nil {
+			if ct != "image/png" || len(b) != len(pngBytes) {
+				t.Errorf("the fetched icon: %d bytes, %q", len(b), ct)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the background fetch did not finish in time")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Errorf("the site was hit %d times, want 1 (the two calls must share one background fetch)", got)
 	}
 }

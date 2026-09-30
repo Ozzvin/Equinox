@@ -43,7 +43,7 @@ var (
 //	                              Stop, portMu only for the pointer, so PortStatus never waits for the router
 //	m.mu -> cfg.mu                cfg.Get() is read under m.mu in a few places
 //	state.mu -> cfg.mu            likewise inside state.with/touch/view callbacks
-//	lowMu, evMu, peerMu, manualMu, self.mu  leaves: nothing else is taken while one of them is held
+//	lowMu, evMu, peerMu, manualMu, self.mu, iconMu  leaves: nothing else is taken while one of them is held
 //
 // m.mu and state.mu are never nested: no state.with/touch/view callback takes m.mu, and nothing calls into
 // the state store while holding m.mu. The state store writes the file under its own lock, so a callback must
@@ -51,20 +51,21 @@ var (
 // hands the event to another goroutine. checkLine takes m.mu and snapshotRecords takes state.mu, so neither may be
 // called with m.mu held. A new lock, or a new nesting, belongs in this list.
 type Manager struct {
-	cfg        *config.Store
-	state      *stateStore
-	stateDir   string
-	iconMu     sync.Mutex     // one fetch of a tracker's icon at a time (see TrackerIcon)
-	store      *store.Storage // the engine's file storage; kept to be told which files to trust
-	startNet   config.Network // connection settings the engine was started with
-	wantedPort int            // the port asked for at start; the engine may have had to use another
-	cl         *torrent.Client
-	comp       storage.PieceCompletion
-	portCtl    sync.Mutex // serialises starting and stopping the mapping; held across the slow Stop
-	portMu     sync.Mutex // guards only the ports pointer, so PortStatus never waits for the router
-	ports      *portmap.Manager
-	inbound    *inboundTracker
-	self       selfIPs // our own address as the peers report it
+	cfg          *config.Store
+	state        *stateStore
+	stateDir     string
+	iconMu       sync.Mutex      // guards iconFetching only (see TrackerIcon); the fetch itself runs outside it
+	iconFetching map[string]bool // sites whose icon a background goroutine is already fetching
+	store        *store.Storage  // the engine's file storage; kept to be told which files to trust
+	startNet     config.Network  // connection settings the engine was started with
+	wantedPort   int             // the port asked for at start; the engine may have had to use another
+	cl           *torrent.Client
+	comp         storage.PieceCompletion
+	portCtl      sync.Mutex // serialises starting and stopping the mapping; held across the slow Stop
+	portMu       sync.Mutex // guards only the ports pointer, so PortStatus never waits for the router
+	ports        *portmap.Manager
+	inbound      *inboundTracker
+	self         selfIPs // our own address as the peers report it
 
 	upLim, downLim *rate.Limiter
 

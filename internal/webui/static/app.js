@@ -279,14 +279,15 @@
   }
   // The icon of a tracker is the picture of its site, which the program fetches (and keeps); one that could not be loaded is a globe.
   // The <img> cannot send the key in a header, so it is in the address, which the program accepts for this one thing.
-  const trackerIconGone = new Set();
   function trackerIcon(site, svg) {
-    if (!site || trackerIconGone.has(site) || (settings && settings.trackerIcons === false)) return svg("i-globe");
+    if (!site || (settings && settings.trackerIcons === false)) return svg("i-globe");
     return `<img class="tr-ico" src="/api/tracker-icon?site=${encodeURIComponent(site)}&token=${encodeURIComponent(token)}" alt="" width="16" height="16" data-site="${esc(site)}">`;
   }
   document.addEventListener("error", (e) => { // an image that did not load (the event does not bubble: heard on the way down)
     const im = e.target;
-    if (im && im.classList && im.classList.contains("tr-ico") && !trackerIconGone.has(im.dataset.site)) { trackerIconGone.add(im.dataset.site); render(); }
+    // No lasting blacklist: the icon may just not be fetched yet (the server backgrounds that, see trackericon.go),
+    // so a plain swap to the globe now, and the next render tries the <img> again on its own.
+    if (im && im.classList && im.classList.contains("tr-ico")) im.outerHTML = '<svg class="i"><use href="#i-globe"/></svg>';
   }, true);
   const trackerless = () => torrents.filter((t) => !t.tracker).length; // in DHT only, say
   // the list of trackers for the narrow window and the compact density, where the side panel is not

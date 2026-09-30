@@ -554,7 +554,7 @@ func (s *Server) stage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) trackerIcon(w http.ResponseWriter, r *http.Request) {
 	data, ctype, err := s.m.TrackerIcon(r.Context(), r.URL.Query().Get("site"))
 	if err != nil {
-		w.Header().Set("Cache-Control", "private, max-age=3600") // the page is not to ask again at once
+		w.Header().Set("Cache-Control", "private, max-age=3") // a background fetch may just now be in flight; retry soon
 		fail(w, err)
 		return
 	}
