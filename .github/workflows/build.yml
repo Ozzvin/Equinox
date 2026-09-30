@@ -10,7 +10,36 @@ on:
         type: string
 
 jobs:
+  # The same tests test.yml runs on every push to main, run again here: that workflow is triggered by push, this
+  # one by hand (at release time, see docs/architecture.md), so nothing otherwise makes sure this exact commit's
+  # tests are green before it is built and released — v1.0.26 was once built and nearly released on a red run,
+  # caught only because someone happened to be watching. CGO_ENABLED is left unset (not "0", unlike the build
+  # jobs below): the race detector needs cgo, and windows-latest has a C compiler in PATH for it.
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        shell: bash
+        run: test -z "$(gofmt -l cmd internal)"
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
   build:
+    needs: [test, test-linux]
     runs-on: windows-latest
     env:
       # windows-latest has a C compiler in PATH (unlike the maintainer's own dev machine), so
@@ -44,9 +73,9 @@ jobs:
             dist/SHA256SUMS.txt
           retention-days: 30
 
-  # The server for Linux, as archives. It is built apart from the Windows job: no installer, no Inno Setup,
-  # and the tests run in the Test workflow (which has a Linux job too).
+  # The server for Linux, as archives. It is built apart from the Windows job: no installer, no Inno Setup.
   linux:
+    needs: [test, test-linux]
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: "0"
