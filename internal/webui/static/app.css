@@ -266,7 +266,7 @@ table.mini tr:hover td { background: var(--hover); }
 .ctx hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
 /* "Add torrents" dialog */
 dialog.add { max-height: calc(100vh - 32px); overflow: auto; }
-.ad-list { min-height: 92px; max-height: 190px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.ad-list { min-height: 48px; max-height: 190px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
 .ad-list .none { min-height: 90px; display: flex; align-items: center; justify-content: center; padding: 0 14px; color: var(--muted); text-align: center; }
 .ad-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer; border-bottom: 1px solid var(--line); }
 .ad-row:last-child { border-bottom: 0; }
@@ -795,4 +795,12 @@ html[data-window="add"] body { background: var(--bg); }
 html[data-window="add"] dialog#dlg-add { position: fixed; inset: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: auto; }
 html[data-window="add"] dialog#dlg-add::backdrop { background: var(--bg); backdrop-filter: none; }
 html[data-window="add"] dialog#dlg-add[open] { display: flex; flex-direction: column; }
-html[data-window="add"] dialog#dlg-add > .row-end:last-child { margin-top: auto; padding-top: 12px; }
+/* Everything above and below the tab pane (the file list, its buttons, the tabs, the final Отмена/Добавить row)
+   keeps its natural size; the pane itself is the one part that grows or shrinks to fill what is left, scrolling on
+   its own when its content does not fit. Without flex-shrink/min-height:0 here, a flex column squeezes the pane's
+   box short instead (its natural height does not fit the ones above and below combined with the fixed 100vh), but
+   the labels and checkboxes inside it are plain block content, not flex items, so they keep their own full height
+   regardless and spill out past the shrunken box, over whatever comes after it (the "Сбросить" row, then the
+   dialog's own Отмена/Добавить) instead of being scrolled to.  */
+html[data-window="add"] .ad-pane { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+html[data-window="add"] dialog#dlg-add > .row-end:last-child { flex: 0 0 auto; margin-top: 0; padding-top: 12px; }
