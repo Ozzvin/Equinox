@@ -1812,6 +1812,27 @@
     }
     return bad;
   }
+
+  // A magnet link or a direct link to a .torrent file, added the way a dropped file is (see the "drop" handler
+  // below, the only place this is used): queued for the window for adding torrents if there is one to open or
+  // wake, falling back to the dialog in this window if that does not work.
+  async function openAddLink(link) {
+    const web = /^https?:\/\//i.test(link);
+    const stageOne = () => api("POST", "/api/stage-url", { url: link });
+    if (!ADD_WINDOW && typeof window.openAddWindow === "function") {
+      try {
+        if (web) await api("POST", "/api/pending-add", { stage: (await stageOne()).id });
+        else await api("POST", "/api/pending-add", { magnet: link });
+      } catch (x) { toast(x.message, true); return; }
+      let err = "";
+      try { err = await window.openAddWindow(); } catch (x) { err = String(x); }
+      if (!err) return;
+    }
+    await openAdd(undefined, true);
+    if (web) { try { await attachStaged((await stageOne()).id); } catch (x) { toast(x.message, true); } }
+    else { const bad = addLinks(link); if (bad.length) toast(`Не похоже на ссылку: ${bad.join("; ")}`, true); }
+    renderAdd();
+  }
   // -- list
   function renderAdd() {
     const n = adItems.length;
@@ -2033,10 +2054,21 @@
   addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("drop").hidden = true; } });
   addEventListener("dragover", (e) => e.preventDefault());
   addEventListener("drop", (e) => {
-    if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) { dragDepth = 0; $("drop").hidden = true; return; } // a column being moved, not files
-    e.preventDefault(); dragDepth = 0; $("drop").hidden = true;
-    const fl = [...(e.dataTransfer.files || [])].filter((f) => /\.torrent$/i.test(f.name));
-    if (fl.length) openAdd(fl); else toast("Нужен файл .torrent", true);
+    dragDepth = 0; $("drop").hidden = true;
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      e.preventDefault();
+      const fl = [...e.dataTransfer.files].filter((f) => /\.torrent$/i.test(f.name));
+      if (fl.length) openAdd(fl); else toast("Нужен файл .torrent", true);
+      return;
+    }
+    // Not a file (a column being moved, or a link dragged from a browser's address bar): without this, the
+    // desktop window would navigate itself to whatever was dropped, page, key and all the bindings a page of
+    // this program gets (see w.Init in cmd/equinox/main_windows.go) — always block that, dropped link or not.
+    e.preventDefault();
+    if (!e.dataTransfer) return;
+    const text = (e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain") || "").trim();
+    const line = text.split(/\r?\n/).find((l) => l && !l.startsWith("#")) || ""; // a uri-list may have # comments first
+    if (/^(https?:|magnet:)/i.test(line)) openAddLink(line);
   });
   // turtle
   $("s-turtle").onclick = () => act(api("POST", "/api/altspeed", { enabled: !(stats && stats.altSpeed) }));

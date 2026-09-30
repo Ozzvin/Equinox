@@ -220,7 +220,10 @@ func runAddWindow(stateDir string) error {
 	} else {
 		_ = desktop.TitleBar(hwnd, "#ffffff", "#1a1f29")
 	}
-	w.Init("window.__equinoxToken = " + strconv.Quote(token) + "; window.__equinoxDesktop = true;")
+	// Only on the program's own page: Init runs on every document this window ever shows, and a dropped link
+	// navigated to before app.js could stop it (see the page's own "drop" handler) would otherwise get the key
+	// and every binding along with it too.
+	w.Init("if (location.origin === " + strconv.Quote(base) + ") { window.__equinoxToken = " + strconv.Quote(token) + "; window.__equinoxDesktop = true; }")
 	w.Navigate(base + "/?window=add")
 
 	go func() { // the page did not say so in time: show the window all the same

@@ -283,7 +283,12 @@ func (d *desktop_) window(dataPath string) {
 	})
 	// The page gets the access key from here, so the window never depends on the link or on what the
 	// web view remembered. The address is then the plain one, without the key.
-	w.Init("window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true;")
+	//
+	// Init runs on every document this window ever shows, not only the program's own: a dropped link that
+	// WebView2 navigated to before app.js could stop it (see the page's own "drop" handler) would get the key
+	// and every binding along with it, same as the real page. The origin check keeps that from mattering.
+	origin := strings.SplitN(d.app.URL, "/#", 2)[0]
+	w.Init("if (location.origin === " + strconv.Quote(origin) + ") { window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true; }")
 	d.place.attach(w, hwnd) // the size, position and state the window had last time
 	w.Navigate(strings.SplitN(d.app.URL, "/#", 2)[0] + "/")
 	go func() { // give the local page a moment to paint before the window is shown
