@@ -50,6 +50,11 @@ type record struct {
 	// Lifetime traffic, accumulated across daemon restarts (payload bytes).
 	Downloaded int64 `json:"downloaded"`
 	Uploaded   int64 `json:"uploaded"`
+
+	// When this torrent was last seen finishable, even if it no longer is right now (see
+	// trackAvailability in status.go). Zero means never, in this program's lifetime.
+	LastSeedSeen      time.Time `json:"lastSeedSeen,omitempty"`      // a connected peer last reported having every piece
+	LastFullAvailable time.Time `json:"lastFullAvailable,omitempty"` // every piece was last available somewhere among the connected peers and us, combined, not necessarily any one of them
 }
 
 type state struct {

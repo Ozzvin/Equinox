@@ -11,9 +11,11 @@ import (
 
 // StatusExtra is what the Status tab shows besides the numbers of the torrent list.
 type StatusExtra struct {
-	ActiveSeconds int64   `json:"activeSeconds"` // time the torrent has been running (not paused), adds up across restarts
-	LastTransfer  int64   `json:"lastTransfer"`  // seconds since data last moved in this session, -1 = not yet
-	Availability  float64 `json:"availability"`  // distributed copies among the connected peers and us
+	ActiveSeconds     int64     `json:"activeSeconds"`     // time the torrent has been running (not paused), adds up across restarts
+	LastTransfer      int64     `json:"lastTransfer"`      // seconds since data last moved in this session, -1 = not yet
+	Availability      float64   `json:"availability"`      // distributed copies among the connected peers and us, right now
+	LastSeedSeen      time.Time `json:"lastSeedSeen"`      // see record.LastSeedSeen
+	LastFullAvailable time.Time `json:"lastFullAvailable"` // see record.LastFullAvailable
 }
 
 // StatusExtra returns the extras of one torrent.
@@ -23,7 +25,10 @@ func (m *Manager) StatusExtra(hash string) (StatusExtra, error) {
 		return StatusExtra{}, err
 	}
 	rec := m.snapshotRecords()[hash]
-	out := StatusExtra{ActiveSeconds: m.activeSeconds(hash, rec), LastTransfer: -1}
+	out := StatusExtra{
+		ActiveSeconds: m.activeSeconds(hash, rec), LastTransfer: -1,
+		LastSeedSeen: rec.LastSeedSeen, LastFullAvailable: rec.LastFullAvailable,
+	}
 	m.mu.Lock()
 	at := m.activeAt[t.InfoHash()]
 	m.mu.Unlock()
@@ -34,6 +39,68 @@ func (m *Manager) StatusExtra(hash string) (StatusExtra, error) {
 		out.Availability = availability(t)
 	}
 	return out, nil
+}
+
+// availabilityCheckEvery is how many ticks of the main loop pass between the (pricier, since it walks
+// every piece) full-availability checks in trackAvailability; the same cadence as the loop's own periodic
+// save.
+const availabilityCheckEvery = 15
+
+// trackAvailability remembers, per incomplete torrent, the last time a single connected peer had every
+// piece (a plain seed) and the last time every piece was available somewhere among the connected peers and
+// us combined, even if no one of them alone had them all. Both answer "could this have finished" after the
+// fact, once the live Availability number (see StatusExtra) has since dropped back under 1 — a seed that
+// left, or a swarm that only briefly had every piece covered between several partial peers. A peer's own
+// reported piece count is cheap to check and done every call; the full walk (availability) only every
+// availabilityCheckEvery-th.
+func (m *Manager) trackAvailability(ts []*torrent.Torrent, recs map[string]record, tickN int) {
+	type found struct{ seed, full bool }
+	updates := map[string]found{}
+	for _, t := range ts {
+		if t.Info() == nil {
+			continue
+		}
+		hash := t.InfoHash().HexString()
+		rec, ok := recs[hash]
+		if !ok {
+			continue
+		}
+		if size, done := selection(t, rec.FilePrios); done >= size {
+			continue // already complete: trivially available from us alone, nothing to learn
+		}
+		var f found
+		n := t.NumPieces()
+		for _, pc := range t.PeerConns() {
+			if pc.Stats().RemotePieceCount >= n {
+				f.seed = true
+				break
+			}
+		}
+		if tickN%availabilityCheckEvery == 0 && availability(t) >= 1 {
+			f.full = true
+		}
+		if f.seed || f.full {
+			updates[hash] = f
+		}
+	}
+	if len(updates) == 0 {
+		return
+	}
+	now := time.Now()
+	m.state.touch(func(s *state) {
+		for hash, f := range updates {
+			r := s.Torrents[hash]
+			if r == nil {
+				continue
+			}
+			if f.seed {
+				r.LastSeedSeen = now
+			}
+			if f.full {
+				r.LastFullAvailable = now
+			}
+		}
+	})
 }
 
 // availability is the number of complete copies of the torrent among the connected peers and us:

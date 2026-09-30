@@ -674,6 +674,7 @@ func (m *Manager) loop(ctx context.Context) {
 		m.applyQueue(ts, recs)
 		m.applySeedQueue(ts, recs)
 		m.enforce(ts)
+		m.trackAvailability(ts, recs, tickN)
 	}
 }
 
