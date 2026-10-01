@@ -699,6 +699,7 @@ window.__i18nCodes = {
   "port.closed": "The router does not answer the forwarding requests. Turn on UPnP or NAT-PMP in the settings of the router, or forward the port by hand.",
   "port.closed_answer": "The router does not answer the forwarding requests. Turn on UPnP or NAT-PMP in the settings of the router, or forward the port by hand. Answer: {1}",
   "port.checking": "Checking the router…",
+  "torrent.busy": "the torrent is being moved right now, wait a moment",
   "file.busy": "could not delete “{1}”: the file is used by another program (a player, the preview in Explorer, an antivirus). Close it and try again",
   "file.delete": "could not delete “{1}”: {2}",
   "fs.no_access": "No access to this folder.",

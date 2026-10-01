@@ -15,7 +15,7 @@ import (
 )
 
 // ErrBusy is returned for a torrent whose files are being moved.
-var ErrBusy = errors.New("torrent is being moved")
+var ErrBusy = &CodedError{Code: "torrent.busy", Msg: "раздача сейчас перемещается, подождите"}
 
 // moveJob tracks one storage move. Its fields are guarded by Manager.mu, except done.
 type moveJob struct {
