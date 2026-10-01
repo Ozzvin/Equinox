@@ -202,23 +202,27 @@ func (m *Manager) SetEdgePieces(hash string, on bool) error {
 	return nil
 }
 
-// SetMoveDone sets the folder this torrent moves to when it finishes; an empty path goes back to the
-// global setting. A folder that does not exist is created.
-func (m *Manager) SetMoveDone(hash, path string) error {
+// SetMoveDone sets whether and where this torrent moves when it finishes. enabled=false means
+// never move it, even if a global or own folder is set. enabled=true with an empty path falls
+// back to the global folder; a non-empty path overrides it (and is created if it is missing).
+func (m *Manager) SetMoveDone(hash string, enabled bool, path string) error {
 	if _, err := m.get(hash); err != nil {
 		return err
 	}
 	path = strings.TrimSpace(path)
-	if path != "" {
+	if enabled && path != "" {
 		abs, err := ensureDir(path)
 		if err != nil {
 			return err
 		}
 		path = abs
+	} else {
+		path = ""
 	}
 	return m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
 			r.MoveDone = path
+			r.MoveDoneOff = !enabled
 		}
 	})
 }

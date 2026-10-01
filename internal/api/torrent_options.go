@@ -33,16 +33,18 @@ func (s *Server) edgePieces(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// moveDone sets the folder a torrent moves to when it finishes: POST {"path": "..."} ("" = the global setting).
+// moveDone sets whether and where a torrent moves when it finishes: POST {"enabled": bool, "path": "..."}.
+// enabled=false means never move it; enabled=true with an empty path means the global setting.
 func (s *Server) moveDone(w http.ResponseWriter, r *http.Request) {
 	var b struct {
-		Path string `json:"path"`
+		Enabled bool   `json:"enabled"`
+		Path    string `json:"path"`
 	}
 	if err := decode(r, &b); err != nil {
 		fail(w, core.ErrInvalidInput)
 		return
 	}
-	if err := s.m.SetMoveDone(r.PathValue("hash"), b.Path); err != nil {
+	if err := s.m.SetMoveDone(r.PathValue("hash"), b.Enabled, b.Path); err != nil {
 		fail(w, err)
 		return
 	}

@@ -43,6 +43,9 @@ func (m *Manager) handleCompletion(t *torrent.Torrent, hash string, r record) {
 		if dir == "" {
 			dir = m.cfg.Get().MoveCompletedDir
 		}
+		if r.MoveDoneOff {
+			dir = ""
+		}
 		if dir != "" && !m.isMoving(hash) {
 			if err := m.MoveStorage(hash, dir); err != nil {
 				fmt.Fprintf(os.Stderr, "move completed %s: %v\n", t.Name(), err)

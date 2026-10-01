@@ -17,6 +17,7 @@ type TorrentOptions struct {
 	EdgePieces  bool     `json:"edgePieces"`  // raise the first and last pieces of every file
 	SkipCheck   bool     `json:"skipCheck"`   // take files already on disk as complete, without hashing them
 	MoveDone    string   `json:"moveDone"`    // move here when finished, "" = the global setting
+	MoveDoneOff bool     `json:"moveDoneOff"` // never move this torrent when it finishes, even if a global folder is set
 	Preallocate *bool    `json:"preallocate"` // reserve the disk space at once, nil = the global setting
 	MaxConns    int      `json:"maxConns"`    // peer connections, 0 = the global setting
 	Files       []string `json:"files"`       // per file: "skip", "low", "normal" or "high" (torrent files only)
@@ -30,7 +31,7 @@ func WithOptions(o TorrentOptions) AddOption {
 		r.SavePath, r.Label, r.Paused = o.SavePath, o.Label, o.Paused
 		r.pausedExplicit = true
 		r.Sequential, r.EdgePieces, r.SkipCheck = o.Sequential, o.EdgePieces, o.SkipCheck
-		r.MoveDone, r.Prealloc, r.MaxConns = o.MoveDone, o.Preallocate, o.MaxConns
+		r.MoveDone, r.MoveDoneOff, r.Prealloc, r.MaxConns = o.MoveDone, o.MoveDoneOff, o.Preallocate, o.MaxConns
 	}
 }
 
@@ -70,7 +71,9 @@ func (m *Manager) checkOptions(rec *record) error {
 	if rec.MaxConns < 0 || rec.MaxConns > 1000 {
 		return errInvalid("connections must be between 0 and 1000")
 	}
-	if d := strings.TrimSpace(rec.MoveDone); d != "" {
+	if rec.MoveDoneOff {
+		rec.MoveDone = ""
+	} else if d := strings.TrimSpace(rec.MoveDone); d != "" {
 		abs, err := ensureDir(d)
 		if err != nil {
 			return err

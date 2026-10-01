@@ -851,8 +851,9 @@
     const focused = optForm().contains(document.activeElement);
     if (optHash !== t.hash) { optHash = t.hash; optDirty = false; }
     if (!optDirty && !focused) {
-      $("op-movedone-on").checked = !!d.moveDone; $("op-movedone").value = d.moveDone || ""; $("op-movedone").disabled = !d.moveDone;
-      $("op-movedone-pick").disabled = !d.moveDone;
+      $("op-movedone-on").checked = !d.moveDoneOff; $("op-movedone").value = d.moveDone || ""; $("op-movedone").disabled = d.moveDoneOff;
+      $("op-movedone-pick").disabled = d.moveDoneOff;
+      $("op-movedone").placeholder = settings && settings.moveCompletedDir ? `общая настройка: ${settings.moveCompletedDir}` : "папка для завершённых";
     }
     if (document.activeElement !== $("op-seq")) $("op-seq").checked = !!d.sequential;
     if (document.activeElement !== $("op-edge")) $("op-edge").checked = !!d.edgePieces;
@@ -874,7 +875,7 @@
   $("op-apply").onclick = async () => {
     const t = cur(); if (!t) return;
     try {
-      await post(t, "move-done", { path: $("op-movedone-on").checked ? $("op-movedone").value.trim() : "" });
+      await post(t, "move-done", { enabled: $("op-movedone-on").checked, path: $("op-movedone").value.trim() });
       optDirty = false; toast("Параметры раздачи сохранены"); renderDetails();
     } catch (x) { toast(x.message, true); }
   };
@@ -1740,7 +1741,7 @@
 
   const optDefaults = () => {
     const d = addInfo.defaults;
-    return { savePath: "", moveDoneOn: !!d.moveDoneEnabled, moveDone: d.moveDone || "", label: "", paused: !!d.paused, sequential: !!d.sequential,
+    return { savePath: "", moveDoneOn: d.moveDoneEnabled || !!addInfo.moveCompletedDir, moveDone: d.moveDone || "", label: "", paused: !!d.paused, sequential: !!d.sequential,
       edgePieces: !!d.edgePieces, skipCheck: !!d.skipCheck, preallocate: !!addInfo.preallocate, maxConns: 0 };
   };
   const adCur = () => adItems[adSel];
@@ -2036,7 +2037,7 @@
     const items = adItems.map((e) => {
       const o = e.opts;
       const options = { savePath: o.savePath.trim(), label: o.label.trim(), paused: o.paused, sequential: o.sequential, edgePieces: o.edgePieces, skipCheck: o.skipCheck,
-        moveDone: o.moveDoneOn ? o.moveDone.trim() : "", preallocate: o.preallocate === addInfo.preallocate ? null : o.preallocate, maxConns: Number(o.maxConns) || 0,
+        moveDone: o.moveDoneOn ? o.moveDone.trim() : "", moveDoneOff: !o.moveDoneOn, preallocate: o.preallocate === addInfo.preallocate ? null : o.preallocate, maxConns: Number(o.maxConns) || 0,
         files: e.kind === "file" && e.sel.some((x) => !x) ? e.sel.map((x) => (x ? "normal" : "skip")) : [] };
       return e.kind === "file" ? { stage: e.stage, options } : e.kind === "magnet" ? { magnet: e.magnet, options } : { infohash: e.infohash, options };
     });

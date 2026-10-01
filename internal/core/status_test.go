@@ -26,18 +26,24 @@ func TestTorrentOptionsAndStatusExtras(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := filepath.Join(dir, "done-here")
-	if err := m.SetMoveDone(hash, target); err != nil {
+	if err := m.SetMoveDone(hash, true, target); err != nil {
 		t.Fatal(err)
 	}
 	d, _ = m.Details(hash)
-	if !d.EdgePieces || d.MoveDone != target {
+	if !d.EdgePieces || d.MoveDone != target || d.MoveDoneOff {
 		t.Fatalf("options not stored: %+v", d)
 	}
-	if err := m.SetMoveDone(hash, ""); err != nil {
+	if err := m.SetMoveDone(hash, true, ""); err != nil {
 		t.Fatal(err)
 	}
-	if d, _ = m.Details(hash); d.MoveDone != "" {
+	if d, _ = m.Details(hash); d.MoveDone != "" || d.MoveDoneOff {
 		t.Fatalf("an empty path must go back to the global setting: %q", d.MoveDone)
+	}
+	if err := m.SetMoveDone(hash, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ = m.Details(hash); !d.MoveDoneOff {
+		t.Fatalf("disabling the checkbox must mean never move this torrent")
 	}
 	if err := m.SetEdgePieces("zz", true); err == nil {
 		t.Fatal("an unknown torrent must be rejected")

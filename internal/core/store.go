@@ -26,6 +26,7 @@ type record struct {
 	pausedExplicit bool         `json:"-"`                       // only while adding: the caller chose paused or not, so the "add paused" setting does not apply
 	EdgePieces     bool         `json:"edgePieces,omitempty"`    // raise the first and last pieces of every file
 	MoveDone       string       `json:"moveDone,omitempty"`      // where to move this torrent when it finishes, overrides the global folder
+	MoveDoneOff    bool         `json:"moveDoneOff,omitempty"`   // never move this torrent when it finishes, even if a global/own folder is set
 	Prealloc       *bool        `json:"prealloc,omitempty"`      // per-torrent preallocation choice, nil = the global setting
 	MaxConns       int          `json:"maxConns,omitempty"`      // connection limit of this torrent, 0 = the global setting
 	ExtraTrackers  []string     `json:"extraTrackers,omitempty"` // announce URLs the user added

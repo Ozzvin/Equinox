@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
 
@@ -154,6 +155,40 @@ func TestCompletedTorrentsAreMovedAutomatically(t *testing.T) {
 	m.mu.Unlock()
 	waitFor(t, func() bool { return exists(filepath.Join(done, "auto.bin")) })
 	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.SavePath == done && s.Progress == 1 })
+}
+
+func TestMoveDoneOffSkipsTheGlobalFolder(t *testing.T) {
+	dir := t.TempDir()
+	done := filepath.Join(dir, "finished")
+	m := newManager(t, dir, func(s *config.Settings) { s.MoveCompletedDir = done })
+	tp := makeTorrent(t, dir, "stay.bin", 48<<10)
+	hash, err := m.AddFile(tp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetMoveDone(hash, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool {
+		r := m.snapshotRecords()[hash]
+		return r.WasIncomplete
+	})
+	if err := os_copy(filepath.Join(dir, "src", "stay.bin"), filepath.Join(m.cfg.Get().DataDir, "stay.bin")); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	for _, tt := range m.torrents {
+		go tt.VerifyData()
+	}
+	m.mu.Unlock()
+	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 })
+	time.Sleep(200 * time.Millisecond) // give a wrongly-triggered move a chance to start
+	if exists(filepath.Join(done, "stay.bin")) {
+		t.Fatal("a torrent with its move explicitly turned off must not be moved to the global folder")
+	}
+	if s, ok := statusOf(m, hash); !ok || s.SavePath == done {
+		t.Fatalf("save path must stay put: %+v", s)
+	}
 }
 
 func TestTorrentSurvivesRestartEvenWithoutUserCopies(t *testing.T) {

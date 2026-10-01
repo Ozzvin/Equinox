@@ -36,10 +36,11 @@ type Details struct {
 	SeedTimeInForce int       `json:"seedTimeInForce"` // the seeding time limit actually in force, 0 = none
 	SeedSeconds     int64     `json:"seedSeconds"`
 	// options of the torrent
-	Sequential bool   `json:"sequential"`
-	EdgePieces bool   `json:"edgePieces"`
-	MoveDone   string `json:"moveDone"` // this torrent's own "move when finished" folder, "" = the global setting
-	Label      string `json:"label"`
+	Sequential  bool   `json:"sequential"`
+	EdgePieces  bool   `json:"edgePieces"`
+	MoveDone    string `json:"moveDone"`    // this torrent's own "move when finished" folder, "" = the global setting
+	MoveDoneOff bool   `json:"moveDoneOff"` // never move this torrent when it finishes, even if a global/own folder is set
+	Label       string `json:"label"`
 }
 
 // Tracker is one announce URL. The engine does not report tracker health, so there is no
@@ -75,7 +76,7 @@ func (m *Manager) Details(hash string) (Details, error) {
 		MaxConns: rec.MaxConns, ConnLimit: m.connLimit(rec),
 		RatioLimit: rec.RatioLimit, RatioInForce: rec.RatioLimit,
 		SeedTimeLimit: rec.SeedTimeLimit, SeedTimeInForce: m.seedLimit(rec), SeedSeconds: m.seedSeconds(hash, rec),
-		Sequential: rec.Sequential, EdgePieces: rec.EdgePieces, MoveDone: rec.MoveDone, Label: rec.Label,
+		Sequential: rec.Sequential, EdgePieces: rec.EdgePieces, MoveDone: rec.MoveDone, MoveDoneOff: rec.MoveDoneOff, Label: rec.Label,
 	}
 	d.PiecesDone = t.Stats().PiecesComplete
 	if d.RatioInForce == 0 {
