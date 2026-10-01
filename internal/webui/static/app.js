@@ -826,6 +826,14 @@
     return `${s} ${S}`;
   };
   const stRow = (label, value, title) => `<div class="st-row"${title ? ` title="${esc(title)}"` : ""}><dt>${label}</dt><dd>${value}</dd></div>`;
+  // "N назад", the same relative style as "Последняя передача" below, for a point in time that (unlike that one)
+  // survives restarts and so can be anywhere from seconds to months ago: fmtDur already scales from seconds up
+  // to weeks on its own.
+  function ago(iso) {
+    if (!iso || iso.startsWith("0001")) return "—";
+    const sec = (Date.now() - new Date(iso).getTime()) / 1000;
+    return sec < 2 ? "сейчас" : fmtDur(sec) + " назад";
+  }
   async function renderStatus(t, same) {
     let x = { activeSeconds: 0, lastTransfer: -1, availability: 0 };
     if (t.hasMetadata) { try { x = (await api("GET", `/api/torrents/${t.hash}/status`)) || x; } catch (_) { /* the numbers of the list are enough */ } }
@@ -846,8 +854,8 @@
           ${stRow("Пиры", t.peers, "Все подключённые пиры")}
           ${stRow("Рейтинг", t.ratio.toFixed(3))}
           ${stRow("Доступность", t.hasMetadata ? x.availability.toFixed(3) : "—", "Сколько полных копий раздачи есть у подключённых пиров и у вас")}
-          ${stRow("Последний сид", when(x.lastSeedSeen), "Когда в последний раз был подключён пир, у которого были все части раздачи")}
-          ${stRow("Полная доступность", when(x.lastFullAvailable), "Когда в последний раз каждая часть была у кого-то из подключённых пиров и у вас, в сумме — необязательно у одного")}
+          ${stRow("Последний сид", ago(x.lastSeedSeen), "Когда в последний раз был подключён пир, у которого были все части раздачи")}
+          ${stRow("Полная доступность", ago(x.lastFullAvailable), "Когда в последний раз каждая часть была у кого-то из подключённых пиров и у вас, в сумме — необязательно у одного")}
         </dl>
         <dl class="st-col">
           ${stRow("Осталось", eta)}
