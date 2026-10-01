@@ -295,6 +295,9 @@ func WithPaused() AddOption { return func(r *record) { r.Paused = true } }
 // WithSavePath saves the torrent in the given folder instead of the default one.
 func WithSavePath(dir string) AddOption { return func(r *record) { r.SavePath = dir } }
 
+// WithSkipCheck trusts the files already on disk as complete instead of hashing them.
+func WithSkipCheck() AddOption { return func(r *record) { r.SkipCheck = true } }
+
 // WithLabel puts the torrent in a category. If the label has a folder configured, that is
 // where the torrent is saved (unless WithSavePath says otherwise).
 func WithLabel(label string) AddOption { return func(r *record) { r.Label = label } }

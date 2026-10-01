@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
+
+	"github.com/Ozzvin/equinox/internal/config"
 )
 
 func waitJob(t *testing.T, m *Manager, id string) CreateJob {
@@ -82,6 +84,50 @@ func TestCreateTorrentFromFolderAndSeedIt(t *testing.T) {
 	}
 	if !exists(filepath.Join(root, "a.bin")) {
 		t.Fatal("the source data must stay untouched")
+	}
+}
+
+// A regression test for a real incident: creating and seeding a torrent from a folder outside
+// the data dir, with a global "move completed torrents to" folder configured, must never move the
+// source data there. It used to: the engine hashed the data before trusting it, so for however
+// long the check took the torrent looked incomplete, and the transition to "complete" once it
+// finished was indistinguishable from an actual finished download, triggering the usual auto-move
+// (the fix: trust the data outright, like adding a torrent that is already known to be on disk —
+// see WithSkipCheck in create.go. The surest sign the check is skipped entirely, not just fast
+// enough to usually win the race, is that the torrent reports complete on the very first look,
+// with no climb from 0%).
+func TestCreateAndSeedNeverMovesTheSourceEvenWithMoveCompletedConfigured(t *testing.T) {
+	dir := t.TempDir()
+	moveTo := filepath.Join(dir, "organized")
+	m := newManager(t, dir, func(s *config.Settings) { s.MoveCompletedDir = moveTo })
+
+	root := filepath.Join(dir, "work", "Documents")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(root, "report.bin"), bytes.Repeat([]byte{7}, 192<<20), 0o644)
+
+	job, err := m.StartCreate(CreateRequest{Source: root, Seed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := waitJob(t, m, job.ID)
+	if done.Error != "" || !done.Seeding || done.Hash == "" {
+		t.Fatalf("job failed: %+v", done)
+	}
+	s, ok := statusOf(m, done.Hash)
+	if !ok || s.Progress != 1 {
+		t.Fatalf("the data was trusted as complete right away, no check: %+v", s)
+	}
+	if s.SavePath != filepath.Dir(root) {
+		t.Fatalf("save path must stay the folder that holds the source: %s", s.SavePath)
+	}
+	time.Sleep(300 * time.Millisecond) // give a wrongly-triggered auto-move a chance to start
+	if !exists(filepath.Join(root, "report.bin")) {
+		t.Fatal("the source must stay exactly where the user put it, never moved to the global folder")
+	}
+	if exists(moveTo) {
+		t.Fatal("the global 'move completed' folder must not even be created for this torrent")
 	}
 }
 

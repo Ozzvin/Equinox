@@ -257,9 +257,12 @@ func (m *Manager) runCreate(job *CreateJob, src string, req CreateRequest, track
 
 	seeding := false
 	if req.Seed {
-		// The data is already on disk, so the folder that holds it becomes the save folder and
-		// the engine verifies it and starts seeding.
-		if _, err := m.AddMetaInfo(&mi, WithSavePath(filepath.Dir(src))); err != nil {
+		// The data is already on disk (it was just read to build the torrent), so the folder that
+		// holds it becomes the save folder; WithSkipCheck trusts it as complete right away instead
+		// of hashing it first. Without that, the torrent looks incomplete for the moment the check
+		// takes, which (if a "move completed torrents to" folder is configured) is mistaken for a
+		// finished download and moves the source files away from where the user put them.
+		if _, err := m.AddMetaInfo(&mi, WithSavePath(filepath.Dir(src)), WithSkipCheck()); err != nil {
 			m.mu.Lock()
 			job.Hash, job.Running = hash, false
 			job.Error = "the file was written, but adding it to the client failed: " + err.Error()
