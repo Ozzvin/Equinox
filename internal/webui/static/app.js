@@ -986,8 +986,25 @@
   // ---------- helpers ----------
   let toastTimer;
   function toast(msg, bad) {
-    const el = $("toast"); el.textContent = msg; el.className = "show" + (bad ? " bad" : "");
+    if (bad) { errToast(msg); return; }
+    const el = $("toast"); el.textContent = msg; el.className = "show";
     clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.className = ""), 3500);
+  }
+  // An error, unlike a plain toast, stays on screen until closed by hand: a new one gets its own card instead of
+  // replacing whatever error is already showing, so an earlier one is never missed because a later one covered it.
+  function errToast(msg) {
+    const card = document.createElement("div");
+    card.className = "errtoast"; card.setAttribute("role", "alert");
+    const text = document.createElement("span"); text.textContent = msg;
+    const close = document.createElement("button");
+    close.type = "button"; close.className = "et-close"; close.setAttribute("aria-label", "Закрыть"); close.textContent = "×";
+    close.addEventListener("click", () => {
+      if (card.classList.contains("out")) return;
+      card.classList.add("out");
+      setTimeout(() => card.remove(), 230);
+    });
+    card.append(text, close);
+    $("errtoast").appendChild(card);
   }
   const act = (p) => p.then(refresh).catch((e) => toast(e.message, true));
   const streamPath = (h, i) => `/api/torrents/${h}/files/${i}/stream?token=${token}`;

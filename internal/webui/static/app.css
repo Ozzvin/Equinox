@@ -149,7 +149,15 @@ legend { padding: 0 8px; font-weight: 700; font-size: 14px; color: var(--text); 
 
 #toast { position: fixed; left: 50%; bottom: 52px; transform: translate(-50%, 20px); background: #1a1f29; color: #fff; padding: 10px 16px; border-radius: 10px; opacity: 0; pointer-events: none; transition: all .25s; max-width: 90vw; z-index: 20; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
-#toast.bad { background: var(--bad); }
+/* Errors (toast(msg, true)) do not use #toast at all: unlike a plain message, an error must stay until the person
+   reads and closes it by hand, so each one is its own card, stacked bottom-right (like #push's cards top-right,
+   but never on a timer — a problem the person has not dismissed yet must not just disappear). */
+#errtoast { position: fixed; bottom: 14px; right: 14px; z-index: 70; display: flex; flex-direction: column; gap: 10px; width: min(360px, calc(100vw - 28px)); pointer-events: none; }
+.errtoast { pointer-events: auto; position: relative; padding: 12px 34px 12px 14px; border-radius: 14px; background: var(--bad); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .2); font-size: 13px; word-break: break-word; animation: push-in .28s cubic-bezier(.2, .8, .25, 1); }
+.errtoast.out { animation: push-out .22s ease-in forwards; }
+.errtoast .et-close { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; color: #fff; opacity: .8; font-size: 16px; line-height: 1; cursor: pointer; }
+.errtoast .et-close:hover { opacity: 1; background: rgba(255, 255, 255, .15); }
+@media (prefers-reduced-motion: reduce) { .errtoast, .errtoast.out { animation: none; } }
 #drop { position: fixed; inset: 10px; border: 2px dashed var(--accent); border-radius: 16px; background: color-mix(in srgb, var(--accent) 12%, transparent); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; color: var(--accent); z-index: 15; pointer-events: none; }
 #drop[hidden] { display: none; }
 
