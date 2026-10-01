@@ -171,6 +171,66 @@ func (m *Manager) Peers(hash string) ([]Peer, error) {
 	return out, nil
 }
 
+// PeerFiles reports, for one connected peer, how much of each file it has: the share of that
+// file's pieces present in the peer's own announced bitmap (PeerPieces), not what you have
+// yourself or chose to download. It is computed only when asked (the Peers tab asks once a row
+// is expanded), not on every poll of the peers list, since working it out costs going through
+// every piece of every file for that one peer.
+func (m *Manager) PeerFiles(hash, addr string) ([]FileStatus, error) {
+	t, err := m.get(hash)
+	if err != nil {
+		return nil, err
+	}
+	if t.Info() == nil {
+		return nil, nil
+	}
+	var pc *torrent.PeerConn
+	for _, c := range t.PeerConns() {
+		if c.RemoteAddr.String() == addr {
+			pc = c
+			break
+		}
+	}
+	if pc == nil {
+		return nil, ErrNotFound
+	}
+	have := pc.PeerPieces()
+	fs := t.Files()
+	prios := m.filePrios(hash)
+	root := ""
+	if info := t.Info(); info != nil && info.IsDir() {
+		root = t.Name() + "/"
+	}
+	out := make([]FileStatus, len(fs))
+	for i, f := range fs {
+		b, e := f.BeginPieceIndex(), f.EndPieceIndex()
+		got := 0
+		for p := b; p < e; p++ {
+			if have.Contains(uint32(p)) {
+				got++
+			}
+		}
+		prog := 0.0
+		if total := e - b; total > 0 {
+			prog = float64(got) / float64(total)
+		}
+		name := "normal"
+		switch prioAt(prios, i) {
+		case PrioSkip:
+			name = "skip"
+		case PrioHigh:
+			name = "high"
+		case PrioLow:
+			name = "low"
+		}
+		out[i] = FileStatus{
+			Index: i, Path: root + f.DisplayPath(), Size: f.Length(),
+			Done: int64(prog * float64(f.Length())), Progress: prog, Priority: name,
+		}
+	}
+	return out, nil
+}
+
 // AddTracker adds an announce URL to a torrent. It is remembered across restarts.
 func (m *Manager) AddTracker(hash, raw string) error {
 	t, err := m.get(hash)

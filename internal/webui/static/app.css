@@ -440,6 +440,11 @@ table.mini.pt th .rs { top: 0; }
 table.mini.pt thead th:last-child .rs { right: 0; width: 6px; }
 table.mini.pt th.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
 table.mini.pt th.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+table.mini.pt td:first-child { display: flex; align-items: center; gap: 4px; }
+.peer-files-row > td { background: var(--hover); padding: 10px 16px 14px 40px; white-space: normal; }
+.peer-files-row .pf { background: none; }
+.peer-files-row .pf th, .peer-files-row .pf td { padding: 4px 10px; }
+.peer-files-row .pbar { height: 18px; }
 /* status bar: the port is a dot with a tooltip, the turtle is a small button */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tip-host { position: relative; }
