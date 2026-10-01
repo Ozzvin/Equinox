@@ -844,6 +844,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		MinimizeToTray   *bool               `json:"minimizeToTray"`       // optional
 		RememberWindow   *bool               `json:"rememberWindow"`       // optional
 		MaxChecks        *int                `json:"maxConcurrentChecks"`  // optional
+		MaxMoves         *int                `json:"maxConcurrentMoves"`   // optional
 		AddPaused        *bool               `json:"addPaused"`            // optional
 		SpeedUnit        *string             `json:"speedUnit"`            // optional: bytes | bits
 		LimitUnits       *map[string]string  `json:"limitUnits"`           // optional: omitted = unchanged
@@ -867,6 +868,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		b.AltDownLimitKBps < 0 || b.AltUpLimitKBps < 0 || b.RatioLimit < 0 || b.MaxActive < 0 ||
 		(b.SeedTimeLimit != nil && (*b.SeedTimeLimit < 0 || *b.SeedTimeLimit > 60*24*3650)) ||
 		(b.MaxChecks != nil && (*b.MaxChecks < 0 || *b.MaxChecks > 64)) ||
+		(b.MaxMoves != nil && (*b.MaxMoves < 0 || *b.MaxMoves > 64)) ||
 		(b.MaxSeeds != nil && (*b.MaxSeeds < 0 || *b.MaxSeeds > 100000)) ||
 		(b.UpdateEvery != nil && (*b.UpdateEvery < config.MinUpdateCheckMinutes || *b.UpdateEvery > config.MaxUpdateCheckMinutes)) ||
 		(b.SpeedUnit != nil && *b.SpeedUnit != "bytes" && *b.SpeedUnit != "bits") ||
@@ -1007,6 +1009,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.MaxChecks != nil {
 			c.MaxConcurrentChecks = *b.MaxChecks
+		}
+		if b.MaxMoves != nil {
+			c.MaxConcurrentMoves = *b.MaxMoves
 		}
 		if b.AddPaused != nil {
 			c.Add.Paused = *b.AddPaused

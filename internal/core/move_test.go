@@ -157,6 +157,49 @@ func TestCompletedTorrentsAreMovedAutomatically(t *testing.T) {
 	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.SavePath == done && s.Progress == 1 })
 }
 
+func TestMoveQueueRespectsMaxConcurrentMoves(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentMoves = 1 })
+	tp := makeTorrent(t, dir, "q.bin", 20<<10)
+	seed(t, m, dir, "q.bin")
+	hash, err := m.AddFile(tp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 })
+
+	// Occupy the one move slot with a synthetic job (no real goroutine, so it never finishes on
+	// its own): this makes the queueing deterministic instead of racing a real background move.
+	m.mu.Lock()
+	m.moves["occupying"] = &moveJob{running: true}
+	m.mu.Unlock()
+
+	target := filepath.Join(dir, "moved")
+	if err := m.MoveStorage(hash, target); err != nil {
+		t.Fatalf("a move past the limit must queue, not fail: %v", err)
+	}
+	m.mu.Lock()
+	job := m.moves[hash]
+	queued := job != nil && job.queued && !job.running
+	m.mu.Unlock()
+	if !queued {
+		t.Fatalf("move must be queued while the one slot is taken: %+v", job)
+	}
+	if s, ok := statusOf(m, hash); !ok || s.Moving != -2 || s.SavePath == target {
+		t.Fatalf("queued torrent must show as waiting and stay put: %+v", s)
+	}
+
+	// Free the slot: the queued move must start and finish on its own.
+	m.mu.Lock()
+	delete(m.moves, "occupying")
+	m.mu.Unlock()
+	m.runMoveQueue()
+	waitFor(t, func() bool {
+		s, ok := statusOf(m, hash)
+		return ok && s.SavePath == target && s.Moving == 0 && s.Progress == 1
+	})
+}
+
 func TestMoveDoneOffSkipsTheGlobalFolder(t *testing.T) {
 	dir := t.TempDir()
 	done := filepath.Join(dir, "finished")

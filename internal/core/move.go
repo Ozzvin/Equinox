@@ -23,6 +23,8 @@ type moveJob struct {
 	selSize   int64 // size of the wanted files, for the placeholder row in the list
 	copySize  int64 // bytes to copy when the move crosses drives, 0 for a plain rename
 	done      atomic.Int64
+	queued    bool   // waiting for a free slot (MaxConcurrentMoves); the torrent is untouched meanwhile
+	reqDir    string // the folder asked for, used to start the move once queued runs its turn
 	running   bool
 	err       string    // last failure, kept until the next move of this torrent
 	warning   string    // the move worked but something was left behind
@@ -44,7 +46,19 @@ func (m *Manager) isMoving(hash string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	j := m.moves[hash]
-	return j != nil && j.running
+	return j != nil && (j.running || j.queued)
+}
+
+// activeMoves counts the moves actually copying/renaming right now (not the ones waiting in line).
+// Must be called with m.mu held.
+func (m *Manager) activeMovesLocked() int {
+	n := 0
+	for _, j := range m.moves {
+		if j.running {
+			n++
+		}
+	}
+	return n
 }
 
 func samePath(a, b string) bool {
@@ -58,46 +72,80 @@ func isInside(child, parent string) bool {
 	return child == parent || strings.HasPrefix(child, parent+string(filepath.Separator))
 }
 
-// MoveStorage moves the downloaded files of a torrent to another folder and keeps
-// seeding from there. The check of the target is immediate; the move itself runs in the
-// background (watch Status.Moving). On any failure the files stay where they were.
-func (m *Manager) MoveStorage(hash, dir string) error {
-	t, err := m.get(hash)
+// resolveMove validates a move and works out its paths without touching anything. samePath
+// means there is nothing to do: the caller should treat that as success, not as an error.
+func (m *Manager) resolveMove(hash, dir string) (t *torrent.Torrent, src, dst, target, cur string, same bool, err error) {
+	t, err = m.get(hash)
 	if err != nil {
-		return err
+		return
 	}
 	if t.Info() == nil {
-		return ErrNoMetadata
+		err = ErrNoMetadata
+		return
 	}
-	target, err := ensureDir(dir)
+	target, err = ensureDir(dir)
 	if err != nil {
-		return err
+		return
 	}
-	cur := m.saveDir(hash)
+	cur = m.saveDir(hash)
 	if samePath(target, cur) {
-		return nil
+		same = true
+		return
 	}
 	name := t.Info().BestName()
-	src, dst := filepath.Join(cur, name), filepath.Join(target, name)
+	src, dst = filepath.Join(cur, name), filepath.Join(target, name)
 	if isInside(dst, src) || isInside(src, dst) {
-		return fmt.Errorf("%w: the folders overlap", ErrInvalidInput)
+		err = fmt.Errorf("%w: the folders overlap", ErrInvalidInput)
+		return
 	}
-	if _, err := os.Lstat(dst); err == nil {
-		return fmt.Errorf("%w: %q already exists in the target folder", ErrInvalidInput, name)
+	if _, e := os.Lstat(dst); e == nil {
+		err = fmt.Errorf("%w: %q already exists in the target folder", ErrInvalidInput, name)
+		return
 	}
+	return
+}
 
+// MoveStorage moves the downloaded files of a torrent to another folder and keeps seeding
+// from there. The check of the target is immediate. The move itself, if a slot is free under
+// MaxConcurrentMoves, starts in the background at once (watch Status.Moving); otherwise it
+// waits in line, and the torrent is left untouched until its turn comes, same as a torrent
+// that has not been asked to move at all. On any failure the files stay where they were.
+func (m *Manager) MoveStorage(hash, dir string) error {
+	t, src, dst, target, cur, same, err := m.resolveMove(hash, dir)
+	if err != nil || same {
+		return err
+	}
 	rec := m.snapshotRecords()[hash]
 	sel, _ := selection(t, rec.FilePrios)
-	job := &moveJob{name: t.Name(), selSize: sel, running: true, updatedAt: time.Now()}
+	job := &moveJob{name: t.Name(), selSize: sel, reqDir: dir, updatedAt: time.Now()}
 
 	m.mu.Lock()
-	if j := m.moves[hash]; j != nil && j.running {
+	if j := m.moves[hash]; j != nil && (j.running || j.queued) {
 		m.mu.Unlock()
 		return ErrBusy
 	}
+	if m.moveSlotFreeLocked() {
+		job.running = true
+		m.moves[hash] = job
+		m.mu.Unlock()
+		return m.beginMove(hash, t, src, dst, target, cur, job)
+	}
+	job.queued = true
 	m.moves[hash] = job
+	m.moveQueue = append(m.moveQueue, hash)
 	m.mu.Unlock()
+	return nil
+}
 
+// moveSlotFreeLocked reports whether a move can start right now. Must be called with m.mu held.
+func (m *Manager) moveSlotFreeLocked() bool {
+	limit := m.cfg.Get().MaxConcurrentMoves
+	return limit <= 0 || m.activeMovesLocked() < limit
+}
+
+// beginMove writes the crash-recovery trail and starts the background copy/rename. job.running
+// must already be true and job already in m.moves.
+func (m *Manager) beginMove(hash string, t *torrent.Torrent, src, dst, target, cur string, job *moveJob) error {
 	// Write the trail before the first file is touched: if the process dies during the copy,
 	// recoverMoves finds the half-written destination on the next start (see runMove, which
 	// clears it, and recoverMoves, which cleans up after it).
@@ -112,9 +160,51 @@ func (m *Manager) MoveStorage(hash, dir string) error {
 		m.mu.Unlock()
 		return err
 	}
-
 	go m.runMove(hash, t, src, dst, target, cur, job)
 	return nil
+}
+
+// runMoveQueue starts as many queued moves as fit under MaxConcurrentMoves. Called once a
+// tick from the main loop, and right after a move finishes so a freed slot is used at once.
+func (m *Manager) runMoveQueue() {
+	for {
+		m.mu.Lock()
+		if len(m.moveQueue) == 0 || !m.moveSlotFreeLocked() {
+			m.mu.Unlock()
+			return
+		}
+		hash := m.moveQueue[0]
+		m.moveQueue = m.moveQueue[1:]
+		job := m.moves[hash]
+		if job == nil || !job.queued { // removed or already handled meanwhile
+			m.mu.Unlock()
+			continue
+		}
+		m.mu.Unlock()
+
+		t, src, dst, target, cur, same, err := m.resolveMove(hash, job.reqDir)
+		m.mu.Lock()
+		switch {
+		case err != nil:
+			job.queued = false
+			job.err = err.Error()
+			job.updatedAt = time.Now()
+		case same: // the torrent is already where it should be: nothing to do
+			job.queued = false
+			delete(m.moves, hash)
+		default:
+			job.queued = false
+			job.running = true
+		}
+		m.mu.Unlock()
+		if err == nil && !same {
+			if err := m.beginMove(hash, t, src, dst, target, cur, job); err != nil {
+				m.mu.Lock()
+				job.err = err.Error()
+				m.mu.Unlock()
+			}
+		}
+	}
 }
 
 func (m *Manager) runMove(hash string, t *torrent.Torrent, src, dst, target, old string, job *moveJob) {
@@ -156,6 +246,7 @@ func (m *Manager) runMove(hash string, t *torrent.Torrent, src, dst, target, old
 		m.moves[hash] = job
 	}
 	m.mu.Unlock()
+	m.runMoveQueue() // a slot just freed up: let the next queued move use it right away
 }
 
 // dropForMove releases the engine's hold on the torrent's files.

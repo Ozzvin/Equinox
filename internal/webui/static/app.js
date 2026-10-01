@@ -225,24 +225,26 @@
     if (f.label === "none") { if (t.label) return false; }
     else if (f.label.startsWith("l:") && t.label !== f.label.slice(2)) return false;
     switch (f.state) {
-      case "active": return !!t.checking || (!t.paused && (t.active || t.downRate > 0 || t.upRate > 0));
+      case "active": return !!t.checking || !!t.moving || (!t.paused && (t.active || t.downRate > 0 || t.upRate > 0));
       case "downloading": return !t.paused && t.queued === 0 && !t.checking && !t.checkQueued && (!t.hasMetadata || t.progress < 1);
       case "checking": return !!t.checking || t.checkQueued > 0;
       case "seeding": return !t.paused && t.hasMetadata && t.progress >= 1;
       case "paused": return t.paused;
       case "queued": return t.queued > 0 || t.checkQueued > 0 || t.seedQueued > 0;
+      case "moving": return !!t.moving;
     }
     return true;
   }
 
   const VIEWS = [
     ["", "Все раздачи", "i-all"], ["active", "Активные", "i-bolt"], ["downloading", "Загружаются", "i-download"],
-    ["seeding", "Раздаются", "i-up"], ["checking", "Проверяются", "i-check"], ["paused", "На паузе", "i-pause"], ["queued", "В очереди", "i-clock"],
+    ["seeding", "Раздаются", "i-up"], ["checking", "Проверяются", "i-check"], ["moving", "Перемещаются", "i-move"],
+    ["paused", "На паузе", "i-pause"], ["queued", "В очереди", "i-clock"],
   ];
   const sideItem = (key, name, icon, count, current) =>
     `<button class="side-item" data-view="${esc(key)}" aria-current="${current}">${icon}<span class="name">${name}</span><span class="cnt">${count}</span></button>`;
 
-  const HIDDEN_WHEN_EMPTY = ["checking", "paused", "queued"];
+  const HIDDEN_WHEN_EMPTY = ["checking", "moving", "paused", "queued"];
 
   function renderSide(gone) {
     const svg = (id) => `<svg class="i"><use href="#${id}"/></svg>`;
@@ -350,7 +352,7 @@
   function stateOf(t) {
     if (t.error) return { cls: "bad", title: t.error, text: t.errorKind === "disk_full" ? "Нет места на диске" : t.errorKind === "write" ? "Ошибка записи на диск" : "Ошибка" };
     if (t.checking) return { cls: "wait", text: t.checkProgress > 0 ? `Проверка файлов ${Math.floor(t.checkProgress * 100)}%` : "Проверка файлов…" };
-    if (t.moving) return { cls: "wait", text: t.moving > 0 ? `Перемещение ${Math.round(t.moving * 100)}%` : "Перемещение…" };
+    if (t.moving) return { cls: "wait", text: t.moving > 0 ? `Перемещение ${Math.round(t.moving * 100)}%` : t.moving === -2 ? "Ждёт переноса" : "Перемещение…", title: t.moving === -2 ? "Стоит в очереди на перенос: одновременно переносится не больше заданного числа раздач" : undefined };
     if (t.checkQueued > 0) return { cls: "wait", text: "Ждёт проверки", title: `Стоит в очереди на проверку локальных файлов: №${t.checkQueued}` };
     if (!t.hasMetadata) return { cls: "wait", text: "Метаданные…" };
     if (t.paused) return { cls: "", text: t.progress >= 1 ? "Остановлено" : L("Пауза", "Paused") };
@@ -419,19 +421,18 @@
   }
 
   const PORT_UI = {
-    open:     { cls: "ok",   text: (p) => `Порт ${p.port} открыт · есть входящие` },
-    mapped:   { cls: "warn", text: (p) => `Порт ${p.port} проброшен · ждём входящих (${p.method})` },
-    cgnat:    { cls: "bad",  text: (p) => `Порт ${p.port} недоступен · серый IP у провайдера` },
-    closed:   { cls: "bad",  text: (p) => `Порт ${p.port} закрыт · роутер не отвечает` },
-    manual:   { cls: "",     text: (p) => `Порт ${p.port} · автопроброс выключен` },
-    checking: { cls: "warn", text: (p) => `Порт ${p.port} · проверка…` },
+    open:     { cls: "ok",   text: () => "Порт открыт. Есть входящие" },
+    mapped:   { cls: "warn", text: (p) => `Порт проброшен (${p.method}). Ждём входящих` },
+    cgnat:    { cls: "bad",  text: () => "Порт недоступен. Серый IP у провайдера" },
+    closed:   { cls: "bad",  text: () => "Порт закрыт. Роутер не отвечает" },
+    manual:   { cls: "",     text: () => "Автопроброс выключен" },
+    checking: { cls: "warn", text: () => "Порт проверяется…" },
   };
 
   // A small joke: click the port dot several times in a row and it starts changing colours like a disco ball.
   // It goes on while the clicking goes on and for three seconds after the last click, then the dot is what it was.
   let discoOn = false, discoClicks = 0, discoLast = 0, discoTimer = 0;
-  const discoClick = (e) => {
-    if (e.type === "contextmenu") e.preventDefault(); // a right click counts too, and has no menu to show here
+  const discoClick = () => {
     const now = Date.now();
     discoClicks = now - discoLast < 1200 ? discoClicks + 1 : 1;
     discoLast = now;
@@ -440,20 +441,28 @@
     if (discoOn) discoTimer = setTimeout(() => { discoOn = false; discoClicks = 0; $("s-port").classList.remove("disco"); }, 3000);
   };
   $("s-port").addEventListener("click", discoClick);
-  $("s-port").addEventListener("contextmenu", discoClick);
+  // A right click copies the address and port instead of showing a (nonexistent) context menu.
+  $("s-port").addEventListener("contextmenu", async (e) => {
+    e.preventDefault();
+    if (!port || !port.publicIP) { toast("IP пока не известен"); return; }
+    try {
+      await navigator.clipboard.writeText(`${port.publicIP}:${port.port}`);
+      toast("Адрес скопирован");
+    } catch (_) { toast("Не удалось скопировать адрес", true); }
+  });
 
   function renderPort() {
     const el = $("s-port");
     if (!port) return;
     const ui = PORT_UI[port.verdict] || PORT_UI.checking;
     el.className = "pill tip-host " + ui.cls + (discoOn ? " disco" : "");
-    const head = ui.text(port) + (port.wantedPort ? ` · нужный ${port.wantedPort} занят` : "");
+    const head = ui.text(port) + (port.wantedPort ? `. Нужный порт ${port.wantedPort} занят` : "");
     const advice = window.__trCode(port.adviceCode, port.adviceArgs, port.advice || "");
     let more = advice;
     if (port.wantedPort) more = `Порт ${port.wantedPort} занят другой программой или недоступен, поэтому выбран порт ${port.port}. ${advice}`.trim();
     el.lastElementChild.textContent = head; // for screen readers; the page shows only the dot
-    const ips = [port.publicIP && `IP: ${port.publicIP}`, port.publicIPv6 && `IPv6: ${port.publicIPv6}`].filter(Boolean);
-    el.dataset.tip = [head, more, ips.length ? ips.join("\n") : "IP: пока не известен, подскажут подключившиеся пиры"].filter(Boolean).join("\n");
+    const ips = [port.publicIP && `IP: ${port.publicIP}:${port.port}`, port.publicIPv6 && `IPv6: [${port.publicIPv6}]:${port.port}`].filter(Boolean);
+    el.dataset.tip = [head, more, ips.length ? ips.join("\n") : "IP: пока не известен, подскажут подключившиеся пиры", port.publicIP ? "Правый клик — скопировать адрес" : ""].filter(Boolean).join("\n");
     // Settings keeps its own copy of this text (shown only while the dialog is open), so a
     // manual "Проверить порт сейчас" — or just time passing — is reflected there too, not
     // only in the status-bar dot.
@@ -2162,7 +2171,7 @@
     $("st-trackericons").checked = settings.trackerIcons !== false;
 
     fillNetwork(settings.network || {});
-    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
+    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-maxmoves").value = settings.maxConcurrentMoves ?? 1; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
     if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {}); $("st-copy").value = settings.copyRemovePolicy;
     $("st-data").value = settings.dataDir; $("st-movedone").value = settings.moveCompletedDir || ""; $("st-watch").value = settings.watchDir || ""; $("st-copydir").value = settings.torrentCopyDir || "";
     openLabelRows();
@@ -2230,7 +2239,7 @@
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
-        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, updateCheckMinutes: updEvery, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), maxActiveSeeds: n("st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
+        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), maxConcurrentMoves: n("st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, updateCheckMinutes: updEvery, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), maxActiveSeeds: n("st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);

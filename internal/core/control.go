@@ -45,7 +45,7 @@ type Status struct {
 	Checking      bool      `json:"checking"`      // files are being checked against their hashes
 	CheckProgress float64   `json:"checkProgress"` // 0..1 while Checking
 	CheckQueued   int       `json:"checkQueued"`   // 0 = not waiting; N = place in the line for a check of local files (1 = next)
-	Moving        float64   `json:"moving"`        // > 0 while files are being moved (fraction copied; -1 = a plain rename)
+	Moving        float64   `json:"moving"`        // nonzero while a move is happening or queued: > 0 fraction copied, -1 a plain rename, -2 waiting in line for a free slot
 	MoveError     string    `json:"moveError"`     // last failed move, "" if none
 	MoveNote      string    `json:"moveNote"`      // a move that worked but left something behind
 	Queued        int       `json:"queued"`        // 0 = not waiting; N = position in the wait line (1 = next)
@@ -462,6 +462,7 @@ func (m *Manager) List() []Status {
 		name      string
 		sel       int64
 		running   bool
+		queued    bool
 		frac      float64
 		err, note string
 	}
@@ -483,14 +484,14 @@ func (m *Manager) List() []Status {
 	}
 	moves := map[string]moveView{}
 	for h, j := range m.moves {
-		v := moveView{name: j.name, sel: j.selSize, running: j.running, frac: j.fraction(), err: j.err, note: j.warning}
-		if j.running {
-			switch {
-			case j.copySize == 0:
-				v.frac = -1 // rename in progress: no meaningful percentage
-			case v.frac < 0.001:
-				v.frac = 0.001 // 0 is reserved for "not moving"
-			}
+		v := moveView{name: j.name, sel: j.selSize, running: j.running, queued: j.queued, frac: j.fraction(), err: j.err, note: j.warning}
+		switch {
+		case j.running && j.copySize == 0:
+			v.frac = -1 // rename in progress: no meaningful percentage
+		case j.running && v.frac < 0.001:
+			v.frac = 0.001 // 0 is reserved for "not moving"
+		case j.queued:
+			v.frac = -2 // waiting in line for a free slot, nothing touched yet
 		}
 		moves[h] = v
 	}
@@ -542,6 +543,9 @@ func (m *Manager) List() []Status {
 		st.Error, st.ErrorKind = errs[st.Hash].msg, errs[st.Hash].kind
 		if v, ok := moves[st.Hash]; ok {
 			st.MoveError, st.MoveNote = v.err, v.note
+			if v.running || v.queued {
+				st.Moving = v.frac
+			}
 		}
 		out = append(out, st)
 	}
@@ -679,6 +683,7 @@ func (m *Manager) loop(ctx context.Context) {
 		m.applySeedQueue(ts, recs)
 		m.enforce(ts)
 		m.trackAvailability(ts, recs, tickN)
+		m.runMoveQueue()
 	}
 }
 

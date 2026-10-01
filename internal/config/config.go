@@ -124,6 +124,13 @@ type Settings struct {
 	// in a line (0 = no limit).
 	MaxConcurrentChecks int `json:"maxConcurrentChecks"`
 
+	// MaxConcurrentMoves limits how many torrents have their files being moved to another folder at
+	// once (a manual move, or the "move completed torrents to" folder); the rest wait in a line
+	// (0 = no limit). Several large torrents moving at once, each seeking all over a disk, is exactly
+	// the kind of thrashing a spinning HDD suffers from, so the default is the most conservative: one
+	// at a time.
+	MaxConcurrentMoves int `json:"maxConcurrentMoves"`
+
 	// SpeedUnit is how speeds are shown: "bytes" (КБ/с, МБ/с) or "bits" (Кб/с, Мб/с).
 	SpeedUnit string `json:"speedUnit"`
 	// TrackerIcons lets the program fetch the icon of the site of each tracker (a request to that site), for the side panel.
@@ -193,6 +200,7 @@ func Default(dir string) Settings {
 		CloseToTray:         true,
 		SpeedUnit:           "bytes",
 		MaxConcurrentChecks: 2,
+		MaxConcurrentMoves:  1,
 		Network: Network{
 			MaxConnsPerTorrent: 50, MaxHalfOpenPerTorrent: 25,
 			DHT: true, PEX: true, UTP: true, TCP: true, IPv6: true, Webseeds: true, AcceptIncoming: true,

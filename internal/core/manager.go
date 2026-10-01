@@ -89,7 +89,8 @@ type Manager struct {
 	seedHeld         map[metainfo.Hash]bool      // finished torrents that have a place to share at the moment
 	schedIn          bool                        // last evaluation of the turtle schedule window
 	schedKnown       bool
-	moves            map[string]*moveJob      // storage moves in progress or just failed, by hash
+	moves            map[string]*moveJob      // storage moves in progress, queued or just failed, by hash
+	moveQueue        []string                 // moves waiting for a free slot (MaxConcurrentMoves); index 0 goes next
 	checking         map[string]bool          // torrents being re-hashed
 	errs             map[string]torrentError  // why a torrent was stopped by the engine, by hash
 	watchSeen        map[string]watchStamp    // files seen in the watch folder on the previous scan
@@ -643,6 +644,7 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	delete(m.seedHeld, h)
 	delete(m.activeAt, h) // flushActiveTime and List walk these maps on every refresh: what stays only grows
 	delete(m.moves, hash)
+	m.moveQueue = dropString(m.moveQueue, hash)
 	m.recheckQueue = dropString(m.recheckQueue, hash)
 	m.mu.Unlock()
 	m.forgetSeedTime(hash) // the uncounted seeding and running time (seedPend, activePend)

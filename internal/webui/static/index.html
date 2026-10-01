@@ -424,9 +424,11 @@
           <label>Одновременных загрузок (0 — без ограничения)<input type="number" min="0" id="st-maxactive"></label>
           <label>Одновременных раздач (0 — без ограничения)<input type="number" min="0" id="st-maxseeds"></label>
           <label>Одновременных проверок локальных файлов (0 — без ограничения)<input type="number" min="0" max="64" id="st-maxchecks"></label>
+          <label>Одновременных переносов раздач на другую папку/диск (0 — без ограничения)<input type="number" min="0" max="64" id="st-maxmoves"></label>
           <p class="muted small">Остальные раздачи ждут своей очереди. Порядок меняют кнопки со стрелками на панели.</p>
           <p class="muted small">Лишние законченные торренты ждут места («В очереди на раздачу»). Раньше других раздаются те, кому сейчас есть что отдавать, потом идут по порядку очереди. Ожидающие остаются на связи, но ничего не отдают.</p>
           <p class="muted small">Проверка идёт, когда добавленная раздача уже лежит на диске, и при кнопке «Проверить файлы». Лишние проверки ждут очереди («Ждёт проверки»): так диск не разрывается между несколькими проверками сразу. Для одного жёсткого диска лучше 1.</p>
+          <p class="muted small">Перенос — вручную или в папку завершённых раздач. Несколько переносов разных больших раздач сразу заставляют диск метаться между ними; для одного жёсткого диска лучше 1.</p>
         </fieldset>
         <fieldset>
           <legend>Раздача</legend>
@@ -802,6 +804,7 @@
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-turtle" viewBox="0 0 24 24"><path d="M3 15c0-4.4 3.6-8 8-8s8 3.6 8 8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 15c0-2.5 1.3-5 3-8m3 8c0-2.5-.8-5-2-8M19 13.5c1.7-.4 2.7.3 2.7 1.5H19M5 15v2.2M9 15v2.2M14 15v2.2M17.5 15v2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-move" viewBox="0 0 24 24"><path d="M3.5 6.5a1 1 0 0 1 1-1h4.2l2 2.3h8.8a1 1 0 0 1 1 1v9.2a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.5 9.3l3.3 2.8-3.3 2.8M8 12.1h6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 <script src="app.js"></script>
 </body>
