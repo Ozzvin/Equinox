@@ -169,7 +169,7 @@
     // Place in the download queue (queue order, whatever the filter or sort). Finished torrents, which are seeding, have none.
     { id: "num", title: "#", menu: "Место в очереди загрузки", tip: "Место в очереди загрузки", always: true, fit: { pad: 12, text: (t) => String(queuePos.get(t.hash) || "") }, cls: "c-num c-qn", w: 48, sort: (t) => queuePos.get(t.hash) || 1e9, cell: (t) => queuePos.get(t.hash) || "" },
     { id: "name", title: "Название", always: true, cls: "c-name", sort: (t) => (t.name || t.hash).toLowerCase(),
-      cell: (t) => `<div class="nm" title="${esc(t.name)}">${esc(t.name || t.hash)}${t.sequential ? '<span class="badge">по ходу</span>' : ""}${t.label ? `<span class="badge lbl lc-${labelColor(t.label)}">${esc(t.label)}</span>` : ""}</div>` },
+      cell: (t) => `<div class="nm" title="${esc(t.name)}">${esc(t.name || t.hash)}${t.label ? `<span class="badge lbl lc-${labelColor(t.label)}">${esc(t.label)}</span>` : ""}</div>` },
     { id: "size", title: "Размер", fit: { pad: 24, text: (t) => (t.hasMetadata || t.checkQueued > 0 ? bytes(t.size) : "—") }, cls: "c-size", w: 92, sort: (t) => t.size, cell: (t) => (t.hasMetadata || t.checkQueued > 0 ? bytes(t.size) : "—") },
     { id: "downloaded", title: "Скачано", menu: "Скачано (за всё время)", cls: "c-num", w: 92, sort: (t) => t.downloaded, cell: (t) => bytes(t.downloaded) },
     { id: "uploaded", title: "Отдано", menu: "Отдано (за всё время)", cls: "c-num", w: 92, sort: (t) => t.uploaded, cell: (t) => bytes(t.uploaded) },
@@ -516,10 +516,10 @@
       <select data-dprio="${esc(d.path)}" aria-label="Приоритет всех файлов папки"><option value="" disabled hidden>Разный</option>${prioOptions}</select>
       <span></span></div>`;
   }
-  function fileRowHTML(x) {
+  function fileRowHTML(x, sequential) {
     const f = x.f;
     return `<div class="file" data-i="${f.index}" ${rowPad(x.depth)}>
-      <div class="fn" title="${esc(f.path)}">${esc(x.name)}</div>
+      <div class="fn" title="${esc(f.path)}">${esc(x.name)}${sequential ? '<span class="badge">по ходу</span>' : ""}</div>
       <div class="fs">${bytes(f.size)}</div>
       ${FILE_BAR}
       <select data-prio="${f.index}" aria-label="Приоритет файла">${prioOptions}</select>
@@ -584,13 +584,13 @@
     if (!cur() || cur().hash !== t.hash) return;
     const box = $("files"), closed = closedOf(t.hash);
     const tree = buildFileTree(files);
-    const key = t.hash + ":" + files.length + ":" + [...closed].sort().join("|");
+    const key = t.hash + ":" + files.length + ":" + t.sequential + ":" + [...closed].sort().join("|");
     // folders and their files, for the selection and the priority of a whole folder
     dirIdx = new Map();
     (function walk(n) { for (const d of n.dirs.values()) { dirIdx.set(d.path, treeFiles(d).map((f) => f.index)); walk(d); } })(tree);
     if (key !== filesKey) {
       const rows = treeRows(tree, closed, []);
-      box.innerHTML = FILE_HEAD + rows.map((r) => (r.kind === "dir" ? dirRowHTML(r.node, closed) : fileRowHTML(r))).join("");
+      box.innerHTML = FILE_HEAD + rows.map((r) => (r.kind === "dir" ? dirRowHTML(r.node, closed) : fileRowHTML(r, t.sequential))).join("");
       fileOrder = rows.filter((r) => r.kind === "file").map((r) => r.f.index);
       if (!filesKey.startsWith(t.hash + ":")) { fileSel.clear(); fileAnchor = null; }
       filesKey = key;
