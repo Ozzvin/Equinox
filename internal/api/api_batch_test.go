@@ -107,6 +107,7 @@ func TestAddDialogInfoAndDefaults(t *testing.T) {
 	var d struct {
 		Defaults struct {
 			EdgePieces bool `json:"edgePieces"`
+			Sequential bool `json:"sequential"`
 			Paused     bool `json:"paused"`
 			SkipCheck  bool `json:"skipCheck"`
 		} `json:"defaults"`
@@ -116,7 +117,7 @@ func TestAddDialogInfoAndDefaults(t *testing.T) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&d)
 	r.Body.Close()
-	if r.StatusCode != 200 || d.DataDir == "" || !d.Defaults.EdgePieces || d.MaxConns != 50 {
+	if r.StatusCode != 200 || d.DataDir == "" || !d.Defaults.Sequential || d.MaxConns != 50 {
 		t.Fatalf("dialog info: %d %+v", r.StatusCode, d)
 	}
 

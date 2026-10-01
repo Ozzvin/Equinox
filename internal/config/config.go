@@ -203,7 +203,7 @@ func Default(dir string) Settings {
 		AltDownLimitKBps:   50,
 		AltUpLimitKBps:     50,
 		AltSchedule:        AltSchedule{From: "23:00", To: "07:00"},
-		Add:                AddDefaults{EdgePieces: true},
+		Add:                AddDefaults{Sequential: true},
 		EdgePieces:         4,
 		SequentialWindow:   16,
 		AutoUpdateCheck:    true,

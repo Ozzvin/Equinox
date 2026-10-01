@@ -1261,11 +1261,14 @@
   $("btn-up").onclick = () => each(chosen(), (t) => post(t, "queue", { move: "up" }));
   $("btn-down").onclick = () => each(chosen().reverse(), (t) => post(t, "queue", { move: "down" }));
 
-  // Copy a stream link for an external player (VLC, mpv). Sequential mode is switched on
-  // so the pieces are fetched in playback order.
+  // Copy a stream link for an external player (VLC, mpv). Also prepares the torrent for
+  // playback regardless of how the file ends up being opened (a pasted link, or the file
+  // directly from Explorer): sequential mode is switched on, and the file's own priority
+  // is raised, so a player opening it straight from disk still gets it fetched in order.
   async function copyLink(index) {
     const t = cur(); if (!t) return;
     if (!t.sequential) await api("POST", `/api/torrents/${t.hash}/sequential`, { enabled: true }).catch(() => {});
+    await setPriority([index], "high");
     try {
       await navigator.clipboard.writeText(location.origin + streamPath(t.hash, index));
       toast("Ссылка скопирована — вставьте её в VLC или mpv (Медиа → Открыть URL)");

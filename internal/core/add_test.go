@@ -351,8 +351,8 @@ func TestStagingIsBounded(t *testing.T) {
 func TestAddDefaultsAreSavedAndValidated(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
-	if !m.AddDialog().Defaults.EdgePieces {
-		t.Fatal("first/last pieces are on by default")
+	if !m.AddDialog().Defaults.Sequential {
+		t.Fatal("sequential download is on by default")
 	}
 	target := filepath.Join(dir, "later")
 	if err := m.SetAddDefaults(config.AddDefaults{Paused: true, SkipCheck: true, MoveDoneEnabled: true, MoveDone: target}); err != nil {
