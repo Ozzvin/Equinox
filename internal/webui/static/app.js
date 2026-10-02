@@ -105,11 +105,11 @@
     }
   }
   // shows the four limits of a window; the unit is the one saved for the limit, else the general one
-  function limitFillAll(ids, bits) {
+  function limitFillAll(ids, bits, src = settings) {
     LIMIT_KEYS.forEach((key, i) => {
-      const saved = settings.limitUnits && settings.limitUnits[key], u = $(ids[i] + "-u");
+      const saved = src.limitUnits && src.limitUnits[key], u = $(ids[i] + "-u");
       if (saved) u.dataset.chosen = "1"; else delete u.dataset.chosen;
-      limitFill(ids[i], settings[LIMIT_CFG[key]], saved ? limitFamily(saved, bits) : limitDefault(bits));
+      limitFill(ids[i], src[LIMIT_CFG[key]], saved ? limitFamily(saved, bits) : limitDefault(bits));
     });
   }
   const limitReadAll = (ids) => Object.fromEntries(LIMIT_KEYS.map((key, i) => [LIMIT_CFG[key], limitRead(ids[i], $(ids[i] + "-u").value)]));
@@ -2136,52 +2136,175 @@
 
 
   // ---------- sections of the settings ----------
+  const setPanes = $("set-panes"), setSearch = $("set-search");
+  const navButtons = () => [...document.querySelectorAll("#set-nav [data-sec]")];
   function showSection(id) {
-    const btns = [...document.querySelectorAll("#set-nav [data-sec]")];
-    // "Обновления" is not in the menu but a button of its own in the bottom row: no item of the menu is chosen then
-    const btn = id === "updates" ? null : btns.find((b) => b.dataset.sec === id && !b.hidden) || btns.find((b) => !b.hidden);
-    if (btn) id = btn.dataset.sec;
-    for (const b of btns) { b.setAttribute("aria-selected", b === btn); b.tabIndex = (btn ? b === btn : b === btns.find((x) => !x.hidden)) ? 0 : -1; }
-    $("st-updates-tab").setAttribute("aria-pressed", id === "updates");
+    if (id === "updates") id = "about"; // "Обновления" used to be a section of its own
+    if (setSearch.value) { setSearch.value = ""; applySearch(); }
+    const btns = navButtons();
+    const btn = btns.find((b) => b.dataset.sec === id && !b.hidden) || btns.find((b) => !b.hidden);
+    id = btn.dataset.sec;
+    for (const b of btns) { b.setAttribute("aria-selected", b === btn); b.tabIndex = b === btn ? 0 : -1; }
     for (const p of document.querySelectorAll("#dlg-settings .set-pane")) p.hidden = p.dataset.sec !== id;
-    if (id === "updates") loadChangelog();
+    if (id === "about") loadChangelog();
+    setPanes.scrollTop = 0;
     try { localStorage.setItem("setSection", id); } catch (_) {}
   }
   $("set-nav").addEventListener("click", (e) => { const b = e.target.closest("[data-sec]"); if (b) showSection(b.dataset.sec); });
-  $("st-updates-tab").onclick = () => showSection("updates");
   $("set-nav").addEventListener("keydown", (e) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
-    const btns = [...document.querySelectorAll("#set-nav [data-sec]")].filter((b) => !b.hidden);
+    const btns = navButtons().filter((b) => !b.hidden);
     const i = btns.findIndex((b) => b.getAttribute("aria-selected") === "true");
     const next = btns[(i + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length];
     showSection(next.dataset.sec); next.focus();
   });
   // A field the browser refuses (say a negative number) may sit in a section that is not shown:
   // switch to it, or the form would fail without a word.
-  $("f-settings").addEventListener("invalid", (e) => { const p = e.target.closest(".set-pane"); if (p) showSection(p.dataset.sec); }, true);
+  $("f-settings").addEventListener("invalid", (e) => { const p = e.target.closest(".set-pane"); if (p && p.hidden) showSection(p.dataset.sec); }, true);
   const openSection = () => { let id = "speed"; try { id = localStorage.getItem("setSection") || id; } catch (_) {} showSection(id); };
+
+  // Search: while something is typed, every section that has a match is shown one after the other (each with its
+  // title), and only the rows (and groups) that match stay. Clearing the box, or choosing a section, goes back.
+  const norm = (t) => t.toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ");
+  function applySearch() {
+    const q = norm(setSearch.value.trim());
+    setPanes.classList.toggle("searching", !!q);
+    const visibleNav = new Set(navButtons().filter((b) => !b.hidden).map((b) => b.dataset.sec));
+    let any = false;
+    for (const pane of setPanes.querySelectorAll(".set-pane")) {
+      pane.classList.remove("sf-hit");
+      const nav = navButtons().find((b) => b.dataset.sec === pane.dataset.sec);
+      if (nav) nav.classList.remove("sf-none");
+      for (const el of pane.querySelectorAll(".sf-hide")) el.classList.remove("sf-hide");
+      if (!q || !visibleNav.has(pane.dataset.sec)) continue;
+      let hits = 0;
+      for (const fs of pane.querySelectorAll("fieldset")) {
+        const rows = [...fs.querySelectorAll(".srow")];
+        const legend = fs.querySelector("legend");
+        let n = 0;
+        if (legend && norm(legend.textContent).includes(q)) n = rows.length || 1;
+        else if (!rows.length) n = norm(fs.textContent).includes(q) ? 1 : 0;
+        else for (const r of rows) { if (norm(r.textContent).includes(q)) n++; else r.classList.add("sf-hide"); }
+        if (!n) fs.classList.add("sf-hide"); else hits += n;
+      }
+      if (hits) { pane.classList.add("sf-hit"); any = true; } else if (nav) nav.classList.add("sf-none");
+    }
+    $("set-none").hidden = !q || any;
+  }
+  setSearch.addEventListener("input", applySearch);
+  setSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && setSearch.value) { e.preventDefault(); e.stopPropagation(); setSearch.value = ""; openSection(); }
+    else if (e.key === "Enter") e.preventDefault(); // Enter in the search must not save the form
+  });
 
   // settings
   const ST_LIMIT_IDS = ["st-down", "st-up", "st-altdown", "st-altup"]; // in the order of LIMIT_KEYS
+  const ST_LIMIT_TG = ["tg-down", "tg-up", "tg-altdown", "tg-altup"];
+
+  // A toggle in front of a field: the field works only while the box is ticked (instead of "empty = off" or
+  // "0 = no limit"). Switching it off keeps what was typed, so ticking it again brings it back.
+  const TOGGLE_FALLBACK = { "st-maxactive": 3, "st-maxseeds": 5, "st-maxchecks": 1, "st-maxmoves": 1, "st-ratio": 2, "st-seedtime": 24 };
+  const tgMemo = {};
+  const tgField = (cb) => $(cb.dataset.for);
+  const isLimitField = (el) => ST_LIMIT_IDS.includes(el.id);
+  function tgApply(cb) {
+    const el = tgField(cb), u = $(el.id + "-u"), pickBtn = document.querySelector(`[data-pick="${el.id}"]`);
+    el.disabled = !cb.checked; if (u) u.disabled = !cb.checked; if (pickBtn) pickBtn.disabled = !cb.checked;
+    el.closest(".srow").classList.toggle("off", !cb.checked);
+  }
+  // sets a toggle from a stored value (0 or "" is off)
+  function tgSet(cbId, on, value) {
+    const cb = $(cbId), el = tgField(cb);
+    cb.checked = !!on;
+    delete tgMemo[el.id];
+    if (isLimitField(el)) { limitFill(el.id, value || 0, $(el.id + "-u").value); if (!on) el.value = ""; }
+    else el.value = on ? value : "";
+    tgApply(cb);
+  }
+  function tgChange(cb) {
+    const el = tgField(cb);
+    if (!cb.checked) {
+      tgMemo[el.id] = isLimitField(el) ? limitRead(el.id, $(el.id + "-u").value) : el.value;
+      if (isLimitField(el)) limitFill(el.id, 0, $(el.id + "-u").value);
+      el.value = "";
+    } else {
+      const m = tgMemo[el.id];
+      if (isLimitField(el)) { if (m) limitFill(el.id, m, $(el.id + "-u").value); }
+      else if (m) el.value = m;
+      else if (TOGGLE_FALLBACK[el.id] !== undefined) el.value = TOGGLE_FALLBACK[el.id];
+    }
+    tgApply(cb);
+    if (cb.checked) el.focus();
+  }
+  for (const cb of document.querySelectorAll("#dlg-settings input.tg")) cb.addEventListener("change", () => tgChange(cb));
+  // what a field holds for saving: nothing while its box is not ticked
+  const tgText = (cbId, fieldId) => ($(cbId).checked ? $(fieldId).value.trim() : "");
+  const tgNum = (cbId, fieldId) => ($(cbId).checked ? Number($(fieldId).value) || 0 : 0);
+
+  // One function per section puts the values of a settings object into its fields: the same for opening the dialog
+  // (the saved settings) and for "reset the section" (the defaults the daemon gives).
+  const FILL = {
+    speed(s) {
+      const bits = s.speedUnit === "bits";
+      $("st-unit-bits").checked = bits; $("st-unit-bytes").checked = !bits;
+      limitFillAll(ST_LIMIT_IDS, bits, s);
+      LIMIT_KEYS.forEach((key, i) => tgSet(ST_LIMIT_TG[i], s[LIMIT_CFG[key]] > 0, s[LIMIT_CFG[key]]));
+      fillSchedule(s.altSchedule || {});
+    },
+    folders(s, isReset) {
+      if (!isReset) $("st-data").value = s.dataDir; // a reset keeps the folder: its default depends on the machine
+      tgSet("tg-movedone", s.moveCompletedDir, s.moveCompletedDir || ""); tgSet("tg-watch", s.watchDir, s.watchDir || ""); tgSet("tg-copydir", s.torrentCopyDir, s.torrentCopyDir || "");
+      $("st-copy").value = s.copyRemovePolicy;
+      $("st-addpaused").checked = !!(s.add && s.add.paused); $("st-addseq").checked = !!(s.add && s.add.sequential); $("st-addedge").checked = !!(s.add && s.add.edgePieces);
+      $("st-prealloc").checked = !!s.preallocate;
+    },
+    queue(s) {
+      tgSet("tg-maxactive", s.maxActiveDownloads > 0, s.maxActiveDownloads); tgSet("tg-maxseeds", s.maxActiveSeeds > 0, s.maxActiveSeeds);
+      tgSet("tg-maxchecks", (s.maxConcurrentChecks ?? 2) > 0, s.maxConcurrentChecks ?? 2); tgSet("tg-maxmoves", (s.maxConcurrentMoves ?? 1) > 0, s.maxConcurrentMoves ?? 1);
+      tgSet("tg-ratio", s.ratioLimit > 0, s.ratioLimit); tgSet("tg-seedtime", s.seedTimeLimitMinutes > 0, (s.seedTimeLimitMinutes || 0) / 60);
+    },
+    network(s, isReset) {
+      fillNetwork(s.network || {});
+      $("st-port-num").value = s.listenPort;
+      $("st-port-note").hidden = !(port && s.listenPort !== port.port);
+      if (!isReset) { $("st-port").textContent = portDetails(port); $("st-mapping").checked = !!port.enabled; } // the mapping applies at once, not on Save
+    },
+    view(s, isReset) {
+      $("st-trackericons").checked = s.trackerIcons !== false;
+      if (!isReset) return;
+      // the language is chosen here but applied on Save; the theme and the density apply at once
+      $("lg-system").checked = true;
+      for (const id of ["th-system", "dn-standard"]) { const r = $(id); if (!r.checked) { r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); } }
+    },
+    system(s, isReset) {
+      $("st-starthidden").checked = s.startHidden !== false; $("st-closetray").checked = s.closeToTray !== false; $("st-mintray").checked = !!s.minimizeToTray;
+      $("st-remwin").checked = !!s.rememberWindow; $("st-notify").checked = s.notifyOnComplete !== false;
+      if (isReset && window.__equinoxDesktop) $("st-autostart").checked = false;
+    },
+  };
+  // "Сбросить раздел к умолчаниям": the fields get the defaults, nothing is saved until "Сохранить"
+  document.querySelectorAll("#dlg-settings [data-reset]").forEach((btn) => {
+    btn.onclick = async () => {
+      let d;
+      try { d = await api("GET", "/api/settings/defaults"); } catch (e) { return toast(e.message, true); }
+      FILL[btn.closest(".set-pane").dataset.sec](d, true);
+      toast("Раздел сброшен к умолчаниям. Нажмите «Сохранить», чтобы применить.");
+    };
+  });
   $("btn-settings").onclick = async () => {
     try { settings = await api("GET", "/api/settings"); port = await api("GET", "/api/port"); } catch (e) { return toast(e.message, true); }
-    limitFillAll(ST_LIMIT_IDS, settings.speedUnit === "bits");
     for (const r of document.querySelectorAll('input[name="lg"]')) r.checked = r.value === window.__langPref;
-    $("st-trackericons").checked = settings.trackerIcons !== false;
-
-    fillNetwork(settings.network || {});
-    fillSchedule(settings.altSchedule || {}); $("st-unit-bits").checked = settings.speedUnit === "bits"; $("st-unit-bytes").checked = settings.speedUnit !== "bits"; $("st-maxactive").value = settings.maxActiveDownloads; $("st-maxseeds").value = settings.maxActiveSeeds || 0; $("st-maxchecks").value = settings.maxConcurrentChecks ?? 2; $("st-maxmoves").value = settings.maxConcurrentMoves ?? 1; $("st-addpaused").checked = !!(settings.add && settings.add.paused); $("st-addseq").checked = !!(settings.add && settings.add.sequential); $("st-addedge").checked = !!(settings.add && settings.add.edgePieces); $("st-ratio").value = settings.ratioLimit; $("st-seedtime").value = (settings.seedTimeLimitMinutes || 0) / 60; $("st-notify").checked = settings.notifyOnComplete !== false; $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked; $("sn-system").hidden = !window.__equinoxDesktop; $("fs-window").hidden = !window.__equinoxDesktop; $("st-starthidden").checked = settings.startHidden !== false; $("st-closetray").checked = settings.closeToTray !== false; $("st-mintray").checked = !!settings.minimizeToTray; $("st-remwin").checked = !!settings.rememberWindow;
-    if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {}); $("st-copy").value = settings.copyRemovePolicy;
-    $("st-data").value = settings.dataDir; $("st-movedone").value = settings.moveCompletedDir || ""; $("st-watch").value = settings.watchDir || ""; $("st-copydir").value = settings.torrentCopyDir || "";
+    for (const id of Object.keys(FILL)) FILL[id](settings);
+    $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked;
+    $("sn-system").hidden = !window.__equinoxDesktop;
+    if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
     openLabelRows();
-    $("st-prealloc").checked = !!settings.preallocate; $("st-port-num").value = settings.listenPort;
-    $("st-port-note").hidden = !(port && settings.listenPort !== port.port);
-    $("st-port").textContent = portDetails(port); $("st-mapping").checked = !!port.enabled;
+    setSearch.value = ""; applySearch();
     openSection();
     loadAbout();
     $("st-err").hidden = true; $("dlg-settings").showModal();
-    (document.querySelector('#set-nav [tabindex="0"]') || $("st-updates-tab")).focus(); // the menu, not the button in the corner, gets the focus
+    (document.querySelector('#set-nav [tabindex="0"]') || setSearch).focus(); // the menu gets the focus
   };
   // The changelog of the program (the CHANGELOG.md it carries, in Russian): each version is folded, and opens on a click.
   let changelogShown = false;
@@ -2203,7 +2326,7 @@
     if (!lastUpdate) checkUpdate(false);
   }
   limitBind(ST_LIMIT_IDS);
-  for (const r of [$("st-unit-bytes"), $("st-unit-bits")]) r.addEventListener("change", () => limitFollow(ST_LIMIT_IDS, $("st-unit-bits").checked));
+  for (const r of [$("st-unit-bytes"), $("st-unit-bits")]) r.addEventListener("change", () => { limitFollow(ST_LIMIT_IDS, $("st-unit-bits").checked); ST_LIMIT_IDS.forEach((id, i) => { if (!$(ST_LIMIT_TG[i]).checked) $(id).value = ""; }); });
   $("st-mapping").onchange = async (e) => {
     try { port = await api("POST", "/api/port/mapping", { enabled: e.target.checked }); $("st-port").textContent = portDetails(port); renderPort(); }
     catch (x) { e.target.checked = !e.target.checked; toast(x.message, true); }
@@ -2227,19 +2350,22 @@
     const n = (id) => Number($(id).value) || 0;
     const updEvery = Math.round(Number($("st-updevery").value));
     const langChoice = (document.querySelector('input[name="lg"]:checked') || {}).value || "system"; // system, ru or en
+    for (const [cb, field, what] of [["tg-movedone", "st-movedone", "Переносить завершённые загрузки в"], ["tg-watch", "st-watch", "Папка автодобавления"], ["tg-copydir", "st-copydir", "Сохранять копии .torrent файлов в"]]) {
+      if ($(cb).checked && !$(field).value.trim()) { $("st-err").textContent = `${L("Укажите папку или снимите галочку", "Choose a folder or untick the box")}: ${L(what, EN_NAMES[what])}`; $("st-err").hidden = false; showSection(document.getElementById(field).closest(".set-pane").dataset.sec); $(field).focus(); return; }
+    }
     if (!(updEvery >= 5 && updEvery <= 20160)) { $("st-err").textContent = "Период проверки обновлений: от 5 минут до 14 суток (20160 минут)."; $("st-err").hidden = false; return; }
     try {
       // labels deleted in the settings are taken off their torrents first
       for (const name of lbDeleted) for (const t of torrents.filter((x) => x.label === name)) await api("POST", `/api/torrents/${t.hash}/label`, { label: "" });
       lbDeleted = new Set();
       settings = await api("PUT", "/api/settings", {
-        ...limitReadAll(ST_LIMIT_IDS), limitUnits: limitUnitsOf(ST_LIMIT_IDS),
+        ...limitReadOff(), limitUnits: limitUnitsOf(ST_LIMIT_IDS),
         language: langChoice === "system" ? "" : langChoice, // the tray and the notifications of the program follow it
         trackerIcons: $("st-trackericons").checked,
         network: readNetwork(),
-        dataDir: $("st-data").value.trim(), moveCompletedDir: $("st-movedone").value.trim(), watchDir: $("st-watch").value.trim(), torrentCopyDir: $("st-copydir").value.trim(), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
+        dataDir: $("st-data").value.trim(), moveCompletedDir: tgText("tg-movedone", "st-movedone"), watchDir: tgText("tg-watch", "st-watch"), torrentCopyDir: tgText("tg-copydir", "st-copydir"), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
-        ratioLimit: n("st-ratio"), seedTimeLimitMinutes: Math.round(n("st-seedtime") * 60), maxConcurrentChecks: n("st-maxchecks"), maxConcurrentMoves: n("st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, updateCheckMinutes: updEvery, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: n("st-maxactive"), maxActiveSeeds: n("st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
+        ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, updateCheckMinutes: updEvery, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);
@@ -2262,6 +2388,14 @@
     const err = await window.registerHandlers();
     if (err) toast("Не удалось зарегистрировать приложение: " + err, true);
   };
+
+  const EN_NAMES = { "Переносить завершённые загрузки в": "Move finished downloads to", "Папка автодобавления": "Watch folder", "Сохранять копии .torrent файлов в": "Keep copies of .torrent files in" };
+  // the four speed limits for saving: a limit whose box is not ticked is "no limit"
+  function limitReadOff() {
+    const v = limitReadAll(ST_LIMIT_IDS);
+    LIMIT_KEYS.forEach((key, i) => { if (!$(ST_LIMIT_TG[i]).checked) v[LIMIT_CFG[key]] = 0; });
+    return v;
+  }
 
   // connection settings
   const NW_CHECKS = { dht: "nw-dht", pex: "nw-pex", utp: "nw-utp", tcp: "nw-tcp", ipv6: "nw-ipv6", webseeds: "nw-web", acceptIncoming: "nw-in" };

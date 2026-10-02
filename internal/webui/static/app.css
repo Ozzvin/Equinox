@@ -339,9 +339,8 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 .set-layout { display: flex; gap: 18px; align-items: stretch; margin-top: 4px; }
 .set-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .set-head h2 { margin: 0; }
-.foot-tab { margin-right: auto; }
-.foot-tab[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
-.set-nav { flex: none; width: 178px; display: flex; flex-direction: column; gap: 2px; padding-right: 12px; border-right: 1px solid var(--line); overflow: auto; }
+.set-side { flex: none; width: 178px; display: flex; flex-direction: column; gap: 8px; padding-right: 12px; border-right: 1px solid var(--line); min-height: 0; }
+.set-nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; min-height: 0; }
 .set-nav button { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .set-nav button:hover { background: var(--hover); }
 .set-nav button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
@@ -350,7 +349,7 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 .set-panes { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding-right: 6px; }
 .set-pane[hidden] { display: none; }
 .set-pane > fieldset:first-child { margin-top: 0; }
-@media (max-width: 520px) { .set-layout { flex-direction: column; } .set-nav { width: auto; flex-direction: row; flex-wrap: wrap; border-right: 0; padding: 0 0 8px; border-bottom: 1px solid var(--line); } }
+@media (max-width: 520px) { .set-layout { flex-direction: column; } .set-side { width: auto; border-right: 0; padding: 0 0 8px; border-bottom: 1px solid var(--line); } .set-nav { flex-direction: row; flex-wrap: wrap; } }
 .pane.none#d-empty { padding: 18px 16px; }
 /* labels in the settings */
 .lb-rows { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
@@ -627,7 +626,7 @@ html:not([data-density="large"]) dialog.wide { width: min(640px, calc(100vw - 32
 html:not([data-density="large"]) #dlg-settings.settings { width: min(780px, calc(100vw - 32px)); }
 html:not([data-density="large"]) #dlg-settings.settings[open] { height: min(560px, calc(100vh - 64px)); }
 html:not([data-density="large"]) .set-layout { gap: 14px; }
-html:not([data-density="large"]) .set-nav { width: 156px; padding-right: 10px; }
+html:not([data-density="large"]) .set-side { width: 156px; padding-right: 10px; }
 html:not([data-density="large"]) .set-nav button { height: 30px; padding: 0 10px; border-radius: 6px; font-size: 13px; }
 html:not([data-density="large"]) .seg label { padding: 5px 8px; }
 html:not([data-density="large"]) .seg label small { font-size: 11px; }
@@ -653,7 +652,7 @@ html[data-density="compact"] .row-end { margin-top: 10px; }
 html[data-density="compact"] dialog.wide { width: min(600px, calc(100vw - 24px)); }
 html[data-density="compact"] #dlg-settings.settings { width: min(700px, calc(100vw - 24px)); }
 html[data-density="compact"] #dlg-settings.settings[open] { height: min(500px, calc(100vh - 64px)); }
-html[data-density="compact"] .set-nav { width: 138px; padding-right: 8px; }
+html[data-density="compact"] .set-side { width: 138px; padding-right: 8px; }
 html[data-density="compact"] .set-nav button { height: 26px; padding: 0 8px; font-size: 12.5px; }
 html[data-density="compact"] .seg label { padding: 4px 6px; }
 html[data-density="compact"] .days span { height: 24px; min-width: 32px; }
@@ -800,3 +799,49 @@ html[data-window="add"] dialog#dlg-add[open] { display: flex; flex-direction: co
    dialog's own Отмена/Добавить) instead of being scrolled to.  */
 html[data-window="add"] .ad-pane { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 html[data-window="add"] dialog#dlg-add > .row-end:last-child { flex: 0 0 auto; margin-top: 0; padding-top: 12px; }
+
+/* settings: compact rows (the name on the left, its control on the right), search, toggles, reset */
+.set-search { margin: 0 !important; height: 32px !important; font-size: 13px; }
+.set-nav button.sf-none { opacity: .4; }
+.set-panes .pane-title { display: none; margin: 14px 0 0; font-size: 15px; }
+.set-panes.searching .pane-title { display: block; }
+.set-panes.searching .set-pane { display: none; }
+.set-panes.searching .set-pane.sf-hit { display: block; }
+.set-panes.searching .pane-foot { display: none; }
+.sf-hide { display: none !important; }
+#set-none { padding: 12px 2px; }
+.set-pane fieldset { margin: 8px 0; padding: 2px 12px 4px; }
+.set-pane .hint { margin: 4px 0 2px; font-size: 12px; color: var(--muted); }
+.srow { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: 4px 14px; padding: 6px 0; border-top: 1px solid var(--line); }
+.srow:first-of-type, legend + .srow, .hint + .srow { border-top: 0; }
+.srow.one { display: block; }
+.srow label { margin: 0; }
+.srow .sl { min-width: 0; font-weight: 550; font-size: 13px; }
+.srow .sc { min-width: 0; display: flex; gap: 8px; align-items: center; }
+.srow input:not([type=checkbox]), .srow select { margin: 0; height: 32px; }
+.srow .pick { margin: 0; }
+.srow .limf { margin-top: 0; }
+.srow .pick .btn, .srow .pick input { margin-top: 0; }
+.srow.tog.off .sc { opacity: .5; }
+.srow input:disabled, .srow select:disabled { cursor: not-allowed; }
+.srow .sched label { display: flex; align-items: center; gap: 6px; }
+.srow .sched { justify-content: flex-end; flex-wrap: wrap; }
+.srow .sched input { width: 104px; }
+.srow.portline .btn { flex: none; white-space: nowrap; }
+.srow.one .seg { margin: 2px 0 4px; }
+.srow.one .days { margin: 2px 0; }
+.srow.one > .muted.small { margin: 2px 0 4px; }
+.srow.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.srow.portline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.more { margin: 2px 0 4px; }
+.more summary { cursor: pointer; color: var(--accent); font-size: 12px; width: max-content; list-style: none; user-select: none; }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::before { content: "▸ "; }
+.more[open] summary::before { content: "▾ "; }
+.more p { margin: 4px 0; }
+.pane-foot { display: flex; justify-content: flex-end; margin: 6px 0 2px; }
+@media (max-width: 640px) { .srow { grid-template-columns: 1fr; } .srow.checks { grid-template-columns: 1fr; } }
+html:not([data-density="large"]) .srow { padding: 4px 0; }
+html[data-density="compact"] .srow { padding: 3px 0; }
+html[data-density="compact"] .srow input:not([type=checkbox]), html[data-density="compact"] .srow select { height: 26px; }
+html:not([data-density="large"]) .srow input:not([type=checkbox]), html:not([data-density="large"]) .srow select { height: 28px; }

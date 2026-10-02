@@ -335,80 +335,115 @@
       <button type="button" class="btn small" id="st-wizard" title="Пошаговая помощь: папки, скорость, порт, запуск с Windows">Быстрая настройка</button>
     </div>
     <div class="set-layout">
-      <nav class="set-nav" id="set-nav" role="tablist" aria-orientation="vertical" aria-label="Разделы настроек">
-        <button type="button" role="tab" data-sec="speed" aria-selected="false">Скорость</button>
-        <button type="button" role="tab" data-sec="folders" aria-selected="false">Загрузки</button>
-        <button type="button" role="tab" data-sec="labels" aria-selected="false">Метки</button>
-        <button type="button" role="tab" data-sec="queue" aria-selected="false">Очередь и раздача</button>
-        <button type="button" role="tab" data-sec="network" aria-selected="false">Сеть</button>
-        <button type="button" role="tab" data-sec="view" aria-selected="false">Интерфейс</button>
-        <button type="button" role="tab" data-sec="system" aria-selected="false" hidden id="sn-system">Системные</button>
-        <button type="button" role="tab" data-sec="about" aria-selected="false">О приложении</button>
-      </nav>
-      <div class="set-panes">
-      <section class="set-pane" role="tabpanel" data-sec="speed" hidden>
-        <fieldset>
-          <legend>Единицы скорости</legend>
-          <div class="seg" role="radiogroup" aria-label="Единицы скорости">
-            <input type="radio" name="st-unit" id="st-unit-bytes" value="bytes"><label for="st-unit-bytes">Байты <small>КБ/с, МБ/с</small></label>
-            <input type="radio" name="st-unit" id="st-unit-bits" value="bits"><label for="st-unit-bits">Биты <small>Кбит/с, Мбит/с</small></label>
-            <i class="seg-pill" aria-hidden="true"></i>
-          </div>
-          <p class="muted small">Так показываются скорости в списке, таблице пиров, строке состояния, графике и в трее. В сокращении единицы различаются только регистром буквы «б»: КБ/с и МБ/с — килобайты и мегабайты в секунду, Кб/с и Мб/с — килобиты и мегабиты (Кбит/с и Мбит/с).</p>
-        </fieldset>
+      <div class="set-side">
+        <input type="search" id="set-search" class="set-search" placeholder="Найти настройку" aria-label="Найти настройку" autocomplete="off">
+        <nav class="set-nav" id="set-nav" role="tablist" aria-orientation="vertical" aria-label="Разделы настроек">
+          <button type="button" role="tab" data-sec="speed" aria-selected="false">Скорость</button>
+          <button type="button" role="tab" data-sec="folders" aria-selected="false">Загрузки</button>
+          <button type="button" role="tab" data-sec="labels" aria-selected="false">Метки</button>
+          <button type="button" role="tab" data-sec="queue" aria-selected="false">Очередь и раздача</button>
+          <button type="button" role="tab" data-sec="network" aria-selected="false">Сеть</button>
+          <button type="button" role="tab" data-sec="view" aria-selected="false">Интерфейс</button>
+          <button type="button" role="tab" data-sec="system" aria-selected="false" hidden id="sn-system">Системные</button>
+          <button type="button" role="tab" data-sec="about" aria-selected="false">Обновления</button>
+        </nav>
+      </div>
+      <div class="set-panes" id="set-panes">
+      <p class="muted" id="set-none" hidden>Ничего не найдено</p>
 
+      <section class="set-pane" role="tabpanel" data-sec="speed" hidden>
+        <h3 class="pane-title">Скорость</h3>
         <fieldset>
-          <legend id="st-speed-legend">Ограничения скорости (0 — без ограничения)</legend>
-          <div class="grid2">
-            <label>Загрузка<span class="limf"><input type="number" min="0" step="any" id="st-down"><select id="st-down-u" aria-label="Единица: Загрузка"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
-            <label>Отдача<span class="limf"><input type="number" min="0" step="any" id="st-up"><select id="st-up-u" aria-label="Единица: Отдача"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
-            <label>Загрузка в режиме ограничения<span class="limf"><input type="number" min="0" step="any" id="st-altdown"><select id="st-altdown-u" aria-label="Единица: Загрузка в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
-            <label>Отдача в режиме ограничения<span class="limf"><input type="number" min="0" step="any" id="st-altup"><select id="st-altup-u" aria-label="Единица: Отдача в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span></label>
+          <legend id="st-speed-legend">Ограничения скорости</legend>
+          <p class="hint">Галочка включает предел; без неё скорость не ограничена.</p>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-down" data-for="st-down"><span>Загрузка</span></label>
+            <span class="sc limf"><input type="number" min="0" step="any" id="st-down"><select id="st-down-u" aria-label="Единица: Загрузка"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span>
           </div>
-          <p class="muted small">Единица выбирается для каждого предела отдельно; в списке две единицы: килобайты и мегабайты либо килобиты и мегабиты, как выбрано выше в «Единицах скорости». 1 МБ = 1024 КБ, 1 Мбит = 1000 Кбит. Внутри предел хранится с точностью до 1 КБ/с (около 8 Кбит/с).</p>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-up" data-for="st-up"><span>Отдача</span></label>
+            <span class="sc limf"><input type="number" min="0" step="any" id="st-up"><select id="st-up-u" aria-label="Единица: Отдача"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-altdown" data-for="st-altdown"><span>Загрузка в режиме ограничения</span></label>
+            <span class="sc limf"><input type="number" min="0" step="any" id="st-altdown"><select id="st-altdown-u" aria-label="Единица: Загрузка в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-altup" data-for="st-altup"><span>Отдача в режиме ограничения</span></label>
+            <span class="sc limf"><input type="number" min="0" step="any" id="st-altup"><select id="st-altup-u" aria-label="Единица: Отдача в режиме ограничения"><option value="KB">КБ/с</option><option value="MB">МБ/с</option></select></span>
+          </div>
+          <details class="more"><summary>Подробнее</summary>
+            <p class="muted small">Единица выбирается для каждого предела отдельно; в списке две единицы: килобайты и мегабайты либо килобиты и мегабиты, как выбрано ниже в «Единицах скорости». 1 МБ = 1024 КБ, 1 Мбит = 1000 Кбит. Внутри предел хранится с точностью до 1 КБ/с (около 8 Кбит/с).</p>
+          </details>
         </fieldset>
         <fieldset>
           <legend>Расписание режима ограничения</legend>
-          <label class="check"><input type="checkbox" id="sc-on"><span>Включать ограничение по расписанию<br><span class="muted small">Ручное переключение «черепахи» остаётся в силе до ближайшей границы расписания</span></span></label>
-          <div class="grid2">
-            <label>С<input type="time" id="sc-from"></label>
-            <label>До<input type="time" id="sc-to"></label>
+          <div class="srow one">
+            <label class="check"><input type="checkbox" id="sc-on"><span>Включать ограничение по расписанию<br><span class="muted small">Ручное переключение «черепахи» остаётся в силе до ближайшей границы расписания</span></span></label>
           </div>
-          <div class="days" id="sc-days" role="group" aria-label="Дни недели"></div>
+          <div class="srow">
+            <span class="sl">Время</span>
+            <span class="sc sched"><label>С<input type="time" id="sc-from"></label><label>До<input type="time" id="sc-to"></label></span>
+          </div>
+          <div class="srow one"><div class="days" id="sc-days" role="group" aria-label="Дни недели"></div></div>
         </fieldset>
+        <fieldset>
+          <legend>Единицы скорости</legend>
+          <div class="srow one">
+            <div class="seg" role="radiogroup" aria-label="Единицы скорости">
+              <input type="radio" name="st-unit" id="st-unit-bytes" value="bytes"><label for="st-unit-bytes">Байты <small>КБ/с, МБ/с</small></label>
+              <input type="radio" name="st-unit" id="st-unit-bits" value="bits"><label for="st-unit-bits">Биты <small>Кбит/с, Мбит/с</small></label>
+              <i class="seg-pill" aria-hidden="true"></i>
+            </div>
+            <details class="more"><summary>Подробнее</summary>
+              <p class="muted small">Так показываются скорости в списке, таблице пиров, строке состояния, графике и в трее. В сокращении единицы различаются только регистром буквы «б»: КБ/с и МБ/с — килобайты и мегабайты в секунду, Кб/с и Мб/с — килобиты и мегабиты (Кбит/с и Мбит/с).</p>
+            </details>
+          </div>
+        </fieldset>
+        <div class="pane-foot"><button type="button" class="btn small" data-reset>Сбросить раздел к умолчаниям</button></div>
       </section>
+
       <section class="set-pane" role="tabpanel" data-sec="folders" hidden>
+        <h3 class="pane-title">Загрузки</h3>
         <fieldset>
           <legend>Папки</legend>
-          <label>Сохранять новые раздачи в
-            <span class="pick"><input id="st-data" autocomplete="off"><button type="button" class="btn small" data-pick="st-data">Обзор…</button></span>
-          </label>
-          <label>Переносить завершённые загрузки в (пусто — не переносить)
-            <span class="pick"><input id="st-movedone" autocomplete="off"><button type="button" class="btn small" data-pick="st-movedone">Обзор…</button></span>
-          </label>
-          <label>Папка автодобавления: .torrent из неё добавляются сами (пусто — выключено)
-            <span class="pick"><input id="st-watch" autocomplete="off"><button type="button" class="btn small" data-pick="st-watch">Обзор…</button></span>
-          </label>
-          <label>Копии .torrent файлов (пусто — не сохранять)
-            <span class="pick"><input id="st-copydir" autocomplete="off"><button type="button" class="btn small" data-pick="st-copydir">Обзор…</button></span>
-          </label>
-          <label class="check"><input type="checkbox" id="st-prealloc"><span>Проверять место на диске перед добавлением<br><span class="muted small">Откажет сразу, если места не хватит на эту раздачу вместе с тем, что ещё не докачано у остальных активных раздач на этом же диске. Место под файл выделяется сразу, но физически не занимается до первой записи в него — в это время его может занять что-то ещё.</span></span></label>
-          <label class="check"><input type="checkbox" id="st-addpaused"><span>Добавлять торренты на паузе<br><span class="muted small">Раздача не начнёт скачиваться сама: можно сначала выбрать файлы и папку. Относится и к папке автодобавления, magnet-ссылкам и запуску из командной строки; в окне добавления для каждой раздачи это можно поменять.</span></span></label>
-          <label class="check"><input type="checkbox" id="st-addseq"><span>Последовательная загрузка по умолчанию<br><span class="muted small">Части качаются по порядку: удобно смотреть по ходу загрузки. Для каждой раздачи это можно поменять в окне добавления или в «Параметрах».</span></span></label>
-          <label class="check"><input type="checkbox" id="st-addedge"><span>Первые и последние части файлов в первую очередь по умолчанию<br><span class="muted small">Чтобы плеер мог открыть ещё не докачанный файл. На механическом диске при нескольких одновременных загрузках может мешать — лишние перескоки головки.</span></span></label>
-        </fieldset>
-        <fieldset>
-          <legend>Копии .torrent файлов</legend>
-          <label>Удалять копию
-            <select id="st-copy">
+          <div class="srow">
+            <span class="sl">Сохранять новые раздачи в</span>
+            <span class="sc pick"><input id="st-data" autocomplete="off"><button type="button" class="btn small" data-pick="st-data">Обзор…</button></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-movedone" data-for="st-movedone"><span>Переносить завершённые загрузки в</span></label>
+            <span class="sc pick"><input id="st-movedone" autocomplete="off"><button type="button" class="btn small" data-pick="st-movedone">Обзор…</button></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-watch" data-for="st-watch"><span>Папка автодобавления<br><span class="muted small">Файлы .torrent из неё добавляются сами</span></span></label>
+            <span class="sc pick"><input id="st-watch" autocomplete="off"><button type="button" class="btn small" data-pick="st-watch">Обзор…</button></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-copydir" data-for="st-copydir"><span>Сохранять копии .torrent файлов в</span></label>
+            <span class="sc pick"><input id="st-copydir" autocomplete="off"><button type="button" class="btn small" data-pick="st-copydir">Обзор…</button></span>
+          </div>
+          <div class="srow">
+            <span class="sl">Удалять копию</span>
+            <span class="sc"><select id="st-copy">
               <option value="with_data">только при удалении раздачи вместе с файлами</option>
               <option value="always">при любом удалении раздачи</option>
               <option value="never">никогда</option>
-            </select>
-          </label>
+            </select></span>
+          </div>
         </fieldset>
+        <fieldset>
+          <legend>Новые раздачи</legend>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-addpaused"><span>Добавлять торренты на паузе<br><span class="muted small">Раздача не начнёт скачиваться сама: можно сначала выбрать файлы и папку. Относится и к папке автодобавления, magnet-ссылкам и запуску из командной строки; в окне добавления для каждой раздачи это можно поменять.</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-addseq"><span>Последовательная загрузка по умолчанию<br><span class="muted small">Части качаются по порядку: удобно смотреть по ходу загрузки. Для каждой раздачи это можно поменять в окне добавления или в «Параметрах».</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-addedge"><span>Первые и последние части файлов в первую очередь по умолчанию<br><span class="muted small">Чтобы плеер мог открыть ещё не докачанный файл. На механическом диске при нескольких одновременных загрузках может мешать — лишние перескоки головки.</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-prealloc"><span>Проверять место на диске перед добавлением<br><span class="muted small">Откажет сразу, если места не хватит на эту раздачу вместе с тем, что ещё не докачано у остальных активных раздач на этом же диске. Место под файл выделяется сразу, но физически не занимается до первой записи в него — в это время его может занять что-то ещё.</span></span></label></div>
+        </fieldset>
+        <div class="pane-foot"><button type="button" class="btn small" data-reset>Сбросить раздел к умолчаниям</button></div>
       </section>
+
       <section class="set-pane" role="tabpanel" data-sec="labels" hidden>
+        <h3 class="pane-title">Метки</h3>
         <fieldset>
           <legend>Метки</legend>
           <p class="muted small">Метка собирает раздачи в группу в левом меню. Для метки можно задать папку: новые раздачи с этой меткой сохраняются туда (без папки — в общую папку загрузок). Уже добавленные раздачи остаются в своих папках.</p>
@@ -420,40 +455,80 @@
           <p class="err small" id="lb-err" hidden></p>
         </fieldset>
       </section>
+
       <section class="set-pane" role="tabpanel" data-sec="queue" hidden>
+        <h3 class="pane-title">Очередь и раздача</h3>
         <fieldset>
           <legend>Очередь</legend>
-          <label>Одновременных загрузок (0 — без ограничения)<input type="number" min="0" id="st-maxactive"></label>
-          <label>Одновременных раздач (0 — без ограничения)<input type="number" min="0" id="st-maxseeds"></label>
-          <label>Одновременных проверок локальных файлов (0 — без ограничения)<input type="number" min="0" max="64" id="st-maxchecks"></label>
-          <label>Одновременных переносов раздач на другую папку/диск (0 — без ограничения)<input type="number" min="0" max="64" id="st-maxmoves"></label>
-          <p class="muted small">Остальные раздачи ждут своей очереди. Порядок меняют кнопки со стрелками на панели.</p>
-          <p class="muted small">Лишние законченные торренты ждут места («В очереди на раздачу»). Раньше других раздаются те, кому сейчас есть что отдавать, потом идут по порядку очереди. Ожидающие остаются на связи, но ничего не отдают.</p>
-          <p class="muted small">Проверка идёт, когда добавленная раздача уже лежит на диске, и при кнопке «Проверить файлы». Лишние проверки ждут очереди («Ждёт проверки»): так диск не разрывается между несколькими проверками сразу. Для одного жёсткого диска лучше 1.</p>
-          <p class="muted small">Перенос — вручную или в папку завершённых раздач. Несколько переносов разных больших раздач сразу заставляют диск метаться между ними; для одного жёсткого диска лучше 1.</p>
+          <p class="hint">Галочка включает ограничение; без неё число не ограничено. Остальные раздачи ждут своей очереди, порядок меняют кнопки со стрелками на панели.</p>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-maxactive" data-for="st-maxactive"><span>Одновременных загрузок</span></label>
+            <span class="sc"><input type="number" min="0" id="st-maxactive"></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-maxseeds" data-for="st-maxseeds"><span>Одновременных раздач</span></label>
+            <span class="sc"><input type="number" min="0" id="st-maxseeds"></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-maxchecks" data-for="st-maxchecks"><span>Одновременных проверок локальных файлов</span></label>
+            <span class="sc"><input type="number" min="0" max="64" id="st-maxchecks"></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-maxmoves" data-for="st-maxmoves"><span>Одновременных переносов на другую папку/диск</span></label>
+            <span class="sc"><input type="number" min="0" max="64" id="st-maxmoves"></span>
+          </div>
+          <details class="more"><summary>Подробнее</summary>
+            <p class="muted small">Лишние законченные торренты ждут места («В очереди на раздачу»). Раньше других раздаются те, кому сейчас есть что отдавать, потом идут по порядку очереди. Ожидающие остаются на связи, но ничего не отдают.</p>
+            <p class="muted small">Проверка идёт, когда добавленная раздача уже лежит на диске, и при кнопке «Проверить файлы». Лишние проверки ждут очереди («Ждёт проверки»): так диск не разрывается между несколькими проверками сразу. Для одного жёсткого диска лучше 1.</p>
+            <p class="muted small">Перенос — вручную или в папку завершённых раздач. Несколько переносов разных больших раздач сразу заставляют диск метаться между ними; для одного жёсткого диска лучше 1.</p>
+          </details>
         </fieldset>
         <fieldset>
           <legend>Раздача</legend>
-          <label>Остановить раздачу при рейтинге (0 — не останавливать)<input type="number" min="0" step="0.1" id="st-ratio"></label>
-          <label>Остановить раздачу после, часов (0 — не останавливать)<input type="number" min="0" step="0.5" id="st-seedtime"></label>
-          <p class="muted small">Раздача останавливается по тому лимиту, который достигнут раньше. Время считается, пока раздача завершена и не на паузе.</p>
+          <p class="hint">Раздача останавливается по тому лимиту, который достигнут раньше. Время считается, пока раздача завершена и не на паузе.</p>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-ratio" data-for="st-ratio"><span>Остановить раздачу при рейтинге</span></label>
+            <span class="sc"><input type="number" min="0" step="0.1" id="st-ratio"></span>
+          </div>
+          <div class="srow tog">
+            <label class="check"><input type="checkbox" class="tg" id="tg-seedtime" data-for="st-seedtime"><span>Остановить раздачу после, часов</span></label>
+            <span class="sc"><input type="number" min="0" step="0.5" id="st-seedtime"></span>
+          </div>
         </fieldset>
+        <div class="pane-foot"><button type="button" class="btn small" data-reset>Сбросить раздел к умолчаниям</button></div>
       </section>
+
       <section class="set-pane" role="tabpanel" data-sec="network" hidden>
+        <h3 class="pane-title">Сеть</h3>
+        <fieldset>
+          <legend>Порт</legend>
+          <div class="srow">
+            <span class="sl">Порт для входящих соединений</span>
+            <span class="sc pick"><input type="number" min="1" max="65535" id="st-port-num"><button type="button" class="btn small" id="st-port-rnd" title="Подставить случайный порт из диапазона 49152–65535">Случайный</button></span>
+          </div>
+          <p class="muted small" id="st-port-note" hidden>Новый порт вступит в силу после перезапуска приложения.</p>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: демон сам открывает порт на роутере и следит, чтобы он не пропал</span></span></label></div>
+          <div class="srow one portline"><span id="st-port" class="small"></span><button type="button" class="btn small" id="st-port-refresh">Проверить порт сейчас</button></div>
+        </fieldset>
         <fieldset>
           <legend>Соединения</legend>
-          <div class="grid2">
-            <label>Подключений на раздачу<input type="number" min="1" max="1000" id="nw-conns"></label>
-            <label>Одновременных попыток соединения<input type="number" min="1" max="500" id="nw-half"></label>
+          <div class="srow">
+            <span class="sl">Подключений на раздачу</span>
+            <span class="sc"><input type="number" min="1" max="1000" id="nw-conns"></span>
           </div>
-          <label>Шифрование трафика
-            <select id="nw-enc">
+          <div class="srow">
+            <span class="sl">Одновременных попыток соединения</span>
+            <span class="sc"><input type="number" min="1" max="500" id="nw-half"></span>
+          </div>
+          <div class="srow">
+            <span class="sl">Шифрование трафика</span>
+            <span class="sc"><select id="nw-enc">
               <option value="prefer">использовать, если поддерживает пир</option>
               <option value="require">требовать (пиры без шифрования отсекаются)</option>
               <option value="off">не использовать</option>
-            </select>
-          </label>
-          <div class="checks">
+            </select></span>
+          </div>
+          <div class="srow one checks">
             <label class="check"><input type="checkbox" id="nw-dht"><span>DHT — поиск пиров без трекера</span></label>
             <label class="check"><input type="checkbox" id="nw-pex"><span>PEX — обмен списками пиров</span></label>
             <label class="check"><input type="checkbox" id="nw-utp"><span>uTP</span></label>
@@ -462,87 +537,95 @@
             <label class="check"><input type="checkbox" id="nw-web"><span>Веб-сиды (загрузка с HTTP-серверов)</span></label>
             <label class="check"><input type="checkbox" id="nw-in"><span>Принимать входящие соединения</span></label>
           </div>
-          <p class="muted small">Число подключений на раздачу применяется сразу, остальные настройки — после перезапуска. Лимит для отдельной раздачи задаётся на вкладке «Общее».</p>
+          <p class="hint">Число подключений на раздачу применяется сразу, остальные настройки — после перезапуска. Лимит для отдельной раздачи задаётся на вкладке «Общее».</p>
         </fieldset>
-        <fieldset>
-          <legend>Порт</legend>
-          <label>Порт для входящих соединений
-            <span class="pick"><input type="number" min="1" max="65535" id="st-port-num"><button type="button" class="btn small" id="st-port-rnd" title="Подставить случайный порт из диапазона 49152–65535">Случайный</button></span>
-          </label>
-          <p class="muted small" id="st-port-note" hidden>Новый порт вступит в силу после перезапуска приложения.</p>
-          <label class="check"><input type="checkbox" id="st-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: демон сам открывает порт на роутере и следит, чтобы он не пропал</span></span></label>
-          <p id="st-port" class="small"></p>
-          <button type="button" class="btn" id="st-port-refresh">Проверить порт сейчас</button>
-        </fieldset>
+        <div class="pane-foot"><button type="button" class="btn small" data-reset>Сбросить раздел к умолчаниям</button></div>
       </section>
+
       <section class="set-pane" role="tabpanel" data-sec="view" hidden>
+        <h3 class="pane-title">Интерфейс</h3>
         <fieldset>
           <legend>Язык</legend>
-          <div class="seg seg3" role="radiogroup" aria-label="Язык">
-            <input type="radio" name="lg" id="lg-system" value="system"><label for="lg-system">Как в системе <small>по умолчанию</small></label>
-            <input type="radio" name="lg" id="lg-ru" value="ru"><label for="lg-ru" data-notr>Русский</label>
-            <input type="radio" name="lg" id="lg-en" value="en"><label for="lg-en" data-notr>English</label>
-            <i class="seg-pill" aria-hidden="true"></i>
+          <div class="srow one">
+            <div class="seg seg3" role="radiogroup" aria-label="Язык">
+              <input type="radio" name="lg" id="lg-system" value="system"><label for="lg-system">Как в системе <small>по умолчанию</small></label>
+              <input type="radio" name="lg" id="lg-ru" value="ru"><label for="lg-ru" data-notr>Русский</label>
+              <input type="radio" name="lg" id="lg-en" value="en"><label for="lg-en" data-notr>English</label>
+              <i class="seg-pill" aria-hidden="true"></i>
+            </div>
+            <p class="muted small">Применяется после «Сохранить»: страница перезагрузится. Выбор хранится в этом браузере или окне приложения.</p>
           </div>
-          <p class="muted small">Применяется после «Сохранить»: страница перезагрузится. Выбор хранится в этом браузере или окне приложения.</p>
         </fieldset>
         <fieldset>
           <legend>Тема</legend>
-          <div class="seg seg3" role="radiogroup" aria-label="Тема">
-            <input type="radio" name="th" id="th-dark" value="dark"><label for="th-dark">Тёмная</label>
-            <input type="radio" name="th" id="th-light" value="light"><label for="th-light">Светлая</label>
-            <input type="radio" name="th" id="th-system" value="system"><label for="th-system">Как в системе <small>по умолчанию</small></label>
-            <i class="seg-pill" aria-hidden="true"></i>
+          <div class="srow one">
+            <div class="seg seg3" role="radiogroup" aria-label="Тема">
+              <input type="radio" name="th" id="th-dark" value="dark"><label for="th-dark">Тёмная</label>
+              <input type="radio" name="th" id="th-light" value="light"><label for="th-light">Светлая</label>
+              <input type="radio" name="th" id="th-system" value="system"><label for="th-system">Как в системе <small>по умолчанию</small></label>
+              <i class="seg-pill" aria-hidden="true"></i>
+            </div>
+            <p class="muted small">Применяется сразу. Выбор хранится в этом браузере или окне приложения.</p>
           </div>
-          <p class="muted small">Применяется сразу. Выбор хранится в этом браузере или окне приложения.</p>
-        </fieldset>
-        <fieldset>
-          <legend>Значки трекеров</legend>
-          <label class="check"><input type="checkbox" id="st-trackericons"><span>Показывать значки трекеров в левой панели<br><span class="muted small">Программа загружает значок с сайта каждого трекера (запрос идёт на сайт трекера) и хранит его в папке данных. Если выключить, ничего не загружается.</span></span></label>
         </fieldset>
         <fieldset>
           <legend>Плотность интерфейса</legend>
-          <div class="seg seg3" role="radiogroup" aria-label="Плотность интерфейса">
-            <input type="radio" name="dn" id="dn-large" value="large"><label for="dn-large">Увеличенный <small>крупные строки</small></label>
-            <input type="radio" name="dn" id="dn-standard" value="standard"><label for="dn-standard">Стандартный <small>по умолчанию</small></label>
-            <input type="radio" name="dn" id="dn-compact" value="compact"><label for="dn-compact">Компактный <small>без левой панели</small></label>
-            <i class="seg-pill" aria-hidden="true"></i>
+          <div class="srow one">
+            <div class="seg seg3" role="radiogroup" aria-label="Плотность интерфейса">
+              <input type="radio" name="dn" id="dn-large" value="large"><label for="dn-large">Увеличенный <small>крупные строки</small></label>
+              <input type="radio" name="dn" id="dn-standard" value="standard"><label for="dn-standard">Стандартный <small>по умолчанию</small></label>
+              <input type="radio" name="dn" id="dn-compact" value="compact"><label for="dn-compact">Компактный <small>без левой панели</small></label>
+              <i class="seg-pill" aria-hidden="true"></i>
+            </div>
+            <details class="more"><summary>Подробнее</summary>
+              <p class="muted small">Меняет размер строк, шрифтов и отступов во всём интерфейсе, в том числе в этих окнах. Применяется сразу. В компактном режиме левой панели нет, а фильтры по состоянию и меткам стоят в верхней панели, прогресс показан тонкой линией. Быстро переключить режим можно клавишами Ctrl+Shift+D.</p>
+            </details>
           </div>
-          <p class="muted small">Меняет размер строк, шрифтов и отступов во всём интерфейсе, в том числе в этих окнах. Применяется сразу. В компактном режиме левой панели нет, а фильтры по состоянию и меткам стоят в верхней панели, прогресс показан тонкой линией. Быстро переключить режим можно клавишами Ctrl+Shift+D.</p>
         </fieldset>
-        <fieldset id="fs-window" hidden>
-          <legend>Окно</legend>
-          <label class="check"><input type="checkbox" id="st-remwin"><span>Сохранять положение и размер окна<br><span class="muted small">Окно откроется там и такого размера, как вы его оставили (отдельно для каждого режима плотности). Если выключено, оно открывается по центру со стандартным размером режима.</span></span></label>
-          <button type="button" class="btn" id="st-resetwin">Сбросить размер окна</button>
+        <fieldset>
+          <legend>Значки трекеров</legend>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-trackericons"><span>Показывать значки трекеров в левой панели<br><span class="muted small">Программа загружает значок с сайта каждого трекера (запрос идёт на сайт трекера) и хранит его в папке данных. Если выключить, ничего не загружается.</span></span></label></div>
         </fieldset>
+        <div class="pane-foot"><button type="button" class="btn small" data-reset>Сбросить раздел к умолчаниям</button></div>
       </section>
+
       <section class="set-pane" role="tabpanel" data-sec="system" hidden>
+        <h3 class="pane-title">Системные</h3>
         <fieldset>
           <legend>Запуск</legend>
-          <label class="check"><input type="checkbox" id="st-autostart"><span>Запускать вместе с Windows<br><span class="muted small">Программа стартует при входе в систему</span></span></label>
-          <label class="check"><input type="checkbox" id="st-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small">Тихий запуск: окно не открывается, раздачи работают. Действует на запуск вместе с Windows</span></span></label>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-autostart"><span>Запускать вместе с Windows<br><span class="muted small">Программа стартует при входе в систему</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small">Тихий запуск: окно не открывается, раздачи работают. Действует на запуск вместе с Windows</span></span></label></div>
         </fieldset>
         <fieldset>
           <legend>Окно</legend>
-          <label class="check"><input type="checkbox" id="st-closetray"><span>Прятать в трей при закрытии окна<br><span class="muted small">Если выключить, закрытие окна завершит программу и остановит раздачи</span></span></label>
-          <label class="check"><input type="checkbox" id="st-mintray"><span>Прятать в трей при сворачивании</span></label>
-        </fieldset>
-        <fieldset>
-          <legend>Программа по умолчанию</legend>
-          <p class="muted small">Equinox уже можно выбрать для файлов .torrent и magnet-ссылок в «Открыть с помощью». Чтобы он открывал их сам, без выбора каждый раз, сделайте его программой по умолчанию — Windows потребует подтвердить это в своих настройках.</p>
-          <button type="button" class="btn" id="st-assoc">Сделать Equinox торрент-клиентом по умолчанию</button>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-closetray"><span>Прятать в трей при закрытии окна<br><span class="muted small">Если выключить, закрытие окна завершит программу и остановит раздачи</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-mintray"><span>Прятать в трей при сворачивании</span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-remwin"><span>Сохранять положение и размер окна<br><span class="muted small">Окно откроется там и такого размера, как вы его оставили (отдельно для каждого режима плотности). Если выключено, оно открывается по центру со стандартным размером режима.</span></span></label></div>
+          <div class="srow one"><button type="button" class="btn small" id="st-resetwin">Сбросить размер окна</button></div>
         </fieldset>
         <fieldset id="fs-notify">
           <legend>Уведомления</legend>
-          <label class="check"><input type="checkbox" id="st-notify"><span>Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-notify"><span>Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label></div>
         </fieldset>
+        <fieldset>
+          <legend>Программа по умолчанию</legend>
+          <div class="srow one">
+            <p class="muted small">Equinox уже можно выбрать для файлов .torrent и magnet-ссылок в «Открыть с помощью». Чтобы он открывал их сам, без выбора каждый раз, сделайте его программой по умолчанию — Windows потребует подтвердить это в своих настройках.</p>
+            <button type="button" class="btn small" id="st-assoc">Сделать Equinox торрент-клиентом по умолчанию</button>
+          </div>
+        </fieldset>
+        <div class="pane-foot"><button type="button" class="btn small" data-reset>Сбросить раздел к умолчаниям</button></div>
       </section>
-      <section class="set-pane" role="tabpanel" data-sec="updates" hidden>
+
+      <section class="set-pane" role="tabpanel" data-sec="about" hidden>
+        <h3 class="pane-title">Обновления</h3>
         <fieldset>
           <legend>Проверка обновлений</legend>
-          <label class="check"><input type="checkbox" id="st-autoupdate"><span>Проверять обновления автоматически</span></label>
-          <label>Период проверки, минут<input type="number" min="5" max="20160" step="1" id="st-updevery"></label>
-          <p class="muted small">От 5 минут до 14 суток, по умолчанию 60. Первая проверка — вскоре после запуска.</p>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-autoupdate"><span>Проверять обновления автоматически</span></label></div>
+          <div class="srow">
+            <span class="sl">Период проверки, минут<br><span class="muted small">От 5 минут до 14 суток, по умолчанию 60. Первая проверка — вскоре после запуска.</span></span>
+            <span class="sc"><input type="number" min="5" max="20160" step="1" id="st-updevery"></span>
+          </div>
           <div class="row-end" style="margin:8px 0">
             <button type="button" class="btn small" id="ab-check-update" style="margin-right:auto">Проверить обновления</button>
             <span class="muted small" id="ab-update-status"></span>
@@ -558,29 +641,29 @@
           <p class="muted small">Что менялось в каждой версии. Нажмите на версию, чтобы развернуть.</p>
           <div class="cl" id="up-log" data-notr></div>
         </fieldset>
-      </section>
-      <section class="set-pane" role="tabpanel" data-sec="about" hidden>
-        <div class="about-head">
-          <svg viewBox="0 0 32 32" width="48" height="48" aria-hidden="true" role="img" aria-label="Equinox"><rect width="32" height="32" rx="6.5" fill="#1b2130"/><g transform="rotate(-23.4 16 16)"><path d="M5.25 16A10.75 10.75 0 0 1 26.75 16Z" fill="#f0a63c"/><path d="M5.25 17A10.75 10.75 0 0 0 26.75 17Z" fill="#f4f5f8"/><circle cx="16" cy="9.5" r="1.625" fill="#1b2130"/><circle cx="16" cy="23.5" r="1.625" fill="#1b2130"/></g></svg>
-          <div><div class="about-name">Equinox</div><div class="muted small" id="ab-version">версия…</div></div>
-        </div>
-        <p class="muted small">Торрент-клиент на Go: движок <a href="https://github.com/anacrolix/torrent" target="_blank" rel="noopener">anacrolix/torrent</a>, без libtorrent.</p>
-        <dl class="kv about-kv">
-          <dt>Сборка</dt><dd id="ab-build">—</dd>
-          <dt>Движок</dt><dd id="ab-engine">—</dd>
-        </dl>
-        <div class="about-links">
-          <a class="btn small" href="https://github.com/Ozzvin/equinox" target="_blank" rel="noopener">Репозиторий на GitHub</a>
-          <a class="btn small" href="https://github.com/Ozzvin/equinox/issues" target="_blank" rel="noopener">Сообщить о проблеме</a>
-          <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/LICENSE" target="_blank" rel="noopener">Лицензия MIT</a>
-          <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Журнал изменений</a>
-        </div>
+        <fieldset>
+          <legend>О приложении</legend>
+          <div class="about-head">
+            <svg viewBox="0 0 32 32" width="48" height="48" aria-hidden="true" role="img" aria-label="Equinox"><rect width="32" height="32" rx="6.5" fill="#1b2130"/><g transform="rotate(-23.4 16 16)"><path d="M5.25 16A10.75 10.75 0 0 1 26.75 16Z" fill="#f0a63c"/><path d="M5.25 17A10.75 10.75 0 0 0 26.75 17Z" fill="#f4f5f8"/><circle cx="16" cy="9.5" r="1.625" fill="#1b2130"/><circle cx="16" cy="23.5" r="1.625" fill="#1b2130"/></g></svg>
+            <div><div class="about-name">Equinox</div><div class="muted small" id="ab-version">версия…</div></div>
+          </div>
+          <p class="muted small">Торрент-клиент на Go: движок <a href="https://github.com/anacrolix/torrent" target="_blank" rel="noopener">anacrolix/torrent</a>, без libtorrent.</p>
+          <dl class="kv about-kv">
+            <dt>Сборка</dt><dd id="ab-build">—</dd>
+            <dt>Движок</dt><dd id="ab-engine">—</dd>
+          </dl>
+          <div class="about-links">
+            <a class="btn small" href="https://github.com/Ozzvin/equinox" target="_blank" rel="noopener">Репозиторий на GitHub</a>
+            <a class="btn small" href="https://github.com/Ozzvin/equinox/issues" target="_blank" rel="noopener">Сообщить о проблеме</a>
+            <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/LICENSE" target="_blank" rel="noopener">Лицензия MIT</a>
+            <a class="btn small" href="https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Журнал изменений</a>
+          </div>
+        </fieldset>
       </section>
       </div>
     </div>
     <p class="err" id="st-err" hidden></p>
     <div class="row-end">
-      <button type="button" class="btn foot-tab" id="st-updates-tab" aria-pressed="false">Обновления</button>
       <button type="button" class="btn" data-close>Отмена</button>
       <button class="btn primary" value="ok">Сохранить</button>
     </div>

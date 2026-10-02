@@ -205,6 +205,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/create", s.createTorrent)
 	s.mux.HandleFunc("GET /api/create/{id}", s.createStatus)
 	s.mux.HandleFunc("GET /api/settings", s.getSettings)
+	s.mux.HandleFunc("GET /api/settings/defaults", s.getSettingsDefaults)
 	s.mux.HandleFunc("GET /api/about", s.about)
 	s.mux.HandleFunc("GET /api/update", s.updateCheck)
 	s.mux.HandleFunc("GET /api/update-progress", s.updateProgress)
@@ -822,6 +823,14 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.cfg.Get())
+}
+
+// getSettingsDefaults gives the settings as a fresh install has them, for "reset the section to the defaults" in
+// the settings dialog. The data folder is the current one: its default depends on the machine, so a reset keeps it.
+func (s *Server) getSettingsDefaults(w http.ResponseWriter, r *http.Request) {
+	d := config.Default("")
+	d.DataDir = s.cfg.Get().DataDir
+	writeJSON(w, http.StatusOK, d)
 }
 
 // putSettings updates the limits, which take effect immediately. Paths and the listen

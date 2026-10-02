@@ -180,3 +180,23 @@ func TestLimitUnitsSetting(t *testing.T) {
 		}
 	}
 }
+
+// "Reset the section" in the settings takes the defaults from the daemon; the data folder stays the current one.
+func TestSettingsDefaults(t *testing.T) {
+	e := setup(t)
+	var cur, def struct {
+		DataDir             string `json:"dataDir"`
+		MaxConcurrentChecks int    `json:"maxConcurrentChecks"`
+		ListenPort          int    `json:"listenPort"`
+		TorrentCopyDir      string `json:"torrentCopyDir"`
+	}
+	_ = json.NewDecoder(e.do(t, "GET", "/api/settings", nil, nil).Body).Decode(&cur)
+	r := e.do(t, "GET", "/api/settings/defaults", nil, nil)
+	if r.StatusCode != 200 {
+		t.Fatalf("defaults: %d", r.StatusCode)
+	}
+	_ = json.NewDecoder(r.Body).Decode(&def)
+	if def.DataDir != cur.DataDir || def.MaxConcurrentChecks != 1 || def.ListenPort != 51413 || def.TorrentCopyDir != "" {
+		t.Fatalf("unexpected defaults: %+v (current folder %q)", def, cur.DataDir)
+	}
+}
