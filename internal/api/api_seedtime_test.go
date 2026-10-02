@@ -77,9 +77,9 @@ func TestChecksLimitAndAddPausedSettings(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&out)
 		return r.StatusCode, out
 	}
-	code, out := put(`,"maxConcurrentChecks":3,"addPaused":true`)
+	code, out := put(`,"maxConcurrentChecks":3,"addPaused":true,"addSequential":false,"addEdgePieces":true`)
 	add, _ := out["add"].(map[string]any)
-	if code != 200 || out["maxConcurrentChecks"] != float64(3) || add["paused"] != true {
+	if code != 200 || out["maxConcurrentChecks"] != float64(3) || add["paused"] != true || add["sequential"] != false || add["edgePieces"] != true {
 		t.Fatalf("not saved: %d %v", code, out)
 	}
 	if code, out = put(``); code != 200 || out["maxConcurrentChecks"] != float64(3) || out["add"].(map[string]any)["paused"] != true {
@@ -90,8 +90,12 @@ func TestChecksLimitAndAddPausedSettings(t *testing.T) {
 			t.Errorf("%s must give 400, got %d", bad, code)
 		}
 	}
-	if code, out = put(`,"maxConcurrentChecks":0,"addPaused":false`); code != 200 || out["maxConcurrentChecks"] != float64(0) || out["add"].(map[string]any)["paused"] != false {
+	if code, out = put(`,"maxConcurrentChecks":0,"addPaused":false,"addSequential":true,"addEdgePieces":false`); code != 200 || out["maxConcurrentChecks"] != float64(0) || out["add"].(map[string]any)["paused"] != false {
 		t.Fatalf("zero and false must be storable: %d %v", code, out)
+	}
+	add, _ = out["add"].(map[string]any)
+	if add["sequential"] != true || add["edgePieces"] != false {
+		t.Fatalf("sequential/edgePieces defaults not saved: %v", add)
 	}
 }
 

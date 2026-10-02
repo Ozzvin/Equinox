@@ -863,6 +863,8 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		MaxChecks        *int                `json:"maxConcurrentChecks"`  // optional
 		MaxMoves         *int                `json:"maxConcurrentMoves"`   // optional
 		AddPaused        *bool               `json:"addPaused"`            // optional
+		AddSequential    *bool               `json:"addSequential"`        // optional: default for new torrents
+		AddEdgePieces    *bool               `json:"addEdgePieces"`        // optional: default for new torrents
 		SpeedUnit        *string             `json:"speedUnit"`            // optional: bytes | bits
 		LimitUnits       *map[string]string  `json:"limitUnits"`           // optional: omitted = unchanged
 		Language         *string             `json:"language"`             // optional: "" (as in the system) | ru | en
@@ -1032,6 +1034,12 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if b.AddPaused != nil {
 			c.Add.Paused = *b.AddPaused
+		}
+		if b.AddSequential != nil {
+			c.Add.Sequential = *b.AddSequential
+		}
+		if b.AddEdgePieces != nil {
+			c.Add.EdgePieces = *b.AddEdgePieces
 		}
 		if b.SpeedUnit != nil {
 			c.SpeedUnit = *b.SpeedUnit
