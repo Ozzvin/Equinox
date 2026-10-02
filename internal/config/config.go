@@ -199,8 +199,9 @@ func Default(dir string) Settings {
 		StartHidden:         true,
 		CloseToTray:         true,
 		SpeedUnit:           "bytes",
-		MaxConcurrentChecks: 2,
+		MaxConcurrentChecks: 1,
 		MaxConcurrentMoves:  1,
+		RememberWindow:      true,
 		Network: Network{
 			MaxConnsPerTorrent: 50, MaxHalfOpenPerTorrent: 25,
 			DHT: true, PEX: true, UTP: true, TCP: true, IPv6: true, Webseeds: true, AcceptIncoming: true,

@@ -71,7 +71,7 @@ func TestLoadKeepsDefaultsForAbsentFields(t *testing.T) {
 	if s.DownLimitKBps != 500 {
 		t.Errorf("the stored value was lost: %d", s.DownLimitKBps)
 	}
-	if s.SequentialWindow != 16 || s.EdgePieces != 4 || s.MaxConcurrentChecks != 2 {
+	if s.SequentialWindow != 16 || s.EdgePieces != 4 || s.MaxConcurrentChecks != 1 {
 		t.Errorf("absent fields did not fall back to the defaults: %+v", s)
 	}
 }

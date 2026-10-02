@@ -555,19 +555,19 @@ func TestRememberWindowSetting(t *testing.T) {
 			t.Fatalf("put: %d", r.StatusCode)
 		}
 	}
-	if get() {
-		t.Fatal("remembering the window must be off by default")
-	}
-	put(`,"rememberWindow":true`)
 	if !get() {
-		t.Fatal("not stored")
-	}
-	put(``)
-	if !get() {
-		t.Fatal("a save without the field must keep it")
+		t.Fatal("remembering the window must be on by default")
 	}
 	put(`,"rememberWindow":false`)
 	if get() {
-		t.Fatal("not switched off")
+		t.Fatal("not stored")
+	}
+	put(``)
+	if get() {
+		t.Fatal("a save without the field must keep it")
+	}
+	put(`,"rememberWindow":true`)
+	if !get() {
+		t.Fatal("not switched on")
 	}
 }
