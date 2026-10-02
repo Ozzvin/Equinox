@@ -849,3 +849,7 @@ html:not([data-density="large"]) .srow input:not([type=checkbox]), html:not([dat
 .srow.upd-check .btn { height: 38px; padding: 0 20px; font-weight: 650; box-shadow: 0 1px 6px color-mix(in srgb, var(--accent) 45%, transparent); }
 html:not([data-density="large"]) .srow.upd-check .btn { height: 32px; padding: 0 16px; }
 html[data-density="compact"] .srow.upd-check .btn { height: 28px; padding: 0 12px; }
+.cl-old[hidden] { display: none; }
+.cl-more { display: block; width: 100%; padding: 9px 12px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--accent); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.cl-more:hover { background: var(--hover); }
+.cl-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

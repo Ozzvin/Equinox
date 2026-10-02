@@ -2312,7 +2312,18 @@
     let d;
     try { d = await api("GET", "/api/changelog"); } catch (_) { $("up-log").innerHTML = `<p class="muted small" style="padding:8px 12px">${L("Не удалось загрузить", "Could not load")}</p>`; return; }
     changelogShown = true;
-    $("up-log").innerHTML = (d.releases || []).map((r) => `<details class="cl-item"><summary><b>${esc(r.version)}</b>${r.version === d.current ? `<span class="badge">${L("установлена", "installed")}</span>` : ""}</summary><div class="cl-body">${mdLite(r.body)}</div></details>`).join("");
+    // the latest versions are shown, the older ones are folded behind a button
+    const SHOWN = 5, rel = d.releases || [];
+    const item = (r) => `<details class="cl-item"><summary><b>${esc(r.version)}</b>${r.version === d.current ? `<span class="badge">${L("установлена", "installed")}</span>` : ""}</summary><div class="cl-body">${mdLite(r.body)}</div></details>`;
+    const rest = rel.slice(SHOWN);
+    $("up-log").innerHTML = rel.slice(0, SHOWN).map(item).join("") + (rest.length
+      ? `<div class="cl-old" hidden>${rest.map(item).join("")}</div><button type="button" class="cl-more" aria-expanded="false">${L("Показать старые версии", "Show older versions")} (${rest.length})</button>` : "");
+    const more = $("up-log").querySelector(".cl-more");
+    if (more) more.onclick = () => {
+      const old = $("up-log").querySelector(".cl-old"), open = old.hidden;
+      old.hidden = !open; more.setAttribute("aria-expanded", open);
+      more.textContent = open ? L("Свернуть старые версии", "Hide older versions") : `${L("Показать старые версии", "Show older versions")} (${rest.length})`;
+    };
   }
   // "О приложении": fetched once and cached, since it never changes while the app is running.
   let aboutInfo = null;
