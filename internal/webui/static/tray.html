@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Equinox</title>
+<link rel="stylesheet" href="tray.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="ti-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor"/></symbol><symbol id="ti-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol><symbol id="ti-folder" viewBox="0 0 24 24"><path d="M3.5 6.5a1 1 0 0 1 1-1h4.2l2 2.3h8.8a1 1 0 0 1 1 1v9.2a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol><symbol id="ti-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol><symbol id="ti-turtle" viewBox="0 0 24 24"><path d="M3 15c0-4.4 3.6-8 8-8s8 3.6 8 8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 15c0-2.5 1.3-5 3-8m3 8c0-2.5-.8-5-2-8M19 13.5c1.7-.4 2.7.3 2.7 1.5H19M5 15v2.2M9 15v2.2M14 15v2.2M17.5 15v2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol><symbol id="ti-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="ti-power" viewBox="0 0 24 24"><path d="M12 3v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 6.6a8 8 0 1 0 10 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol></svg>
+<main class="menu" id="menu" role="menu" aria-label="Equinox">
+  <div class="top">
+    <svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect width="32" height="32" rx="6.5" fill="#1b2130"/><g transform="rotate(-23.4 16 16)"><path d="M5.25 16A10.75 10.75 0 0 1 26.75 16Z" fill="#f0a63c"/><path d="M5.25 17A10.75 10.75 0 0 0 26.75 17Z" fill="#f4f5f8"/><circle cx="16" cy="9.5" r="1.625" fill="#1b2130"/><circle cx="16" cy="23.5" r="1.625" fill="#1b2130"/></g></svg>
+    <div class="speed"><span class="dn" id="t-down">↓ —</span><span class="up" id="t-up">↑ —</span></div>
+  </div>
+  <div class="cnt" id="t-cnt"></div>
+  <div class="sep"></div>
+  <button class="it" id="a-open" role="menuitem"><svg class="g"><use href="#ti-play"/></svg><span data-t="open">Открыть Equinox</span></button>
+  <button class="it" id="a-add" role="menuitem"><svg class="g"><use href="#ti-plus"/></svg><span data-t="add">Добавить раздачу…</span></button>
+  <button class="it" id="a-folder" role="menuitem"><svg class="g"><use href="#ti-folder"/></svg><span data-t="folder">Папка загрузок</span></button>
+  <div class="sep"></div>
+  <button class="it" id="a-pause" role="menuitem"><svg class="g" id="g-pause"><use href="#ti-pause"/></svg><span id="t-pause"></span></button>
+  <button class="it" id="a-turtle" role="menuitemcheckbox" aria-checked="false"><svg class="g"><use href="#ti-turtle"/></svg><span data-t="turtle">Ограничение скорости</span><span class="sw" id="sw-turtle"></span></button>
+  <div class="sep"></div>
+  <button class="it" id="a-settings" role="menuitem"><svg class="g"><use href="#ti-gear"/></svg><span data-t="settings">Настройки</span></button>
+  <button class="it danger" id="a-quit" role="menuitem"><svg class="g"><use href="#ti-power"/></svg><span data-t="quit">Выход</span></button>
+</main>
+<script src="tray.js"></script>
+</body>
+</html>

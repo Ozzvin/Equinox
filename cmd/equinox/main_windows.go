@@ -54,6 +54,7 @@ func main() {
 	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback)")
 	hidden := flag.Bool("hidden", false, "start in the tray without opening the window")
 	addWindow := flag.Bool("addwindow", false, "internal: only open the window for adding torrents (the running program has queued them)")
+	trayMenu := flag.Bool("traymenu", false, "internal: the window of the tray icon's menu (started by the program)")
 	after := flag.Int("after", 0, "internal: wait for this process to exit first (used when restarting)")
 	flag.Parse()
 	args := flag.Args() // magnet links and .torrent files passed by Windows
@@ -80,6 +81,13 @@ func main() {
 				_ = windows.SetEvent(ev)
 				_ = windows.CloseHandle(ev)
 			}
+		}
+		return
+	}
+
+	if *trayMenu {
+		if err := runTrayMenu(*stateDir); err != nil {
+			log.Println("tray menu:", err)
 		}
 		return
 	}
@@ -127,6 +135,11 @@ func main() {
 	if err != nil {
 		fatalBox(err)
 	}
+	settingsEvName, _ := windows.UTF16PtrFromString(`Local\EquinoxDesktopSettings` + instance)
+	settingsEvent, err := windows.CreateEvent(nil, 0, 0, settingsEvName)
+	if err != nil {
+		fatalBox(err)
+	}
 	log.Println("starting engine")
 	a, err := app.Start(*stateDir, *listen)
 	if err != nil {
@@ -156,6 +169,14 @@ func main() {
 				return
 			}
 			d.requestShow()
+		}
+	}()
+	go func() { // the menu of the tray icon asks for the settings
+		for {
+			if r, _ := windows.WaitForSingleObject(settingsEvent, windows.INFINITE); r != windows.WAIT_OBJECT_0 {
+				return
+			}
+			d.openSettings()
 		}
 	}()
 	go func() { // the installer (or the uninstaller) asks the app to close itself
@@ -204,6 +225,26 @@ type desktop_ struct {
 	// thread: see installUpdate) is running, so requestShow knows a window that briefly stops answering
 	// IsHungAppWindow then is busy, not actually hung (see requestShow).
 	checkingUpdate atomic.Bool
+
+	// settingsOnLoad asks the window that is about to be made to open the settings when its page has loaded.
+	settingsOnLoad atomic.Bool
+}
+
+// openSettings brings the window forward with the settings dialog open (the tray menu's "Настройки").
+func (d *desktop_) openSettings() {
+	d.mu.Lock()
+	v := d.view
+	d.mu.Unlock()
+	if v == nil { // no window yet: the new one opens the settings itself
+		d.settingsOnLoad.Store(true)
+		d.requestShow()
+		return
+	}
+	hwnd := uintptr(v.Window())
+	v.Dispatch(func() {
+		bringToFront(hwnd)
+		v.Eval("window.openSettingsNow && window.openSettingsNow()")
+	})
 }
 
 // window opens the UI window and blocks until it is closed (or the app quits).
@@ -299,7 +340,7 @@ func (d *desktop_) window(dataPath string) {
 	origin := strings.SplitN(d.app.URL, "/#", 2)[0]
 	w.Init("if (location.origin === " + strconv.Quote(origin) + ") { window.__equinoxToken = " + strconv.Quote(d.app.Token) + "; window.__equinoxDesktop = true; }")
 	d.place.attach(w, hwnd) // the size, position and state the window had last time
-	w.Navigate(strings.SplitN(d.app.URL, "/#", 2)[0] + "/")
+	w.Navigate(strings.SplitN(d.app.URL, "/#", 2)[0] + "/" + map[bool]string{true: "#settings"}[d.settingsOnLoad.Swap(false)])
 	go func() { // give the local page a moment to paint before the window is shown
 		time.Sleep(300 * time.Millisecond)
 		pShowWindow.Call(hwnd, 9) // SW_RESTORE
@@ -576,6 +617,25 @@ func (d *desktop_) closeWindow() {
 	}
 }
 
+// keepTrayMenu starts the menu process again when it has died, a few times at most: with no WebView2 it would die
+// every time, and the system's menu serves then.
+func (d *desktop_) keepTrayMenu() {
+	for tries := 0; tries < 3; {
+		time.Sleep(5 * time.Second)
+		select {
+		case <-d.quit:
+			return
+		default:
+		}
+		if trayMenuAlive() {
+			continue
+		}
+		tries++
+		log.Println("tray menu: not running, starting it again")
+		_ = spawnTrayMenu(d.stateDir)
+	}
+}
+
 func (d *desktop_) onTrayReady() {
 	log.Println("tray: ready")
 	systray.SetIcon(desktop.Icon())
@@ -619,7 +679,17 @@ func (d *desktop_) onTrayReady() {
 
 	open.Click(d.requestShow)
 	systray.SetOnClick(func(systray.IMenu) { d.requestShow() })
-	systray.SetOnRClick(func(m systray.IMenu) { _ = m.ShowMenu() })
+	// The menu of the right click is a window of its own (trayhost_windows.go); the system's menu is the way out
+	// when that process is not there.
+	if err := spawnTrayMenu(d.stateDir); err != nil {
+		log.Println("tray menu: cannot start:", err)
+	}
+	go d.keepTrayMenu()
+	systray.SetOnRClick(func(m systray.IMenu) {
+		if !signalTrayMenu() {
+			_ = m.ShowMenu()
+		}
+	})
 	turtle.Click(func() {
 		on := !d.app.Settings.Get().AltSpeedActive
 		if err := d.app.Manager.SetAltSpeed(on); err != nil {

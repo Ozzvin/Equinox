@@ -2911,4 +2911,11 @@
     if (!token) return;
     try { scheduleUpdateChecks(await api("GET", "/api/settings")); } catch (_) {}
   })();
+  // The tray menu's "Настройки": the desktop program opens the settings of a window that exists (openSettingsNow), or
+  // makes the window with #settings in its address.
+  window.openSettingsNow = () => { if (!ADD_WINDOW) $("btn-settings").click(); };
+  if (location.hash === "#settings") {
+    history.replaceState(null, "", location.pathname + location.search);
+    setTimeout(window.openSettingsNow, 600);
+  }
 })();
