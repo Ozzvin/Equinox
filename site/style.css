@@ -27,8 +27,9 @@ td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertica
 code{font-family:ui-monospace,Consolas,monospace;font-size:.9em}
 footer{margin:56px 0 32px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:8px 20px}
 footer a{color:var(--muted)}
-.pair{display:flex;gap:16px;align-items:flex-start;margin:16px 0}
-.pair img{height:auto;border:1px solid var(--line);border-radius:10px}
-.pair .wide{flex:1 1 0;min-width:0}
-.pair .narrow{flex:0 0 28%;min-width:0}
-@media(max-width:600px){.pair{flex-direction:column}.pair .narrow{flex:none;width:60%;align-self:center}}
+.ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;justify-content:center;margin-top:28px;font-size:14px;color:var(--muted)}
+.ctrl span{margin-left:10px}
+.ctrl span:first-child{margin-left:0}
+.ctrl button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 12px;cursor:pointer}
+.ctrl button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.ctrl+.shot{margin-top:14px}

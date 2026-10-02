@@ -23,7 +23,13 @@
   <div class="note">Windows 10 и 11 · бесплатно · лицензия MIT</div>
 </section>
 
-<img class="shot" src="img/main-ru.png" alt="Главное окно: список раздач, метки, панель сведений">
+<div class="ctrl" role="group">
+  <span>Тема:</span>
+  <button type="button" data-theme="dark">Тёмная</button><button type="button" data-theme="light">Светлая</button>
+  <span>Размер:</span>
+  <button type="button" data-density="compact">Компактный</button><button type="button" data-density="standard">Стандартный</button><button type="button" data-density="large">Большой</button>
+</div>
+<img class="shot" id="shot-main" src="img/main-ru-dark-standard.webp" alt="Главное окно: список раздач, метки, панель сведений">
 
 <h2 id="features">Что умеет</h2>
 <div class="grid">
@@ -35,11 +41,8 @@
   <div class="card"><h3>Живёт в трее</h3><p>Скорость и счётчики в меню трея, автозапуск, автообновление с проверкой контрольной суммы.</p></div>
 </div>
 
-<h2>Настройки и трей</h2>
-<div class="pair">
-  <img class="wide" src="img/settings-ru.png" alt="Настройки: компактные строки, поиск, галочки у необязательных папок">
-  <img class="narrow" src="img/tray-ru.png" alt="Меню в трее">
-</div>
+<h2>Настройки</h2>
+<img class="shot" id="shot-settings" src="img/settings-ru-dark-standard.webp" alt="Настройки: компактные строки, поиск, галочки у необязательных папок">
 
 <h2 id="install">Установка</h2>
 <table>
@@ -56,5 +59,21 @@
   <a href="https://github.com/Ozzvin/equinox/issues">Сообщить об ошибке</a>
 </footer>
 </div>
+<script>
+(function () {
+  var lang = "ru", base = "img/";
+  var theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark", density = "standard";
+  var main = document.getElementById("shot-main"), set = document.getElementById("shot-settings");
+  function show() {
+    var tail = "-" + lang + "-" + theme + "-" + density + ".webp";
+    main.src = base + "main" + tail; set.src = base + "settings" + tail;
+    document.querySelectorAll("[data-theme]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.theme === theme); });
+    document.querySelectorAll("[data-density]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.density === density); });
+  }
+  document.querySelectorAll("[data-theme]").forEach(function (b) { b.onclick = function () { theme = b.dataset.theme; show(); }; });
+  document.querySelectorAll("[data-density]").forEach(function (b) { b.onclick = function () { density = b.dataset.density; show(); }; });
+  show();
+})();
+</script>
 </body>
 </html>

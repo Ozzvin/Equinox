@@ -23,7 +23,13 @@
   <div class="note">Windows 10 and 11 · free · MIT license</div>
 </section>
 
-<img class="shot" src="../img/main-en.png" alt="The main window: the list of torrents, labels, the details panel">
+<div class="ctrl" role="group">
+  <span>Theme:</span>
+  <button type="button" data-theme="dark">Dark</button><button type="button" data-theme="light">Light</button>
+  <span>Size:</span>
+  <button type="button" data-density="compact">Compact</button><button type="button" data-density="standard">Standard</button><button type="button" data-density="large">Large</button>
+</div>
+<img class="shot" id="shot-main" src="../img/main-en-dark-standard.webp" alt="The main window: the list of torrents, labels, the details panel">
 
 <h2 id="features">Features</h2>
 <div class="grid">
@@ -35,11 +41,8 @@
   <div class="card"><h3>Lives in the tray</h3><p>Live speed and counters in the tray menu, autostart, auto-update with a checksum check.</p></div>
 </div>
 
-<h2>Settings and tray</h2>
-<div class="pair">
-  <img class="wide" src="../img/settings-en.png" alt="Settings: compact rows, search, tick boxes for the optional folders">
-  <img class="narrow" src="../img/tray-en.png" alt="The tray menu">
-</div>
+<h2>Settings</h2>
+<img class="shot" id="shot-settings" src="../img/settings-en-dark-standard.webp" alt="Settings: compact rows, search, tick boxes for the optional folders">
 
 <h2 id="install">Install</h2>
 <table>
@@ -56,5 +59,21 @@
   <a href="https://github.com/Ozzvin/equinox/issues">Report a bug</a>
 </footer>
 </div>
+<script>
+(function () {
+  var lang = "en", base = "../img/";
+  var theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark", density = "standard";
+  var main = document.getElementById("shot-main"), set = document.getElementById("shot-settings");
+  function show() {
+    var tail = "-" + lang + "-" + theme + "-" + density + ".webp";
+    main.src = base + "main" + tail; set.src = base + "settings" + tail;
+    document.querySelectorAll("[data-theme]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.theme === theme); });
+    document.querySelectorAll("[data-density]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.density === density); });
+  }
+  document.querySelectorAll("[data-theme]").forEach(function (b) { b.onclick = function () { theme = b.dataset.theme; show(); }; });
+  document.querySelectorAll("[data-density]").forEach(function (b) { b.onclick = function () { density = b.dataset.density; show(); }; });
+  show();
+})();
+</script>
 </body>
 </html>
