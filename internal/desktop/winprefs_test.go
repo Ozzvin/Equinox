@@ -56,7 +56,7 @@ func TestWindowPrefsIgnoreNonsense(t *testing.T) {
 }
 
 func TestSizesPerDensity(t *testing.T) {
-	if DefaultSize(DensityLarge) != (Size{1280, 800}) || DefaultSize(DensityStandard) != (Size{1000, 640}) || DefaultSize(DensityCompact) != (Size{640, 400}) {
+	if DefaultSize(DensityLarge) != (Size{1280, 800}) || DefaultSize(DensityStandard) != (Size{1000, 700}) || DefaultSize(DensityCompact) != (Size{640, 400}) {
 		t.Fatal("default sizes changed")
 	}
 	if MinSize(DensityCompact) != (Size{640, 400}) || MinSize(DensityStandard) != (Size{720, 480}) {

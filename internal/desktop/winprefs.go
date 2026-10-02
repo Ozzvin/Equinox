@@ -25,7 +25,7 @@ type Size struct {
 // Client sizes the window gets the first time, per density.
 var defaultSizes = map[string]Size{
 	DensityLarge:    {1280, 800},
-	DensityStandard: {1000, 640},
+	DensityStandard: {1000, 700},
 	DensityCompact:  {640, 400},
 }
 

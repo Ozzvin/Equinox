@@ -89,7 +89,7 @@ td.c-name .sub { font-size: 12px; color: var(--muted); }
 .empty[hidden] { display: none; }
 
 /* details */
-.details { flex: none; height: min(260px, 42vh); border-top: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; overflow: hidden; }
+.details { flex: none; height: min(290px, 42vh); border-top: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; overflow: hidden; }
 .details[hidden] { display: none; }
 .details-head { flex: none; display: flex; gap: 12px; align-items: flex-end; padding: 0 12px 0 8px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
 .details-body { flex: 1; min-height: 0; overflow: auto; }
@@ -562,7 +562,7 @@ html:not([data-density="large"]) #side { padding: 4px; }
 html:not([data-density="large"]) .side-title { padding: 8px 8px 4px; font-size: 10.5px; }
 html:not([data-density="large"]) .side-item { height: 28px; padding: 0 8px; gap: 8px; border-radius: 6px; font-size: 13px; }
 html:not([data-density="large"]) .side-item .i { width: 15px; height: 15px; }
-html:not([data-density="large"]) .details { height: min(220px, 38vh); }
+html:not([data-density="large"]) .details { height: min(250px, 40vh); }
 html:not([data-density="large"]) .tabs button { padding: 7px 12px 5px; font-size: 13px; }
 html:not([data-density="large"]) .details-head .btn { margin-bottom: 3px; }
 html:not([data-density="large"]) table.mini td { padding: 3px 10px; }
@@ -693,7 +693,7 @@ html[data-density="compact"] .seg-note { display: none; }
 /* status tab */
 .st-bar { padding: 12px 16px 8px; }
 .st-bar .pbar { height: 22px; }
-.st-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 28px; padding: 4px 16px 12px; }
+.st-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 28px; padding: 4px 16px 12px; }
 .st-col { margin: 0; }
 .st-row { display: flex; justify-content: space-between; gap: 14px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
 .st-row dt { color: var(--muted); font-weight: 600; }
