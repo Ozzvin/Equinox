@@ -73,8 +73,14 @@
   $("a-folder").onclick = () => act("folder:" + state.dir);
   $("a-settings").onclick = () => act("settings");
   $("a-quit").onclick = () => act("quit");
-  $("a-pause").onclick = async () => { hide(); try { await api("POST", "/api/pause-all", { paused: state.running }); } catch (_) { /* nothing to do */ } };
-  $("a-turtle").onclick = async () => { hide(); try { await api("POST", "/api/altspeed", { enabled: !state.turtle }); } catch (_) { /* nothing to do */ } };
+  // The switches stay on screen: the menu closes only for what opens something else, or on a click outside of it.
+  $("a-pause").onclick = async () => { try { await api("POST", "/api/pause-all", { paused: state.running }); } catch (_) { /* nothing to do */ } refresh(); };
+  $("a-turtle").onclick = async () => {
+    const on = !state.turtle;
+    $("sw-turtle").classList.toggle("on", on); // at once, the daemon's answer comes with the refresh
+    try { await api("POST", "/api/altspeed", { enabled: on }); } catch (_) { /* nothing to do */ }
+    refresh();
+  };
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); hide(); return; }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
