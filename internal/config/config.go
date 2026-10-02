@@ -168,26 +168,15 @@ type Settings struct {
 
 	// AutoUpdateCheck periodically asks GitHub for a newer release (manual checks always work).
 	AutoUpdateCheck bool `json:"autoUpdateCheck"`
-	// UpdateCheckMinutes is how often that check repeats (0 = the default, an hour). The first one is made
-	// shortly after the start.
-	UpdateCheckMinutes int `json:"updateCheckMinutes"`
 }
 
-// Limits of how often updates are looked for: often enough to be of use, rarely enough to be kind to GitHub.
-const (
-	DefaultUpdateCheckMinutes = 60
-	MinUpdateCheckMinutes     = 5
-	MaxUpdateCheckMinutes     = 14 * 24 * 60 // setInterval in the page cannot wait longer than about 24 days
-)
+// UpdateCheckInterval is how often the automatic update check repeats (the first one is made shortly after the
+// start). It is not a setting: often enough to be of use, rarely enough to be kind to GitHub (4 requests an hour).
+// An "updateCheckMinutes" left in the settings file by an older version is ignored.
+const UpdateCheckInterval = 15 * time.Minute
 
 // UpdateCheckEvery is the period of the automatic update check.
-func (s Settings) UpdateCheckEvery() time.Duration {
-	n := s.UpdateCheckMinutes
-	if n < MinUpdateCheckMinutes || n > MaxUpdateCheckMinutes {
-		n = DefaultUpdateCheckMinutes
-	}
-	return time.Duration(n) * time.Minute
-}
+func (s Settings) UpdateCheckEvery() time.Duration { return UpdateCheckInterval }
 
 // Default returns settings with sane values; dir is the daemon's state directory.
 func Default(dir string) Settings {
@@ -207,17 +196,16 @@ func Default(dir string) Settings {
 			DHT: true, PEX: true, UTP: true, TCP: true, IPv6: true, Webseeds: true, AcceptIncoming: true,
 			Encryption: EncryptionPrefer,
 		},
-		PortMapping:        true,
-		Preallocate:        true,
-		AltDownLimitKBps:   50,
-		AltUpLimitKBps:     50,
-		AltSchedule:        AltSchedule{From: "23:00", To: "07:00"},
-		Add:                AddDefaults{Sequential: true},
-		EdgePieces:         4,
-		SequentialWindow:   16,
-		AutoUpdateCheck:    true,
-		TrackerIcons:       true,
-		UpdateCheckMinutes: DefaultUpdateCheckMinutes,
+		PortMapping:      true,
+		Preallocate:      true,
+		AltDownLimitKBps: 50,
+		AltUpLimitKBps:   50,
+		AltSchedule:      AltSchedule{From: "23:00", To: "07:00"},
+		Add:              AddDefaults{Sequential: true},
+		EdgePieces:       4,
+		SequentialWindow: 16,
+		AutoUpdateCheck:  true,
+		TrackerIcons:     true,
 	}
 }
 

@@ -2139,14 +2139,13 @@
   const setPanes = $("set-panes"), setSearch = $("set-search");
   const navButtons = () => [...document.querySelectorAll("#set-nav [data-sec]")];
   function showSection(id) {
-    if (id === "updates") id = "about"; // "Обновления" used to be a section of its own
     if (setSearch.value) { setSearch.value = ""; applySearch(); }
     const btns = navButtons();
     const btn = btns.find((b) => b.dataset.sec === id && !b.hidden) || btns.find((b) => !b.hidden);
     id = btn.dataset.sec;
     for (const b of btns) { b.setAttribute("aria-selected", b === btn); b.tabIndex = b === btn ? 0 : -1; }
     for (const p of document.querySelectorAll("#dlg-settings .set-pane")) p.hidden = p.dataset.sec !== id;
-    if (id === "about") loadChangelog();
+    if (id === "updates") loadChangelog();
     setPanes.scrollTop = 0;
     try { localStorage.setItem("setSection", id); } catch (_) {}
   }
@@ -2296,7 +2295,7 @@
     try { settings = await api("GET", "/api/settings"); port = await api("GET", "/api/port"); } catch (e) { return toast(e.message, true); }
     for (const r of document.querySelectorAll('input[name="lg"]')) r.checked = r.value === window.__langPref;
     for (const id of Object.keys(FILL)) FILL[id](settings);
-    $("st-autoupdate").checked = settings.autoUpdateCheck !== false; $("st-updevery").value = settings.updateCheckMinutes || 60; $("st-updevery").disabled = !$("st-autoupdate").checked;
+    $("st-autoupdate").checked = settings.autoUpdateCheck !== false;
     $("sn-system").hidden = !window.__equinoxDesktop;
     if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
     openLabelRows();
@@ -2348,12 +2347,10 @@
   $("f-settings").addEventListener("submit", async (e) => {
     e.preventDefault();
     const n = (id) => Number($(id).value) || 0;
-    const updEvery = Math.round(Number($("st-updevery").value));
     const langChoice = (document.querySelector('input[name="lg"]:checked') || {}).value || "system"; // system, ru or en
     for (const [cb, field, what] of [["tg-movedone", "st-movedone", "Переносить завершённые загрузки в"], ["tg-watch", "st-watch", "Папка автодобавления"], ["tg-copydir", "st-copydir", "Сохранять копии .torrent файлов в"]]) {
       if ($(cb).checked && !$(field).value.trim()) { $("st-err").textContent = `${L("Укажите папку или снимите галочку", "Choose a folder or untick the box")}: ${L(what, EN_NAMES[what])}`; $("st-err").hidden = false; showSection(document.getElementById(field).closest(".set-pane").dataset.sec); $(field).focus(); return; }
     }
-    if (!(updEvery >= 5 && updEvery <= 20160)) { $("st-err").textContent = "Период проверки обновлений: от 5 минут до 14 суток (20160 минут)."; $("st-err").hidden = false; return; }
     try {
       // labels deleted in the settings are taken off their torrents first
       for (const name of lbDeleted) for (const t of torrents.filter((x) => x.label === name)) await api("POST", `/api/torrents/${t.hash}/label`, { label: "" });
@@ -2365,7 +2362,7 @@
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: tgText("tg-movedone", "st-movedone"), watchDir: tgText("tg-watch", "st-watch"), torrentCopyDir: tgText("tg-copydir", "st-copydir"), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
-        ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, updateCheckMinutes: updEvery, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
+        ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);
@@ -2382,7 +2379,6 @@
     } catch (x) { $("st-err").textContent = x.message; $("st-err").hidden = false; }
   });
 
-  $("st-autoupdate").onchange = () => { $("st-updevery").disabled = !$("st-autoupdate").checked; };
   $("st-assoc").onclick = async () => {
     if (typeof window.registerHandlers !== "function") return;
     const err = await window.registerHandlers();
@@ -2877,8 +2873,7 @@
     loop();
     checkRestart(); setInterval(checkRestart, 20000);
   }
-  // Updates: an automatic check shortly after start and then at the period from the settings (an hour unless
-  // changed), unless turned off; a manual check (the About section's button) always works regardless. The
+  // Updates: an automatic check shortly after start and then every 15 minutes, unless turned off; a manual check (the About section's button) always works regardless. The
   // schedule is made again when the settings are saved. Only the first schedule after the check was off makes the
   // check at once: a new period alone does not.
   let updStartTimer = null, updTimer = null;
@@ -2887,7 +2882,7 @@
     const wasOn = updTimer !== null;
     updTimer = null;
     if (!s || s.autoUpdateCheck === false) { clearTimeout(updStartTimer); updStartTimer = null; return; }
-    const every = Math.min(20160, Math.max(5, s.updateCheckMinutes || 60)) * 60000;
+    const every = 15 * 60000; // the period is fixed (the same as the daemon's, config.UpdateCheckInterval)
     updTimer = setInterval(() => checkUpdate(true), every); // the timer is due, so it must not be answered from the cache
     if (!wasOn && updStartTimer === null) updStartTimer = setTimeout(() => { updStartTimer = null; checkUpdate(false); }, 5000);
   }

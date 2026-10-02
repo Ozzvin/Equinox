@@ -845,3 +845,7 @@ html:not([data-density="large"]) .srow { padding: 4px 0; }
 html[data-density="compact"] .srow { padding: 3px 0; }
 html[data-density="compact"] .srow input:not([type=checkbox]), html[data-density="compact"] .srow select { height: 26px; }
 html:not([data-density="large"]) .srow input:not([type=checkbox]), html:not([data-density="large"]) .srow select { height: 28px; }
+.srow.upd-check { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; }
+.srow.upd-check .btn { height: 38px; padding: 0 20px; font-weight: 650; box-shadow: 0 1px 6px color-mix(in srgb, var(--accent) 45%, transparent); }
+html:not([data-density="large"]) .srow.upd-check .btn { height: 32px; padding: 0 16px; }
+html[data-density="compact"] .srow.upd-check .btn { height: 28px; padding: 0 12px; }

@@ -440,6 +440,7 @@ window.__i18nEn = [
   ["Галочка включает предел; без неё скорость не ограничена.", "The box turns a limit on; without it the speed is not limited."],
   ["Единица выбирается для каждого предела отдельно; в списке две единицы: килобайты и мегабайты либо килобиты и мегабиты, как выбрано ниже в «Единицах скорости». 1 МБ = 1024 КБ, 1 Мбит = 1000 Кбит. Внутри предел хранится с точностью до 1 КБ/с (около 8 Кбит/с).", "The unit is chosen for each limit separately; the list has two units: kilobytes and megabytes, or kilobits and megabits, as chosen below in “Speed units”. 1 MB = 1024 KB, 1 Mbit = 1000 Kbit. A limit is stored with a precision of 1 KB/s (about 8 Kbit/s)."],
   ["Время", "Time"],
+  ["Каждые 15 минут, первая проверка — вскоре после запуска", "Every 15 minutes; the first check is made soon after the start"],
   ["Файлы .torrent из неё добавляются сами", ".torrent files from it are added automatically"],
   ["Переносить завершённые загрузки в", "Move finished downloads to"],
   ["Папка автодобавления", "Watch folder"],

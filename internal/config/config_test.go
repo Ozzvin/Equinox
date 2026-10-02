@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -143,20 +144,15 @@ func TestValidLabelColor(t *testing.T) {
 }
 
 func TestUpdateCheckEvery(t *testing.T) {
-	for minutes, want := range map[int]time.Duration{
-		0:                         time.Hour, // never set: the default
-		-5:                        time.Hour,
-		MinUpdateCheckMinutes - 1: time.Hour,
-		MinUpdateCheckMinutes:     5 * time.Minute,
-		90:                        90 * time.Minute,
-		MaxUpdateCheckMinutes:     time.Duration(MaxUpdateCheckMinutes) * time.Minute,
-		MaxUpdateCheckMinutes + 1: time.Hour,
-	} {
-		if got := (Settings{UpdateCheckMinutes: minutes}).UpdateCheckEvery(); got != want {
-			t.Errorf("%d minutes: %v, want %v", minutes, got, want)
-		}
+	// not a setting: always 15 minutes, whatever an older settings file says
+	var old Settings
+	if err := json.Unmarshal([]byte(`{"updateCheckMinutes":600}`), &old); err != nil {
+		t.Fatal(err)
 	}
-	if got := Default(t.TempDir()); got.UpdateCheckMinutes != 60 || !got.AutoUpdateCheck {
-		t.Errorf("a new install checks every hour, got %d", got.UpdateCheckMinutes)
+	if got := old.UpdateCheckEvery(); got != 15*time.Minute {
+		t.Errorf("update check period %v, want 15m", got)
+	}
+	if got := Default(t.TempDir()); !got.AutoUpdateCheck {
+		t.Error("a new install checks for updates")
 	}
 }
