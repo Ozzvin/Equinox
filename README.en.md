@@ -10,6 +10,16 @@
 
 Equinox is a BitTorrent client for Windows. The engine is written in Go ([anacrolix/torrent](https://github.com/anacrolix/torrent)), the web interface is built into the program, and it comes with a window and a tray icon. It works like an ordinary application: download it, run it, no keys or server settings needed. The interface is available in Russian and English (Settings → Interface → Language; by default it follows the system language).
 
+## What it looks like
+
+<p align="center"><img src="docs/screenshots/main-en.png" alt="The main window: the list of torrents, labels, the details panel" width="860"></p>
+
+<p align="center">
+  <img src="docs/screenshots/settings-en.png" alt="Settings: compact rows, search, tick boxes for the optional folders" width="560">
+  &nbsp;
+  <img src="docs/screenshots/tray-en.png" alt="The tray menu" width="200">
+</p>
+
 ## Features
 
 **Torrents**
