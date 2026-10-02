@@ -4,7 +4,7 @@
 [![Tests](https://github.com/Ozzvin/equinox/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/Ozzvin/equinox/actions/workflows/test.yml)
 [![MIT license](https://img.shields.io/github/license/Ozzvin/equinox?label=license)](LICENSE)
 
-**A fast, lightweight BitTorrent client for Windows, written in Go.** Native window with a tray icon, a web interface, and no libtorrent.
+**A BitTorrent client for Windows: light, fast, and ready to use without any setup.**
 
 [Русская версия](README.md)
 
