@@ -528,7 +528,7 @@
   function fileRowHTML(x, sequential) {
     const f = x.f;
     return `<div class="file" data-i="${f.index}" ${rowPad(x.depth)}>
-      <div class="fn" title="${esc(f.path)}">${esc(x.name)}${sequential ? '<span class="badge">по ходу</span>' : ""}</div>
+      <div class="fn" title="${esc(f.path)}">${esc(x.name)}${sequential ? '<span class="badge">последовательно</span>' : ""}</div>
       <div class="fs">${bytes(f.size)}</div>
       ${FILE_BAR}
       <select data-prio="${f.index}" aria-label="Приоритет файла">${prioOptions}</select>

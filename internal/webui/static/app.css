@@ -687,6 +687,7 @@ html[data-density="compact"] .seg-note { display: none; }
 .fhead .r { text-align: right; }
 .file .fn { padding-left: calc(var(--d, 0) * 18px); display: flex; align-items: center; min-width: 0; }
 .file .fn > span, .file:not(.dir) .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.file .fn > span.badge { display: inline-block; flex: none; overflow: visible; }
 .file.dir .fn { font-weight: 600; white-space: nowrap; overflow: hidden; }
 .file.dir .fn .i { width: 16px; height: 16px; flex: none; margin: 0 7px 0 2px; color: var(--warn); }
 .chev { flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; }
