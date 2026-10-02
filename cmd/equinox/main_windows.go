@@ -605,6 +605,25 @@ func (d *desktop_) requestShow() {
 	}
 }
 
+// toggleWindow is the left click on the tray icon: a window that is on screen goes back to the tray, anything else
+// (hidden in the tray, minimised, not made yet) comes up. Like requestShow it only queues its work on the window's
+// thread, because it runs inside the tray's own message loop.
+func (d *desktop_) toggleWindow() {
+	d.mu.Lock()
+	v := d.view
+	d.mu.Unlock()
+	if v != nil && !d.checkingUpdate.Load() {
+		hwnd := uintptr(v.Window())
+		if vis, _, _ := pIsWindowVisible.Call(hwnd); vis != 0 {
+			if ic, _, _ := pIsIconic.Call(hwnd); ic == 0 {
+				v.Dispatch(func() { pShowWindow.Call(hwnd, 0) }) // SW_HIDE: into the tray, as closing the window does
+				return
+			}
+		}
+	}
+	d.requestShow()
+}
+
 // closeWindow asks a running window loop to end (safe from any thread).
 func (d *desktop_) closeWindow() {
 	d.mu.Lock()
@@ -678,7 +697,7 @@ func (d *desktop_) onTrayReady() {
 	}
 
 	open.Click(d.requestShow)
-	systray.SetOnClick(func(systray.IMenu) { d.requestShow() })
+	systray.SetOnClick(func(systray.IMenu) { d.toggleWindow() })
 	// The menu of the right click is a window of its own (trayhost_windows.go); the system's menu is the way out
 	// when that process is not there.
 	if err := spawnTrayMenu(d.stateDir); err != nil {
