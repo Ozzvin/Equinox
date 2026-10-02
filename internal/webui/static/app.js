@@ -689,45 +689,8 @@
     const pct = x.progress * 100, text = pct >= 100 ? "100%" : pct.toFixed(1) + "%", label = esc(text);
     return `<div class="pbar ${pct >= 100 ? "seed" : "down"}" title="${label}"><div class="fill" style="width:${pct.toFixed(1)}%"><span class="lb">${label}</span></div><span class="lb base">${label}</span></div>`;
   }
-  // Expanding a peer row shows its progress per file (how much of each file THIS peer has, not
-  // you), fetched only for the rows actually open — not on every poll of the whole peers list,
-  // since working it out costs the server going through every piece of every file for that peer.
-  let peerOpen = new Set(), peerFilesCache = new Map(), peerFilesHash = ""; // addr -> FileStatus[] | null (failed) | undefined (loading)
-  async function loadPeerFiles(addr) {
-    const t = cur();
-    if (!t) return;
-    peerFilesCache.delete(addr);
-    try {
-      const fs = await api("GET", `/api/torrents/${t.hash}/peer-files?addr=${encodeURIComponent(addr)}`);
-      if (!cur() || cur().hash !== t.hash) return;
-      peerFilesCache.set(addr, fs);
-    } catch (_) {
-      peerFilesCache.set(addr, null);
-    }
-    if (peerOpen.has(addr)) drawPeers();
-  }
-  function togglePeerFiles(addr) {
-    if (peerOpen.has(addr)) peerOpen.delete(addr);
-    else { peerOpen.add(addr); loadPeerFiles(addr); }
-    drawPeers();
-  }
-  const PRIO_NAME = Object.fromEntries(PRIO);
-  function peerFilesRowHTML(cols, addr) {
-    const fs = peerFilesCache.get(addr);
-    let body;
-    if (!peerFilesCache.has(addr)) body = '<p class="muted small">Загрузка…</p>';
-    else if (fs === null) body = '<p class="muted small">Не удалось получить список файлов</p>';
-    else if (fs.length === 0) body = '<p class="muted small">У раздачи нет файлов</p>';
-    else body = `<table class="mini pf"><colgroup><col><col style="width:84px"><col style="width:140px"><col style="width:100px"></colgroup>` +
-      `<thead><tr><th>Файл</th><th class="r">Размер</th><th>Есть у пира</th><th>Ваш приоритет</th></tr></thead><tbody>` +
-      fs.map((f) => `<tr><td title="${esc(f.path)}">${esc(f.path)}</td><td class="r">${bytes(f.size)}</td><td>${peerBar(f)}</td><td>${esc(PRIO_NAME[f.priority] || f.priority)}</td></tr>`).join("") +
-      "</tbody></table>";
-    return `<tr class="peer-files-row"><td colspan="${cols.length}">${body}</td></tr>`;
-  }
   const PCOLS = [
-    { id: "addr", title: "Адрес", always: true, w: 240, sort: (x) => x.addr,
-      cell: (x) => `<button type="button" class="chev" data-peer-toggle="${esc(x.addr)}" aria-expanded="${peerOpen.has(x.addr)}" aria-label="${peerOpen.has(x.addr) ? "Свернуть" : "Развернуть"} файлы пира">${peerOpen.has(x.addr) ? "▾" : "▸"}</button>${x.incoming ? "←" : "→"} ${esc(x.addr)}`,
-      tipOf: (x) => (x.incoming ? "входящее подключение" : "исходящее подключение") },
+    { id: "addr", title: "Адрес", always: true, w: 240, sort: (x) => x.addr, cell: (x) => `${x.incoming ? "←" : "→"} ${esc(x.addr)}`, tipOf: (x) => (x.incoming ? "входящее подключение" : "исходящее подключение") },
     { id: "client", title: "Клиент", w: 190, sort: (x) => (x.client || "").toLowerCase(), cell: (x) => esc(x.client || "—") },
     { id: "source", title: "Источник", tip: "Откуда взялся пир:\n" + SOURCES_TIP, w: 120, tipOf: (x) => SOURCE_TIPS[x.source] || SOURCE_TIPS.other, sort: (x) => SOURCES[x.source] || "", cell: (x) => SOURCES[x.source] || "—" },
     { id: "dir", title: "Направление", w: 120, sort: (x) => (x.incoming ? 0 : 1), cell: (x) => (x.incoming ? "Входящее" : "Исходящее") },
@@ -758,13 +721,9 @@
       const f = PCOL[pSort.key].sort;
       rows = [...rows].sort((a, b) => { const x = f(a), y = f(b); return (typeof x === "string" ? x.localeCompare(y) : x - y) * pSort.dir; });
     }
-    // A peer that dropped its connection while its row was expanded: stop asking about it.
-    const seen = new Set(rows.map((x) => x.addr));
-    for (const addr of [...peerOpen]) if (!seen.has(addr)) { peerOpen.delete(addr); peerFilesCache.delete(addr); }
     box.innerHTML = `<table class="mini pt"><colgroup>${cols.map((c) => `<col style="width:${(pWidth(c) / total * 100).toFixed(3)}%">`).join("")}</colgroup>` +
       `<thead><tr>${cols.map((c) => `<th class="${c.r ? "r" : ""}" data-pcol="${c.id}"${c.tip ? ` title="${esc(c.tip)}"` : ""} aria-sort="${pSort.key === c.id ? (pSort.dir > 0 ? "ascending" : "descending") : "none"}">${c.title}<i class="rs" data-prs="${c.id}" title="Потяните, чтобы изменить ширину; двойной клик — по умолчанию"></i></th>`).join("")}</tr></thead><tbody>` +
-      rows.map((x) => "<tr>" + cols.map((c) => `<td class="${c.r ? "r" : ""}"${c.tipOf ? ` title="${c.tipOf(x)}"` : ""}>${c.cell(x)}</td>`).join("") + "</tr>" +
-        (peerOpen.has(x.addr) ? peerFilesRowHTML(cols, x.addr) : "")).join("") + "</tbody></table>";
+      rows.map((x) => "<tr>" + cols.map((c) => `<td class="${c.r ? "r" : ""}"${c.tipOf ? ` title="${c.tipOf(x)}"` : ""}>${c.cell(x)}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
   }
   const pApplyWidths = () => {
     const cols = pIds.map((id) => PCOL[id]), total = cols.reduce((a, c) => a + pWidth(c), 0);
@@ -816,8 +775,6 @@
   peersPane.addEventListener("dblclick", (e) => { const h = e.target.closest(".rs"); if (h) { delete pW[h.dataset.prs]; pSave(); drawPeers(); } });
   // sorting: ascending, descending, back to the order the server sends (busiest first)
   peersPane.addEventListener("click", (e) => {
-    const chev = e.target.closest("[data-peer-toggle]");
-    if (chev) { togglePeerFiles(chev.dataset.peerToggle); return; }
     const th = e.target.closest("th[data-pcol]"); if (!th || pSuppress || e.target.closest(".rs")) return;
     const k = th.dataset.pcol;
     if (pSort.key !== k) { pSort.key = k; pSort.dir = 1; } else if (pSort.dir > 0) pSort.dir = -1; else pSort.key = "";
@@ -980,7 +937,6 @@
           <dt>Magnet-ссылка</dt><dd><button class="btn small" id="copy-magnet">Скопировать</button></dd></dl>`;
         $("copy-magnet").onclick = () => navigator.clipboard.writeText(d.magnet).then(() => toast("Magnet-ссылка скопирована"), () => toast("Не удалось скопировать", true));
       } else if (tab === "peers") {
-        if (peerFilesHash !== t.hash) { peerFilesHash = t.hash; peerOpen.clear(); peerFilesCache.clear(); }
         const p = await api("GET", `/api/torrents/${t.hash}/peers`); if (!same()) return;
         if (peersBusy) return; // a click or a drag is under way: drawing again would lose it
         lastPeers = p; drawPeers();

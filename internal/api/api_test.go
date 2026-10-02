@@ -443,13 +443,6 @@ func TestDetailsPeersTrackersRecheckEndpoints(t *testing.T) {
 		t.Fatalf("peers must be a JSON array even when empty: %d %v", res.StatusCode, peers)
 	}
 
-	if r := e.do(t, "GET", base+"/peer-files", nil, nil); r.StatusCode != 400 {
-		t.Fatalf("peer-files without an address must be 400, got %d", r.StatusCode)
-	}
-	if r := e.do(t, "GET", base+"/peer-files?addr=203.0.113.5:6881", nil, nil); r.StatusCode != 404 {
-		t.Fatalf("peer-files for an address with no connection must be 404, got %d", r.StatusCode)
-	}
-
 	add := func(u string) int {
 		r := e.do(t, "POST", base+"/trackers", bytes.NewReader([]byte(`{"url":`+strconvQuote(u)+`}`)), nil)
 		r.Body.Close()
@@ -505,7 +498,7 @@ func TestDetailsPeersTrackersRecheckEndpoints(t *testing.T) {
 		t.Fatalf("recheck: %d", r.StatusCode)
 	}
 	bad := "/api/torrents/" + strings.Repeat("z", 40)
-	for _, c := range [][2]string{{"GET", bad + "/details"}, {"GET", bad + "/peers"}, {"GET", bad + "/peer-files?addr=203.0.113.5:6881"}, {"POST", bad + "/trackers"}, {"POST", bad + "/peers"}, {"GET", bad + "/manual-peers"}, {"POST", bad + "/manual-peers/remove"}, {"POST", bad + "/recheck"}} {
+	for _, c := range [][2]string{{"GET", bad + "/details"}, {"GET", bad + "/peers"}, {"POST", bad + "/trackers"}, {"POST", bad + "/peers"}, {"GET", bad + "/manual-peers"}, {"POST", bad + "/manual-peers/remove"}, {"POST", bad + "/recheck"}} {
 		r := e.do(t, c[0], c[1], bytes.NewReader([]byte(`{"url":"udp://t.example:1/a","peers":["203.0.113.5:6881"],"addrs":["203.0.113.5:6881"]}`)), nil)
 		r.Body.Close()
 		if r.StatusCode != 404 {

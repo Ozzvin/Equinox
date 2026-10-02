@@ -173,7 +173,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/torrents/{hash}/move", s.moveStorage)
 	s.mux.HandleFunc("GET /api/torrents/{hash}/details", s.details)
 	s.mux.HandleFunc("GET /api/torrents/{hash}/peers", s.peers)
-	s.mux.HandleFunc("GET /api/torrents/{hash}/peer-files", s.peerFiles)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/trackers", s.addTracker)
 	s.mux.HandleFunc("POST /api/torrents/{hash}/peers", s.addPeers)
 	s.mux.HandleFunc("GET /api/torrents/{hash}/manual-peers", s.manualPeers)
@@ -395,22 +394,6 @@ func (s *Server) peers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
-}
-
-// peerFiles reports one connected peer's progress per file: GET ?addr=203.0.113.5:51413. Computed
-// on request, not part of the regular peer poll (see Manager.PeerFiles).
-func (s *Server) peerFiles(w http.ResponseWriter, r *http.Request) {
-	addr := r.URL.Query().Get("addr")
-	if addr == "" {
-		fail(w, core.ErrInvalidInput)
-		return
-	}
-	f, err := s.m.PeerFiles(r.PathValue("hash"), addr)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, f)
 }
 
 // addTracker adds an announce URL: {"url": "udp://tracker.example:6969/announce"}.
