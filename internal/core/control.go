@@ -150,6 +150,34 @@ func (m *Manager) SetPaused(hash string, paused bool) error {
 	return nil
 }
 
+// SetAllPaused pauses or resumes every torrent at once (the "pause all" button and the tray menu). Resuming
+// resumes every paused torrent, also those the person paused one by one earlier, as the other clients do.
+// It returns how many torrents changed.
+func (m *Manager) SetAllPaused(paused bool) int {
+	m.mu.Lock()
+	hashes := make([]string, 0, len(m.torrents))
+	for h := range m.torrents {
+		hashes = append(hashes, h.HexString())
+	}
+	m.mu.Unlock()
+	recs := map[string]bool{}
+	m.state.view(func(s *state) {
+		for h, r := range s.Torrents {
+			recs[h] = r.Paused
+		}
+	})
+	n := 0
+	for _, h := range hashes {
+		if was, ok := recs[h]; ok && was == paused {
+			continue
+		}
+		if m.SetPaused(h, paused) == nil {
+			n++
+		}
+	}
+	return n
+}
+
 func (m *Manager) setPaused(t *torrent.Torrent, hash string, paused bool) {
 	if err := m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {

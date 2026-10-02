@@ -211,6 +211,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/update-progress", s.updateProgress)
 	s.mux.HandleFunc("PUT /api/settings", s.putSettings)
 	s.mux.HandleFunc("POST /api/altspeed", s.altSpeed)
+	s.mux.HandleFunc("POST /api/pause-all", s.pauseAll)
 	s.mux.HandleFunc("GET /api/port", s.port)
 	s.mux.HandleFunc("POST /api/port/refresh", s.portRefresh)
 	s.mux.HandleFunc("POST /api/port/mapping", s.portMapping)
@@ -332,6 +333,18 @@ func (s *Server) pause(p bool) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// pauseAll pauses or resumes every torrent: {"paused": true|false}.
+func (s *Server) pauseAll(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Paused bool `json:"paused"`
+	}
+	if err := decode(r, &b); err != nil {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"changed": s.m.SetAllPaused(b.Paused)})
 }
 
 func (s *Server) sequential(w http.ResponseWriter, r *http.Request) {

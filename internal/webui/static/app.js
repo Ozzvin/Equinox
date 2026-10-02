@@ -403,6 +403,11 @@
     const list = chosen(), n = list.length, has = n > 0;
     const busy = list.some((t) => t.moving), noMeta = list.some((t) => !t.hasMetadata);
     for (const id of ["btn-toggle", "btn-remove", "btn-up", "btn-down", "btn-label"]) $(id).disabled = !has || busy;
+    // "pause all" pauses everything that runs; when nothing runs, the same button resumes everything
+    const running = torrents.some((t) => !t.paused), pa = $("btn-pauseall");
+    pa.disabled = !torrents.length;
+    pa.querySelector("use").setAttribute("href", running ? "#i-pauseall" : "#i-resumeall");
+    pa.title = running ? "Поставить все на паузу" : "Продолжить все";
     $("btn-move").disabled = !has || busy || noMeta;
     $("btn-open").disabled = n !== 1;
     if (has) {
@@ -1266,6 +1271,11 @@
     const list = chosen(); if (!list.length) return;
     const resume = list.every((t) => t.paused);
     each(list.filter((t) => t.paused === resume), (t) => post(t, resume ? "resume" : "pause"));
+  };
+  $("btn-pauseall").onclick = async () => {
+    const pause = torrents.some((t) => !t.paused);
+    try { await api("POST", "/api/pause-all", { paused: pause }); toast(pause ? "Все раздачи поставлены на паузу" : "Все раздачи продолжены"); refresh(); }
+    catch (e) { toast(e.message, true); }
   };
   // Queue moves keep the relative order of the selection: going up, the first goes first.
   $("btn-up").onclick = () => each(chosen(), (t) => post(t, "queue", { move: "up" }));
