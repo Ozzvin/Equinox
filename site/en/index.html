@@ -19,7 +19,13 @@
 <section class="hero">
   <h1>A BitTorrent client for Windows: light, fast, no setup</h1>
   <p>Download it, run it, start downloading. No keys, accounts or servers. A window, a tray icon and auto-update, like any ordinary program.</p>
-  <a class="btn" href="https://github.com/Ozzvin/equinox/releases/latest">Download for Windows</a>
+  <details class="dl">
+    <summary class="btn">Download for Windows</summary>
+    <div class="dl-menu">
+      <a href="../download/Equinox-Setup.exe">From this site<small>mirror <span id="dl-ver"></span></small></a>
+      <a href="https://github.com/Ozzvin/equinox/releases/latest">From GitHub<small>if GitHub is reachable</small></a>
+    </div>
+  </details>
   <div class="note">Windows 10 and 11 · free · MIT license</div>
 </section>
 
@@ -46,10 +52,11 @@
 
 <h2 id="install">Install</h2>
 <table>
-  <tr><td><code>Equinox-Setup-…exe</code></td><td>Installer. Installs for the current user, no administrator rights needed.</td></tr>
-  <tr><td><code>Equinox-pc-…zip</code></td><td>Portable version: window and tray, no installation.</td></tr>
-  <tr><td><code>Equinox-server-…zip</code></td><td>Windowless version: the interface opens in a browser.</td></tr>
+  <tr><td><code>Equinox-Setup-…exe</code></td><td>Installer. Installs for the current user, no administrator rights needed.</td><td class="dl-links"><a href="../download/Equinox-Setup.exe">site</a> · <a href="https://github.com/Ozzvin/equinox/releases/latest">GitHub</a></td></tr>
+  <tr><td><code>Equinox-pc-…zip</code></td><td>Portable version: window and tray, no installation.</td><td class="dl-links"><a href="../download/Equinox-pc.zip">site</a> · <a href="https://github.com/Ozzvin/equinox/releases/latest">GitHub</a></td></tr>
+  <tr><td><code>Equinox-server-…zip</code></td><td>Windowless version: the interface opens in a browser.</td><td class="dl-links"><a href="../download/Equinox-server.zip">site</a> · <a href="https://github.com/Ozzvin/equinox/releases/latest">GitHub</a></td></tr>
 </table>
+<p class="note"><a href="../download/SHA256SUMS.txt">Checksums (SHA-256)</a></p>
 <p class="note">Requires Microsoft Edge WebView2 Runtime (included in Windows 11 and most Windows 10). Builds are unsigned, so SmartScreen may warn on first run: "More info" → "Run anyway".</p>
 
 <footer>
@@ -73,6 +80,9 @@
   document.querySelectorAll("[data-theme]").forEach(function (b) { b.onclick = function () { theme = b.dataset.theme; show(); }; });
   document.querySelectorAll("[data-density]").forEach(function (b) { b.onclick = function () { density = b.dataset.density; show(); }; });
   show();
+  fetch(base + "../download/version.txt").then(function (r) { return r.ok ? r.text() : ""; }).then(function (v) {
+    var el = document.getElementById("dl-ver"); if (el && /^v[0-9.]+$/.test(v.trim())) el.textContent = "· " + v.trim();
+  }).catch(function () {});
 })();
 </script>
 </body>

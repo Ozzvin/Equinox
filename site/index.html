@@ -19,7 +19,13 @@
 <section class="hero">
   <h1>Торрент-клиент для Windows: лёгкий, быстрый, без настройки</h1>
   <p>Скачали, запустили, качаете. Никаких ключей, аккаунтов и серверов. Окно, трей и автообновление, как у обычной программы.</p>
-  <a class="btn" href="https://github.com/Ozzvin/equinox/releases/latest">Скачать для Windows</a>
+  <details class="dl">
+    <summary class="btn">Скачать для Windows</summary>
+    <div class="dl-menu">
+      <a href="download/Equinox-Setup.exe">С этого сайта<small>зеркало <span id="dl-ver"></span></small></a>
+      <a href="https://github.com/Ozzvin/equinox/releases/latest">С GitHub<small>если GitHub доступен</small></a>
+    </div>
+  </details>
   <div class="note">Windows 10 и 11 · бесплатно · лицензия MIT</div>
 </section>
 
@@ -46,10 +52,11 @@
 
 <h2 id="install">Установка</h2>
 <table>
-  <tr><td><code>Equinox-Setup-…exe</code></td><td>Установщик. Ставится для текущего пользователя, права администратора не нужны.</td></tr>
-  <tr><td><code>Equinox-pc-…zip</code></td><td>Портативная версия: окно и трей, установка не нужна.</td></tr>
-  <tr><td><code>Equinox-server-…zip</code></td><td>Версия без окна: интерфейс открывается в браузере.</td></tr>
+  <tr><td><code>Equinox-Setup-…exe</code></td><td>Установщик. Ставится для текущего пользователя, права администратора не нужны.</td><td class="dl-links"><a href="download/Equinox-Setup.exe">сайт</a> · <a href="https://github.com/Ozzvin/equinox/releases/latest">GitHub</a></td></tr>
+  <tr><td><code>Equinox-pc-…zip</code></td><td>Портативная версия: окно и трей, установка не нужна.</td><td class="dl-links"><a href="download/Equinox-pc.zip">сайт</a> · <a href="https://github.com/Ozzvin/equinox/releases/latest">GitHub</a></td></tr>
+  <tr><td><code>Equinox-server-…zip</code></td><td>Версия без окна: интерфейс открывается в браузере.</td><td class="dl-links"><a href="download/Equinox-server.zip">сайт</a> · <a href="https://github.com/Ozzvin/equinox/releases/latest">GitHub</a></td></tr>
 </table>
+<p class="note"><a href="download/SHA256SUMS.txt">Контрольные суммы (SHA-256)</a></p>
 <p class="note">Нужен Microsoft Edge WebView2 Runtime (есть в Windows 11 и в большинстве Windows 10). Сборки не подписаны, поэтому SmartScreen может предупредить при первом запуске: «Подробнее» → «Выполнить в любом случае».</p>
 
 <footer>
@@ -73,6 +80,9 @@
   document.querySelectorAll("[data-theme]").forEach(function (b) { b.onclick = function () { theme = b.dataset.theme; show(); }; });
   document.querySelectorAll("[data-density]").forEach(function (b) { b.onclick = function () { density = b.dataset.density; show(); }; });
   show();
+  fetch(base + "../download/version.txt").then(function (r) { return r.ok ? r.text() : ""; }).then(function (v) {
+    var el = document.getElementById("dl-ver"); if (el && /^v[0-9.]+$/.test(v.trim())) el.textContent = "· " + v.trim();
+  }).catch(function () {});
 })();
 </script>
 </body>
