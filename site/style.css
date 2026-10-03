@@ -33,11 +33,13 @@ footer a{color:var(--muted)}
 .ctrl button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 12px;cursor:pointer}
 .ctrl button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
 .ctrl+.shot{margin-top:14px}
-.dl{display:inline-block}
-.dl summary{list-style:none;cursor:pointer}
+.dl summary{list-style:none;cursor:pointer;display:inline-block;user-select:none}
 .dl summary::-webkit-details-marker{display:none}
-.dl-menu{display:flex;flex-direction:column;gap:8px;margin-top:10px;min-width:260px}
-.dl-menu a{display:block;text-align:left;padding:10px 16px;border:1px solid var(--line);background:var(--card);border-radius:8px;text-decoration:none}
-.dl-menu a:hover{border-color:var(--accent)}
-.dl-menu small{display:block;color:var(--muted);font-size:13px}
+.dl summary::marker{content:""}
+.dl-menu{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
+.dl-menu a{display:flex;flex-direction:column;align-items:center;min-width:210px;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--fg)}
+.dl-menu a:first-child{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.dl-menu a:hover{filter:brightness(1.07)}
+.dl-menu a:not(:first-child):hover{border-color:var(--accent);filter:none}
+.dl-menu small{font-weight:400;font-size:13px;opacity:.8}
 .dl-links{white-space:nowrap}
