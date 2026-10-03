@@ -291,6 +291,7 @@ window.__i18nEn = [
   [", без libtorrent.", ", no libtorrent."],
   ["Сборка", "Build"],
   ["Движок", "Engine"],
+  ["Сайт проекта", "Project website"],
   ["Репозиторий на GitHub", "Repository on GitHub"],
   ["Сообщить о проблеме", "Report a problem"],
   ["Лицензия MIT", "MIT license"],
