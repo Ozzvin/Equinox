@@ -305,7 +305,9 @@ type FileStatus struct {
 	Size     int64   `json:"size"`
 	Done     int64   `json:"done"`
 	Progress float64 `json:"progress"`
-	Priority string  `json:"priority"` // skip | normal | high
+	Priority string  `json:"priority"`        // skip | normal | high
+	Check    float64 `json:"check,omitempty"` // while the torrent is checked: the share of the file already checked (0 is sent as missing)
+	Checking bool    `json:"checking,omitempty"`
 }
 
 // Files lists the files of a torrent whose metadata is known.
@@ -319,6 +321,7 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 	}
 	fs := t.Files()
 	prios := m.filePrios(hash)
+	checked := m.fileChecked(t, hash)
 	out := make([]FileStatus, len(fs))
 	// the engine reports the path inside the torrent; a torrent made from a folder keeps that folder as its root
 	root := ""
@@ -341,6 +344,9 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 			name = "low"
 		}
 		out[i] = FileStatus{Index: i, Path: root + f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
+		if checked != nil {
+			out[i].Checking, out[i].Check = true, checked[i]
+		}
 	}
 	return out, nil
 }

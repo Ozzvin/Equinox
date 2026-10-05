@@ -55,6 +55,12 @@ func (m *Manager) updateChecks(ts []*torrent.Torrent) {
 		if !watch[hash] || t.Info() == nil {
 			continue
 		}
+		m.mu.Lock()
+		_, counted := m.checkPos[hash] // a recheck of ours keeps its own, exact, progress
+		m.mu.Unlock()
+		if counted {
+			continue
+		}
 		c, total := checkingPieces(t)
 		m.mu.Lock()
 		ph := m.phase[hash]
@@ -72,7 +78,65 @@ func (m *Manager) updateChecks(ts []*torrent.Torrent) {
 			}
 		}
 		m.mu.Unlock()
+		m.syncPerm(t, hash) // a check that begins or ends lets downloading stop or go on
 	}
+}
+
+// checkHolds says whether a torrent is being checked now, which stops its downloading. Called with m.mu held.
+func (m *Manager) checkHolds(hash string) bool {
+	if m.checking[hash] {
+		return true
+	}
+	_, ok := m.checkProg[hash]
+	return ok
+}
+
+// fileChecked is the share of each file of t already checked while it is being checked, nil when it is not: for a
+// recheck of ours what lies before its place, for the engine's own check the pieces no longer waiting for a hash.
+func (m *Manager) fileChecked(t *torrent.Torrent, hash string) []float64 {
+	m.mu.Lock()
+	pos, ours := m.checkPos[hash]
+	_, checking := m.checkProg[hash]
+	m.mu.Unlock()
+	if !ours && !checking {
+		return nil
+	}
+	fs := t.Files()
+	out := make([]float64, len(fs))
+	if ours {
+		upto := checkedBytes(t, pos)
+		for i, f := range fs {
+			if f.Length() > 0 {
+				out[i] = float64(min(max(upto-f.Offset(), 0), f.Length())) / float64(f.Length())
+			} else {
+				out[i] = 1
+			}
+		}
+		return out
+	}
+	pending := make([]bool, t.NumPieces())
+	at := 0
+	for _, run := range t.PieceStateRuns() {
+		for k := 0; k < run.Length && at < len(pending); k++ {
+			pending[at] = run.Hashing || run.QueuedForHash
+			at++
+		}
+	}
+	for i, f := range fs {
+		b, e := f.BeginPieceIndex(), f.EndPieceIndex()
+		if e <= b {
+			out[i] = 1
+			continue
+		}
+		left := 0
+		for p := b; p < e && p < len(pending); p++ {
+			if pending[p] {
+				left++
+			}
+		}
+		out[i] = 1 - float64(left)/float64(e-b)
+	}
+	return out
 }
 
 func (m *Manager) forgetChecks(hash string) {
