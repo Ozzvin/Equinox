@@ -236,7 +236,12 @@ func (m *Manager) Recheck(hash string) error {
 	if busy {
 		return ErrBusy
 	}
+	return m.startRecheck(t, hash, 0)
+}
 
+// startRecheck runs a recheck from piece start on, in the background, behind the limit on simultaneous checks.
+// While it runs the torrent does not download (see syncPerm): what it would fetch could be thrown away by the check.
+func (m *Manager) startRecheck(t *torrent.Torrent, hash string, start int) error {
 	go func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -254,9 +259,11 @@ func (m *Manager) Recheck(hash string) error {
 		m.mu.Lock()
 		m.checking[hash] = true
 		m.mu.Unlock()
+		m.syncPerm(t, hash) // no downloading while the check runs
 		defer func() {
 			m.mu.Lock()
 			delete(m.checking, hash)
+			delete(m.checkPos, hash)
 			// The loop only refreshes progress of torrents it watches, which this one no
 			// longer is: without this a last percentage below 100 could stay on the status.
 			if m.phase[hash] == nil {
@@ -264,8 +271,9 @@ func (m *Manager) Recheck(hash string) error {
 			}
 			m.mu.Unlock()
 			release()
+			m.syncPerm(t, hash)
 		}()
-		_ = t.VerifyDataContext(ctx)
+		_ = m.verifyFrom(ctx, t, hash, start)
 	}()
 	return nil
 }
