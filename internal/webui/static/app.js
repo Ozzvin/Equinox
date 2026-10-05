@@ -1952,8 +1952,6 @@
     $("ad-remove").disabled = adSel < 0 || adBusy;
     $("ad-go").disabled = n === 0 || adBusy;
     $("ad-go").textContent = n > 1 ? `Добавить (${n})` : "Добавить";
-    for (const b of document.querySelectorAll("#ad-tabs button")) b.setAttribute("aria-selected", b.dataset.tab === adTab);
-    $("ad-files").hidden = adTab !== "files"; $("ad-opts").hidden = adTab !== "opts";
     renderAdFiles(); fillOpts();
     const err = adCur() && adCur().error;
     $("ad-err").hidden = !err; if (err) $("ad-err").textContent = `${adCur().name}: ${err}`;
@@ -1979,7 +1977,7 @@
     const box = $("ad-files"), e = adCur();
     if (!e) { box.innerHTML = '<p class="note">Выберите раздачу из списка.</p>'; return; }
     if (e.kind !== "file") {
-      box.innerHTML = '<p class="note">Список файлов появится только после получения метаданных. Чтобы выбрать файлы до начала загрузки, отметьте на вкладке «Параметры» «Добавить в паузе» и выберите файлы в панели подробностей.</p>';
+      box.innerHTML = '<p class="note">Список файлов появится после получения метаданных. Чтобы выбрать файлы до начала загрузки, отметьте справа «Добавить в паузе» и выберите файлы в панели подробностей.</p>';
       return;
     }
     const root = fileTree(e);
@@ -2015,13 +2013,16 @@
   function fillOpts() {
     const e = adCur(), on = !!e;
     for (const id of Object.values(AO)) $(id).disabled = !on;
-    for (const b of ["ao-reset", "ao-all", "ao-save-defaults"]) $(b).disabled = !on;
+    for (const b of ["ao-reset", "ao-save-defaults"]) $(b).disabled = !on;
+    $("ao-all").disabled = !on || adItems.length < 2;
     if (!e) return;
     const o = e.opts;
     $(AO.save).value = o.savePath; $(AO.moveOn).checked = o.moveDoneOn; $(AO.move).value = o.moveDone; $(AO.move).disabled = !o.moveDoneOn;
     document.querySelector('[data-pick="ao-movedone"]').disabled = !o.moveDoneOn;
     $(AO.label).value = o.label; $(AO.paused).checked = o.paused; $(AO.edges).checked = o.edgePieces; $(AO.seq).checked = o.sequential;
     $(AO.skip).checked = o.skipCheck; $(AO.prealloc).checked = o.preallocate; $(AO.conns).value = o.maxConns;
+    const d = optDefaults(); // something set under "Ещё" that differs from the defaults is not hidden
+    if (o.skipCheck !== d.skipCheck || o.preallocate !== d.preallocate || Number(o.maxConns) !== 0) setAoMore(true, false);
     const lf = addInfo && addInfo.labels && addInfo.labels[o.label.trim()];
     $(AO.save).placeholder = lf ? `папка метки: ${lf}` : `по умолчанию: ${addInfo ? addInfo.dataDir : ""}`;
     $(AO.move).placeholder = addInfo && addInfo.moveCompletedDir ? `общая настройка: ${addInfo.moveCompletedDir}` : "папка для завершённых";
@@ -2037,10 +2038,20 @@
     $(AO.save).placeholder = lf ? `папка метки: ${lf}` : `по умолчанию: ${addInfo ? addInfo.dataDir : ""}`;
   }
 
+  // "Ещё": the options people rarely change, folded under a link; the choice is remembered
+  function setAoMore(open, remember) {
+    $("ao-extra").hidden = !open;
+    $("ao-more").setAttribute("aria-expanded", String(open));
+    $("ao-more").querySelector(".ao-arr").textContent = open ? "▾" : "▸";
+    $("ao-more-t").textContent = open ? "Меньше" : "Ещё";
+    if (remember) try { localStorage.setItem("adMore", open ? "1" : ""); } catch (_) {}
+  }
+  try { setAoMore(localStorage.getItem("adMore") === "1", false); } catch (_) { setAoMore(false, false); }
+  $("ao-more").onclick = () => setAoMore($("ao-extra").hidden, true);
+
   // -- events
   $("btn-add").onclick = () => openAdd();
   $("ad-list").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { adSel = Number(r.dataset.i); renderAdd(); } });
-  $("ad-tabs").addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) { adTab = b.dataset.tab; renderAdd(); } });
   $("ad-file").onclick = () => $("ad-fileinput").click();
   $("ad-fileinput").addEventListener("change", async (e) => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) await stageFiles(fl); });
   $("ad-remove").onclick = () => {
