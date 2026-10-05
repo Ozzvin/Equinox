@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"net"
 	"sort"
 	"time"
 
@@ -268,4 +269,29 @@ func (m *Manager) Recheck(hash string) error {
 		_ = t.VerifyDataContext(ctx)
 	}()
 	return nil
+}
+
+// ConnCounts sums up the connections of all torrents, for the status bar: peers is the number of different peers
+// connected now (one peer in two torrents counts once, told apart by the address without the port, as a peer's
+// port differs between its connections), conns the connections open now plus those still being made.
+func (m *Manager) ConnCounts() (peers, conns int) {
+	m.mu.Lock()
+	ts := make([]*torrent.Torrent, 0, len(m.torrents))
+	for _, t := range m.torrents {
+		ts = append(ts, t)
+	}
+	m.mu.Unlock()
+	seen := map[string]struct{}{}
+	for _, t := range ts {
+		st := t.Stats()
+		conns += st.ActivePeers + st.HalfOpenPeers
+		for _, pc := range t.PeerConns() {
+			host := pc.RemoteAddr.String()
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				host = h
+			}
+			seen[host] = struct{}{}
+		}
+	}
+	return len(seen), conns
 }

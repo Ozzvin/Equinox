@@ -1100,8 +1100,9 @@ func (s *Server) portRefresh(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 	down, up, ratio := s.m.GlobalRatio()
+	peers, conns := s.m.ConnCounts()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"downloaded": down, "uploaded": up, "ratio": ratio,
+		"downloaded": down, "uploaded": up, "ratio": ratio, "peers": peers, "conns": conns,
 		"altSpeed": s.cfg.Get().AltSpeedActive,
 	})
 }
