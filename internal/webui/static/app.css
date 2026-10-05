@@ -911,3 +911,10 @@ html[data-window="add"] .ad-side { overflow-y: auto; }
 #dlg-add .ad-side .pick .btn.icon { width: 28px; height: 28px; }
 #dlg-add .tree-tools .btn { height: 24px; }
 html[data-window="add"] dialog#dlg-add.fitting, html[data-window="add"] dialog#dlg-add.fitting .ad-side, html[data-window="add"] dialog#dlg-add.fitting .ad-list { overflow: hidden; }
+/* statistics: the period above the numbers */
+.k-periods { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; }
+.k-periods button { height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.k-periods button:hover { background: var(--hover); }
+.k-periods button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.k-periods button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.k-note { margin: 8px 0 0; }
