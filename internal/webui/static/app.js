@@ -1955,6 +1955,29 @@
     renderAdFiles(); fillOpts();
     const err = adCur() && adCur().error;
     $("ad-err").hidden = !err; if (err) $("ad-err").textContent = `${adCur().name}: ${err}`;
+    fitAddWindow();
+  }
+  // The window made for adding is as high as the dialog needs: low with "Ещё" folded, higher with it open. The page
+  // works out the height (the parts above the files and options, the taller of the options and a few rows of files,
+  // the buttons below) and the program sets the window to it.
+  let fitTimer = 0;
+  function fitAddWindow() {
+    if (!ADD_WINDOW || typeof window.resizeAddWindow !== "function") return;
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(() => {
+      const d = $("dlg-add"), split = d.querySelector(".ad-split"), foot = d.querySelector(":scope > .row-end");
+      if (!d.open || !split || !foot) return;
+      const cs = getComputedStyle(d);
+      const above = split.getBoundingClientRect().top - d.getBoundingClientRect().top;
+      const err = $("ad-err").hidden ? 0 : $("ad-err").getBoundingClientRect().height + 8;
+      // the options' own height (the column itself is stretched to the window, so its last item is measured), or
+      // room for a few rows of files
+      const side = $("ad-opts"), kids = [...side.children].filter((k) => k.offsetParent !== null);
+      const last = kids[kids.length - 1];
+      const body = Math.max(last ? last.getBoundingClientRect().bottom - side.getBoundingClientRect().top : 0, 220);
+      const need = above + body + err + foot.getBoundingClientRect().height + parseFloat(cs.paddingBottom) + 14;
+      window.resizeAddWindow(Math.ceil(need * (window.devicePixelRatio || 1)));
+    }, 30);
   }
 
   // -- files tab: a tree with check boxes
@@ -2045,6 +2068,7 @@
     $("ao-more").querySelector(".ao-arr").textContent = open ? "▾" : "▸";
     $("ao-more-t").textContent = open ? "Меньше" : "Ещё";
     if (remember) try { localStorage.setItem("adMore", open ? "1" : ""); } catch (_) {}
+    fitAddWindow();
   }
   try { setAoMore(localStorage.getItem("adMore") === "1", false); } catch (_) { setAoMore(false, false); }
   $("ao-more").onclick = () => setAoMore($("ao-extra").hidden, true);
