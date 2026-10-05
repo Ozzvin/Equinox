@@ -1960,9 +1960,15 @@
   // The window made for adding is as high as the dialog needs: low with "Ещё" folded, higher with it open. The page
   // works out the height (the parts above the files and options, the taller of the options and a few rows of files,
   // the buttons below) and the program sets the window to it.
-  let fitTimer = 0;
+  // Until the window has its new height, the content may be taller than the window for a moment: no scroll bar is
+  // shown in that moment (it would flash up and vanish), the class "fitting" hides it until the window is resized.
+  let fitTimer = 0, fitDone = 0;
+  const fitEnd = () => { clearTimeout(fitDone); $("dlg-add").classList.remove("fitting"); };
+  addEventListener("resize", () => { if ($("dlg-add").classList.contains("fitting")) { clearTimeout(fitDone); fitDone = setTimeout(fitEnd, 60); } });
   function fitAddWindow() {
     if (!ADD_WINDOW || typeof window.resizeAddWindow !== "function") return;
+    $("dlg-add").classList.add("fitting"); // at once, before the next paint
+    clearTimeout(fitDone); fitDone = setTimeout(fitEnd, 400); // the height did not change, or the window did not answer
     clearTimeout(fitTimer);
     fitTimer = setTimeout(() => {
       const d = $("dlg-add"), split = d.querySelector(".ad-split"), foot = d.querySelector(":scope > .row-end");
