@@ -393,7 +393,7 @@
 
     $("s-down").textContent = speed(torrents.reduce((a, t) => a + t.downRate, 0)).replace("—", speedZero());
     $("s-up").textContent = speed(torrents.reduce((a, t) => a + t.upRate, 0)).replace("—", speedZero());
-    if (stats) { $("s-ratio").textContent = stats.ratio.toFixed(2); $("s-peers").textContent = stats.peers ?? 0; $("s-conns").textContent = stats.conns ?? 0; }
+    if (stats) $("s-ratio").textContent = stats.ratio.toFixed(2);
     renderButtons();
     renderTurtle();
     renderPort();
