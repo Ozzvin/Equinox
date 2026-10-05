@@ -75,6 +75,8 @@ type Manager struct {
 	seenDown, seenUp map[metainfo.Hash]int64
 	rates            map[metainfo.Hash][2]int64  // bytes/s: down, up (averaged over a few seconds)
 	activeAt         map[metainfo.Hash]time.Time // when each torrent last moved data
+	session          Traffic                     // payload moved since the program started (see traffic.go)
+	started          time.Time                   // when it started
 	lowMu            sync.Mutex
 	lowOn            map[metainfo.Hash]bool // per torrent: were the low-priority files allowed to download at the last apply
 	peerMu           sync.Mutex             // guards the three peer* fields below; the peers tab asks for every connection in turn
@@ -155,6 +157,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		seedQueued: map[metainfo.Hash]int{},
 		seedHeld:   map[metainfo.Hash]bool{},
 		activeAt:   map[metainfo.Hash]time.Time{},
+		started:    time.Now(),
 		lowOn:      map[metainfo.Hash]bool{},
 		peerRates:  map[string]*peerRate{},
 		peerSeen:   map[string]time.Time{},
