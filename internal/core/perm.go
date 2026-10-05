@@ -34,7 +34,7 @@ func (m *Manager) syncPerm(t *torrent.Torrent, hash string) {
 		prev = permState{true, true} // what a freshly added torrent may do
 	}
 	want := permState{
-		down: !rec.Paused && m.queued[h] == 0,
+		down: !rec.Paused && m.queued[h] == 0 && !m.checkHolds(hash), // nothing is downloaded while the files are checked
 		up:   !rec.Paused && m.seedQueued[h] == 0,
 	}
 	m.perm[h] = want

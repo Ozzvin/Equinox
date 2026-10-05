@@ -159,7 +159,8 @@
   // The progress bar carries the status text and the percentage inside it. The text is drawn twice,
   // dark over the empty part and light over the filled part, so it reads wherever the fill ends.
   function progressBar(t) {
-    const st = stateOf(t), pct = t.progress * 100, kind = t.error ? "bad" : barState(t);
+    // while the files are checked the bar follows the check (the share of the torrent's size checked), not what is downloaded
+    const st = stateOf(t), pct = (t.checking ? t.checkProgress || 0 : t.progress) * 100, kind = t.error ? "bad" : barState(t);
     let text = st.text;
     if (t.progress < 1 && !t.error && !t.checkQueued && !text.includes("%")) text += ` ${pct.toFixed(1)}%`;
     const label = esc(text);
@@ -548,9 +549,9 @@
       <button class="btn icon" data-play="${f.index}" title="Скопировать ссылку для плеера (VLC, mpv)"><svg class="i"><use href="#i-play"/></svg></button></div>`;
   }
   // Mirrors peerBar(): blue once everything is there (a seed), green while still downloading.
-  function setFileBar(bar, pct) {
-    const text = pct >= 100 ? "100%" : pct.toFixed(1) + "%";
-    bar.className = "pbar " + (pct >= 100 ? "seed" : "down");
+  function setFileBar(bar, pct, checking) {
+    const text = checking ? `${L("Проверка", "Checking")} ${Math.floor(pct)}%` : pct >= 100 ? "100%" : pct.toFixed(1) + "%";
+    bar.className = "pbar " + (checking ? "check" : pct >= 100 ? "seed" : "down");
     bar.title = text;
     bar.querySelector(".fill").style.width = pct.toFixed(1) + "%";
     for (const lb of bar.querySelectorAll(".lb")) lb.textContent = text;
@@ -624,16 +625,17 @@
     for (const f of files) {
       const row = box.querySelector(`.file[data-i="${f.index}"]`); if (!row) continue;
       row.classList.toggle("skip", f.priority === "skip");
-      setFileBar(row.querySelector(".pbar"), f.progress * 100);
+      setFileBar(row.querySelector(".pbar"), (f.checking ? f.check || 0 : f.progress) * 100, !!f.checking);
       const sel = row.querySelector("select");
       if (document.activeElement !== sel) sel.value = f.priority;
     }
     for (const [path, idxs] of dirIdx) {
       const row = box.querySelector(`.file.dir[data-dir="${CSS.escape(path)}"]`); if (!row) continue;
       const all = idxs.map((i) => byIdx.get(i)).filter(Boolean);
-      const size = all.reduce((a, f) => a + f.size, 0), done = all.reduce((a, f) => a + f.size * f.progress, 0);
+      const checking = all.some((f) => f.checking);
+      const size = all.reduce((a, f) => a + f.size, 0), done = all.reduce((a, f) => a + f.size * (checking ? f.check || 0 : f.progress), 0);
       row.classList.toggle("skip", all.length > 0 && all.every((f) => f.priority === "skip"));
-      setFileBar(row.querySelector(".pbar"), size ? (done / size) * 100 : 0);
+      setFileBar(row.querySelector(".pbar"), size ? (done / size) * 100 : 0, checking);
       const sel = row.querySelector("select"), same = all.length && all.every((f) => f.priority === all[0].priority);
       if (document.activeElement !== sel) sel.value = same ? all[0].priority : "";
     }
