@@ -654,9 +654,14 @@ func (m *Manager) loop(ctx context.Context) {
 
 		rates := map[metainfo.Hash][2]int64{}
 		moved := map[metainfo.Hash]bool{}
+		var tickDown, tickUp int64 // moved by all torrents since the last tick, for the statistics by period
 		for _, t := range ts {
 			h := t.InfoHash()
 			d, u := counters(t)
+			// the engine's counters of a torrent start at zero when it is added to it, so a torrent seen for the first
+			// time counts from zero too
+			tickDown += max(d-lastDown[h], 0)
+			tickUp += max(u-lastUp[h], 0)
 			w := hist[h]
 			if w == nil {
 				w = &window{}
@@ -682,6 +687,7 @@ func (m *Manager) loop(ctx context.Context) {
 			}
 		}
 		now := time.Now()
+		m.addTraffic(now, tickDown, tickUp)
 		m.mu.Lock()
 		m.rates = rates
 		for h, ok := range moved {

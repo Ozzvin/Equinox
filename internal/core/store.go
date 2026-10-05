@@ -63,6 +63,8 @@ type state struct {
 	// Totals of torrents that were removed, so the global ratio survives removals.
 	RemovedDownloaded int64 `json:"removedDownloaded"`
 	RemovedUploaded   int64 `json:"removedUploaded"`
+	// The traffic of all torrents by the hour, for the statistics by period (see traffic.go).
+	Traffic []trafficHour `json:"traffic,omitempty"`
 }
 
 type stateStore struct {

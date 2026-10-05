@@ -1544,11 +1544,31 @@
   }
 
   // ---------- statistics ----------
+  // the period the statistics show: the session, the last day, week or month, or all time (remembered)
+  let kPeriod = "all";
+  try { kPeriod = localStorage.getItem("statsPeriod") || "all"; } catch (_) {}
+  $("k-periods").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-period]"); if (!b) return;
+    kPeriod = b.dataset.period; try { localStorage.setItem("statsPeriod", kPeriod); } catch (_) {}
+    renderStats();
+  });
+  const PERIOD_DAYS = { day: 1, week: 7, month: 30 };
   function renderStats() {
-    if (stats) {
-      $("k-down").textContent = bytes(stats.downloaded); $("k-up").textContent = bytes(stats.uploaded);
-      $("k-ratio").textContent = stats.ratio.toFixed(2);
+    for (const b of document.querySelectorAll("#k-periods [data-period]")) b.setAttribute("aria-selected", String(b.dataset.period === kPeriod));
+    const p = stats && stats.periods;
+    let down, up, note = "";
+    if (stats && kPeriod === "all") { down = stats.downloaded; up = stats.uploaded; }
+    else if (p && kPeriod === "session") { down = p.session.down; up = p.session.up; note = `С запуска программы: ${when(p.sessionStart)}`; }
+    else if (p && p[kPeriod]) {
+      down = p[kPeriod].down; up = p[kPeriod].up;
+      const since = p.since && !p.since.startsWith("0001") ? new Date(p.since) : null;
+      if (!since || Date.now() - since.getTime() < PERIOD_DAYS[kPeriod] * 864e5 - 36e5) note = `Учёт по периодам ведётся с ${since ? since.toLocaleString(LOCALE) : "этого запуска"}`;
     }
+    if (down !== undefined) {
+      $("k-down").textContent = bytes(down); $("k-up").textContent = bytes(up);
+      $("k-ratio").textContent = kPeriod === "all" ? stats.ratio.toFixed(2) : down > 0 ? (up / down).toFixed(2) : "—";
+    }
+    $("k-note").hidden = !note; $("k-note").textContent = note;
     $("k-count").textContent = torrents.length;
 
     const top = [...torrents].filter((t) => t.uploaded > 0).sort((a, b) => b.uploaded - a.uploaded).slice(0, 5);

@@ -248,12 +248,20 @@
 <!-- Статистика -->
 <dialog id="dlg-stats" class="wide">
   <div class="dlg-head"><h2>Статистика</h2><button class="btn icon" data-close aria-label="Закрыть"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="k-periods" id="k-periods" role="tablist" aria-label="Период">
+    <button type="button" role="tab" data-period="session" title="С запуска программы">Сессия</button>
+    <button type="button" role="tab" data-period="day" title="Последние 24 часа">День</button>
+    <button type="button" role="tab" data-period="week" title="Последние 7 дней">Неделя</button>
+    <button type="button" role="tab" data-period="month" title="Последние 30 дней">Месяц</button>
+    <button type="button" role="tab" data-period="all">Всё время</button>
+  </div>
   <div class="kpis">
-    <div class="kpi"><span class="muted small">Скачано за всё время</span><b id="k-down">—</b></div>
-    <div class="kpi"><span class="muted small">Отдано за всё время</span><b id="k-up">—</b></div>
-    <div class="kpi"><span class="muted small">Общий рейтинг</span><b id="k-ratio">—</b></div>
+    <div class="kpi"><span class="muted small">Скачано</span><b id="k-down">—</b></div>
+    <div class="kpi"><span class="muted small">Отдано</span><b id="k-up">—</b></div>
+    <div class="kpi"><span class="muted small">Рейтинг</span><b id="k-ratio">—</b></div>
     <div class="kpi"><span class="muted small">Раздач</span><b id="k-count">—</b></div>
   </div>
+  <p class="muted small k-note" id="k-note" hidden></p>
   <div id="k-top-wrap" hidden><strong>Больше всего отдано</strong><div id="k-top"></div></div>
 </dialog>
 
