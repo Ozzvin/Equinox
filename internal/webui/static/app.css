@@ -910,3 +910,4 @@ html[data-window="add"] .ad-side { overflow-y: auto; }
 #dlg-add .ad-side input:not([type=checkbox]) { height: 28px; margin: 0; padding: 0 8px; font-size: 12.5px; }
 #dlg-add .ad-side .pick .btn.icon { width: 28px; height: 28px; }
 #dlg-add .tree-tools .btn { height: 24px; }
+html[data-window="add"] dialog#dlg-add.fitting, html[data-window="add"] dialog#dlg-add.fitting .ad-side, html[data-window="add"] dialog#dlg-add.fitting .ad-list { overflow: hidden; }
