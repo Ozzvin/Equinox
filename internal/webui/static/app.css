@@ -872,3 +872,41 @@ html[data-density="compact"] .file, html[data-density="compact"] .fhead { grid-t
 /* several torrents chosen: the note above the options spans the whole row */
 .opt-multi { grid-column: 1 / -1; margin: 0 0 2px; color: var(--muted); font-size: 12.5px; }
 .opt-multi[hidden] { display: none; }
+/* the "Add torrents" dialog: the files on the left, the options of the chosen torrent on the right, no tabs */
+.ad-buttons { margin: 8px 0; gap: 6px; }
+.ad-split { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 0; min-height: 0; }
+.ad-split .ad-pane { min-height: 0; display: flex; flex-direction: column; }
+.ad-split .ad-pane .tree { flex: 1 1 auto; min-height: 120px; max-height: none; }
+.ad-side { display: flex; flex-direction: column; gap: 5px; margin-left: 10px; padding-left: 10px; border-left: 1px solid var(--line); min-width: 0; }
+.ad-side .ao-l { font-weight: 600; font-size: 12.5px; }
+.ad-side label { margin: 0; }
+.ad-side label.check { align-items: center; font-size: 12.5px; }
+.ad-side label.check input { margin-top: 0; }
+.ad-side .pick { gap: 6px; }
+.ad-side .pick input, .ad-side .ao-inline input { margin: 0; height: 28px; font-size: 12.5px; padding: 0 8px; }
+.ad-side .pick .btn { margin-top: 0; }
+.ad-side .ao-inline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 500; }
+.ad-side .ao-inline > span { flex: 1; }
+.ad-side .ao-inline #ao-label { width: 130px; }
+.ad-side .ao-inline #ao-conns { width: 70px; text-align: right; }
+.ao-more { display: flex; align-items: center; gap: 6px; width: max-content; margin-top: 2px; padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.ao-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.ao-extra { display: flex; flex-direction: column; gap: 5px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.ao-extra[hidden] { display: none; }
+.ao-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.ad-all { margin-right: auto; }
+.ad-all[disabled] { visibility: hidden; }
+.tree-tools { margin: 0 0 6px; }
+.tree-row { min-height: 22px; padding: 0; font-size: 12.5px; }
+dialog.add { width: min(620px, calc(100vw - 32px)); }
+html[data-window="add"] .ad-split { flex: 1 1 auto; }
+html[data-window="add"] .ad-split .ad-pane { overflow: visible; }
+html[data-window="add"] .ad-side { overflow-y: auto; }
+@media (max-width: 560px) { .ad-split { grid-template-columns: 1fr; } .ad-side { margin: 8px 0 0; padding: 8px 0 0; border-left: 0; border-top: 1px solid var(--line); } }
+/* the dialog's own rules win over the general ones for dialogs and narrow windows */
+#dlg-add .ad-buttons .btn span { display: inline; }
+#dlg-add .ad-side label { margin: 0; }
+#dlg-add .ad-side label.check { min-height: 22px; }
+#dlg-add .ad-side input:not([type=checkbox]) { height: 28px; margin: 0; padding: 0 8px; font-size: 12.5px; }
+#dlg-add .ad-side .pick .btn.icon { width: 28px; height: 28px; }
+#dlg-add .tree-tools .btn { height: 24px; }

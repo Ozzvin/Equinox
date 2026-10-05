@@ -37,6 +37,7 @@ var (
 	pCallNextHookEx      = user32.NewProc("CallNextHookEx")
 	pSysParamsInfo       = user32.NewProc("SystemParametersInfoW")
 	pCurrentThreadID     = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetCurrentThreadId")
+	pGetDpiForSystem     = user32.NewProc("GetDpiForSystem")
 )
 
 const (
@@ -89,6 +90,19 @@ func newWebViewOffscreen(opts webview2.WebViewOptions) webview2.WebView {
 		defer pUnhookWindowsHookEx.Call(hook)
 	}
 	return webview2.NewWithOptions(opts)
+}
+
+// dpiScaled turns a size in page pixels into the screen pixels the window is made in (the program is DPI-aware,
+// so at 150 % a window of 660 pixels would show only 440 pixels of the page).
+func dpiScaled(n uint) uint {
+	if pGetDpiForSystem.Find() != nil {
+		return n
+	}
+	dpi, _, _ := pGetDpiForSystem.Call()
+	if dpi < 96 {
+		return n
+	}
+	return n * uint(dpi) / 96
 }
 
 // showCentered puts the window in the middle of the work area of the main screen.
@@ -185,7 +199,8 @@ func runAddWindow(stateDir string) error {
 		// profile's lock file, disk cache, GPU process). This runs as a separate process from the main window, so
 		// there is no other way to keep them apart than a folder of its own.
 		DataPath: filepath.Join(stateDir, "webview-add"), AutoFocus: true,
-		WindowOptions: webview2.WindowOptions{Title: lang.Tr("Добавить раздачу") + " — " + appTitle(), Width: 900, Height: 720},
+		// as big as the dialog needs with "Ещё" open (640 × 680 page pixels plus the frame), on any display scale
+		WindowOptions: webview2.WindowOptions{Title: lang.Tr("Добавить раздачу") + " — " + appTitle(), Width: dpiScaled(660), Height: dpiScaled(720)},
 	})
 	if w == nil {
 		return errors.New("Microsoft Edge WebView2 Runtime was not found")
