@@ -159,44 +159,40 @@
 
   <div class="ad-list" id="ad-list" role="listbox" aria-label="Раздачи, которые будут добавлены"></div>
   <div class="ad-buttons">
-    <button type="button" class="btn" id="ad-file"><svg class="i"><use href="#i-newfile"/></svg><span>Файлы .torrent…</span></button>
-    <button type="button" class="btn" id="ad-links" title="Magnet-ссылки, infohash и ссылки на .torrent"><svg class="i"><use href="#i-tag"/></svg><span>Ссылки…</span></button>
-    <button type="button" class="btn" id="ad-remove" disabled>Убрать из списка</button>
+    <button type="button" class="btn small" id="ad-file"><svg class="i"><use href="#i-plus"/></svg><span>Файл…</span></button>
+    <button type="button" class="btn small" id="ad-links" title="Magnet-ссылки, infohash и ссылки на .torrent"><svg class="i"><use href="#i-tag"/></svg><span>Ссылка…</span></button>
+    <button type="button" class="btn small" id="ad-remove" disabled>Убрать</button>
     <input type="file" id="ad-fileinput" accept=".torrent,application/x-bittorrent" multiple hidden>
   </div>
 
-  <div class="tabs ad-tabs" id="ad-tabs" role="tablist">
-    <button type="button" role="tab" data-tab="files" aria-selected="true">Файлы</button>
-    <button type="button" role="tab" data-tab="opts" aria-selected="false">Параметры</button>
-  </div>
-
-  <div id="ad-files" class="ad-pane"></div>
-
-  <div id="ad-opts" class="ad-pane" hidden>
-    <label>Папка загрузки
-      <span class="pick"><input id="ao-save" autocomplete="off"><button type="button" class="btn small" data-pick="ao-save">Обзор…</button></span>
-    </label>
-    <label class="check"><input type="checkbox" id="ao-movedone-on"><span>Переместить завершённую раздачу в:</span></label>
-    <span class="pick"><input id="ao-movedone" autocomplete="off" aria-label="Папка для завершённых"><button type="button" class="btn small" data-pick="ao-movedone">Обзор…</button></span>
-    <label>Метка<input id="ao-label" list="lb-list" maxlength="40" placeholder="например, Фильмы" autocomplete="off"></label>
-    <div class="checks">
+  <div class="ad-split">
+    <div id="ad-files" class="ad-pane"></div>
+    <div id="ad-opts" class="ad-side">
+      <span class="ao-l">Папка загрузки</span>
+      <span class="pick"><input id="ao-save" autocomplete="off" aria-label="Папка загрузки"><button type="button" class="btn icon small" data-pick="ao-save" title="Обзор…" aria-label="Обзор…"><svg class="i"><use href="#i-folder"/></svg></button></span>
+      <label class="check"><input type="checkbox" id="ao-movedone-on"><span>Переместить после завершения</span></label>
+      <span class="pick"><input id="ao-movedone" autocomplete="off" aria-label="Папка для завершённых"><button type="button" class="btn icon small" data-pick="ao-movedone" title="Обзор…" aria-label="Обзор…"><svg class="i"><use href="#i-folder"/></svg></button></span>
+      <label class="ao-inline"><span>Метка</span><input id="ao-label" list="lb-list" maxlength="40" placeholder="без метки" autocomplete="off"></label>
       <label class="check"><input type="checkbox" id="ao-paused"><span>Добавить в паузе</span></label>
-      <label class="check"><input type="checkbox" id="ao-edges"><span>Приоритет первым и последним частям</span></label>
       <label class="check"><input type="checkbox" id="ao-seq"><span>Последовательная загрузка</span></label>
-      <label class="check"><input type="checkbox" id="ao-skip"><span>Не проверять локальные файлы<br><span class="muted small">Файлы, уже лежащие в папке, считаются целыми без сверки хэшей</span></span></label>
-      <label class="check"><input type="checkbox" id="ao-prealloc"><span>Заранее выделить место на диске</span></label>
-    </div>
-    <label>Подключений (0 — как в настройках)<input type="number" min="0" max="1000" id="ao-conns"></label>
-    <p class="muted small">Скорость для отдельной раздачи ограничить нельзя (движок не умеет): используйте общий лимит и режим «черепаха».</p>
-    <div class="row-end ao-buttons">
-      <button type="button" class="btn small" id="ao-reset" title="Вернуть параметры этой раздачи к значениям по умолчанию">Сбросить</button>
-      <button type="button" class="btn small" id="ao-all" title="Скопировать параметры этой раздачи всем остальным в списке">Применить ко всем</button>
-      <button type="button" class="btn small" id="ao-save-defaults" title="Запомнить эти значения для следующих добавлений">Сохранить как умолчание</button>
+      <label class="check"><input type="checkbox" id="ao-edges"><span>Первые и последние части</span></label>
+      <button type="button" class="ao-more" id="ao-more" aria-expanded="false" aria-controls="ao-extra"><span class="ao-arr">▸</span><span id="ao-more-t">Ещё</span></button>
+      <div class="ao-extra" id="ao-extra" hidden>
+        <label class="check" title="Файлы, уже лежащие в папке, считаются целыми без сверки хэшей"><input type="checkbox" id="ao-skip"><span>Не проверять файлы на диске</span></label>
+        <label class="check"><input type="checkbox" id="ao-prealloc"><span>Выделить место заранее</span></label>
+        <label class="ao-inline" title="0 — как в настройках программы"><span>Подключений</span><input type="number" min="0" max="1000" id="ao-conns"></label>
+        <span class="muted small">0 — как в настройках программы</span>
+        <div class="ao-buttons">
+          <button type="button" class="btn small" id="ao-reset" title="Вернуть параметры этой раздачи к значениям по умолчанию">Сбросить</button>
+          <button type="button" class="btn small" id="ao-save-defaults" title="Запомнить эти значения для следующих добавлений">Сохранить как умолчание</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <p class="err" id="ad-err" hidden></p>
   <div class="row-end">
+    <button type="button" class="btn ad-all" id="ao-all" title="Скопировать параметры выбранной раздачи всем остальным в списке">Применить ко всем</button>
     <button type="button" class="btn" data-close id="ad-cancel">Отмена</button>
     <button type="button" class="btn primary" id="ad-go" disabled>Добавить</button>
   </div>
