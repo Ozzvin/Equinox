@@ -38,6 +38,7 @@ var (
 	pSysParamsInfo       = user32.NewProc("SystemParametersInfoW")
 	pCurrentThreadID     = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetCurrentThreadId")
 	pGetDpiForSystem     = user32.NewProc("GetDpiForSystem")
+	pGetClientRect       = user32.NewProc("GetClientRect")
 )
 
 const (
@@ -90,6 +91,30 @@ func newWebViewOffscreen(opts webview2.WebViewOptions) webview2.WebView {
 		defer pUnhookWindowsHookEx.Call(hook)
 	}
 	return webview2.NewWithOptions(opts)
+}
+
+// fitWindowHeight makes the page area of a window clientH pixels high, keeping its left and top edges, moved up
+// if it would end below the screen's work area and cut to that area's height.
+func fitWindowHeight(hwnd uintptr, clientH int32) {
+	var wr, cr winRect
+	pGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&wr)))
+	pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&cr)))
+	h := clientH + (wr.Bottom - wr.Top) - (cr.Bottom - cr.Top) // plus the title bar and the frame
+	mon, _, _ := pMonitorFrom.Call(hwnd, 2)                    // MONITOR_DEFAULTTONEAREST
+	mi := monitorInfo{Size: uint32(unsafe.Sizeof(monitorInfo{}))}
+	y := wr.Top
+	if r, _, _ := pMonitorInfo.Call(mon, uintptr(unsafe.Pointer(&mi))); r != 0 {
+		wa := mi.Work
+		h = min(h, wa.Bottom-wa.Top)
+		if y+h > wa.Bottom {
+			y = wa.Bottom - h
+		}
+		y = max(y, wa.Top)
+	}
+	if h == wr.Bottom-wr.Top && y == wr.Top {
+		return
+	}
+	pSetWindowPos.Call(hwnd, 0, uintptr(wr.Left), uintptr(y), uintptr(wr.Right-wr.Left), uintptr(h), swpNoZOrder|swpNoActivate)
 }
 
 // dpiScaled turns a size in page pixels into the screen pixels the window is made in (the program is DPI-aware,
@@ -227,6 +252,14 @@ func runAddWindow(stateDir string) error {
 	_ = w.Bind("addWindowReady", func() { show("the page") }) // the page says so when its dialog has been drawn
 
 	_ = w.Bind("closeAddWindow", func() { w.Dispatch(w.Terminate) })
+	// the page asks for the height its dialog needs (in screen pixels of the page area): low with "Ещё" folded, higher
+	// with it open; the window keeps its width and top edge, and stays on its screen
+	_ = w.Bind("resizeAddWindow", func(clientH int) {
+		if clientH < 200 {
+			return
+		}
+		w.Dispatch(func() { fitWindowHeight(hwnd, int32(clientH)) })
+	})
 	_ = w.Bind("setTitleBar", func(bg, fg string) { _ = desktop.TitleBar(hwnd, bg, fg) })
 	bindExternal(w)
 	setWindowIcon(hwnd)
