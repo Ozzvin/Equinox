@@ -1101,7 +1101,7 @@ func (s *Server) portRefresh(w http.ResponseWriter, r *http.Request) {
 func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 	down, up, ratio := s.m.GlobalRatio()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"downloaded": down, "uploaded": up, "ratio": ratio,
+		"downloaded": down, "uploaded": up, "ratio": ratio, "periods": s.m.TrafficStats(time.Now()),
 		"altSpeed": s.cfg.Get().AltSpeedActive,
 	})
 }
