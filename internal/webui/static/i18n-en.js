@@ -105,7 +105,7 @@ window.__i18nEn = [
   ["Скопировать параметры этой раздачи всем остальным в списке", "Copy the options of this torrent to all the others on the list"],
   ["Применить ко всем", "Apply to all"],
   ["Запомнить эти значения для следующих добавлений", "Remember these values for the next additions"],
-  ["Сохранить как умолчание", "Save as default"],
+  ["Сохранить по умолчанию", "Save as default"],
   ["Отмена", "Cancel"],
   ["Magnet-ссылки, infohash и ссылки на .torrent", "Magnet links, infohashes and links to a .torrent"],
   ["Ссылки…", "Links…"],
