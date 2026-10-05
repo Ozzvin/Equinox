@@ -485,9 +485,17 @@
   let filesKey = "";
   const PRIO = [["skip", "Не скачивать"], ["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]];
 
-  // ---- the files as a tree: the root folder of a torrent made from a folder is shown, folders open and close
-  const dirClosed = new Map(); // hash -> Set of folder paths ("Root/sub/") that are closed
-  const closedOf = (hash) => { let s = dirClosed.get(hash); if (!s) dirClosed.set(hash, (s = new Set())); return s; };
+  // ---- the files as a tree: the root folder of a torrent made from a folder is shown, folders open and close.
+  // Folders start closed, so a big torrent shows its outline first; the one root folder of a torrent made from a
+  // folder starts open (closed, the tab would show a single row).
+  const dirOpen = new Map(); // hash -> Set of folder paths ("Root/sub/") the person opened
+  const openOf = (hash) => { let s = dirOpen.get(hash); if (!s) dirOpen.set(hash, (s = new Set())); return s; };
+  // the folders of a tree that are closed now: every folder that was not opened
+  function closedDirs(tree, open) {
+    const closed = new Set();
+    (function walk(n) { for (const d of n.dirs.values()) { if (!open.has(d.path)) closed.add(d.path); walk(d); } })(tree);
+    return closed;
+  }
   let fileOrder = [];        // indexes of the files that are on screen, in the order they are shown
   let dirIdx = new Map();    // folder path -> indexes of all the files below it
   const prioOptions = PRIO.map(([v, n]) => `<option value="${v}">${n}</option>`).join("");
@@ -596,8 +604,10 @@
     if (!t.hasMetadata) { $("files").innerHTML = '<p class="muted" style="padding:6px 16px">Ждём метаданные…</p>'; filesKey = ""; return; }
     try { files = await api("GET", `/api/torrents/${t.hash}/files`) || []; } catch (_) { return; }
     if (!cur() || cur().hash !== t.hash) return;
-    const box = $("files"), closed = closedOf(t.hash);
+    const box = $("files"), open = openOf(t.hash);
     const tree = buildFileTree(files);
+    if (!open.size && tree.dirs.size === 1 && !tree.files.length) open.add([...tree.dirs.values()][0].path); // the root folder, the first time
+    const closed = closedDirs(tree, open);
     const key = t.hash + ":" + files.length + ":" + t.sequential + ":" + [...closed].sort().join("|");
     // folders and their files, for the selection and the priority of a whole folder
     dirIdx = new Map();
@@ -864,6 +874,8 @@
   function fillOptions(t, d) {
     const focused = optForm().contains(document.activeElement);
     if (optHash !== t.hash) { optHash = t.hash; optDirty = false; }
+    $("opt-multi").hidden = true;
+    for (const id of ["op-seq", "op-edge", "op-movedone-on"]) $(id).indeterminate = false;
     if (!optDirty && !focused) {
       $("op-movedone-on").checked = !d.moveDoneOff; $("op-movedone").value = d.moveDone || ""; $("op-movedone").disabled = d.moveDoneOff;
       $("op-movedone-pick").disabled = d.moveDoneOff;
@@ -882,17 +894,74 @@
   }
   for (const id of ["op-movedone-on", "op-movedone"]) $(id).addEventListener("input", () => { optDirty = true; });
   $("op-movedone-on").addEventListener("change", (e) => { $("op-movedone").disabled = !e.target.checked; $("op-movedone-pick").disabled = !e.target.checked; optDirty = true; });
-  $("op-seq").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "sequential", { enabled: e.target.checked }); refresh(); } catch (x) { toast(x.message, true); } });
-  $("op-edge").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "edge-pieces", { enabled: e.target.checked }); } catch (x) { toast(x.message, true); } });
-  $("op-label").addEventListener("change", async (e) => { const t = cur(); if (!t) return; try { await post(t, "label", { label: e.target.value }); refresh(); } catch (x) { toast(x.message, true); } });
+  // The options act on every chosen torrent: one, or several at once (then the tab says so at the top).
+  const optAll = (path, body) => {
+    const list = chosen(); if (!list.length) return;
+    optMultiAt = 0; // the states shown are asked for again at once
+    each(list, (t) => post(t, path, body), list.length > 1 ? `Применено к раздачам: ${list.length}` : undefined);
+  };
+  $("op-seq").addEventListener("change", (e) => optAll("sequential", { enabled: e.target.checked }));
+  $("op-edge").addEventListener("change", (e) => optAll("edge-pieces", { enabled: e.target.checked }));
+  $("op-label").addEventListener("change", (e) => { if (e.target.value !== MIXED) optAll("label", { label: e.target.value }); });
   $("op-move").onclick = () => $("btn-move").click();
   $("op-apply").onclick = async () => {
-    const t = cur(); if (!t) return;
-    try {
-      await post(t, "move-done", { enabled: $("op-movedone-on").checked, path: $("op-movedone").value.trim() });
-      optDirty = false; toast("Параметры раздачи сохранены"); renderDetails();
-    } catch (x) { toast(x.message, true); }
+    const list = chosen(); if (!list.length) return;
+    if ($("op-movedone-on").indeterminate) { toast("Отметьте или снимите галочку «Переместить завершённую раздачу в:»", true); return; }
+    const body = { enabled: $("op-movedone-on").checked, path: $("op-movedone").value.trim() };
+    optDirty = false; optMultiAt = 0;
+    await each(list, (t) => post(t, "move-done", body), list.length > 1 ? `Применено к раздачам: ${list.length}` : "Параметры раздачи сохранены");
+    renderDetails();
   };
+
+  // ---- several torrents chosen: the Options tab shows what they have in common and sets them all at once
+  const MIXED = "\u0001mixed";
+  let optMulti = { key: "", ds: [] }, optMultiAt = 0;
+  const mixedOf = (vals) => vals.length > 1 && vals.some((v) => v !== vals[0]);
+  // a check box for several torrents: ticked, empty, or half (they differ); the half state is left alone while focused
+  function setTri(el, vals) {
+    if (document.activeElement === el) return;
+    el.indeterminate = mixedOf(vals);
+    el.checked = !el.indeterminate && !!vals[0];
+  }
+  async function renderMultiOptions(list) {
+    for (const [k, id] of Object.entries(PANES)) $(id).hidden = k !== "options";
+    $("d-empty").hidden = true; $("file-actions").hidden = true;
+    $("opt-none").hidden = true; optForm().hidden = false;
+    const msg = $("opt-multi");
+    msg.textContent = `Выбрано раздач: ${list.length}. Изменения применяются ко всем.`;
+    msg.hidden = false;
+    const key = list.map((t) => t.hash).sort().join(",");
+    if (optMulti.key !== key || Date.now() - optMultiAt > 3000) { // the details of many torrents: not on every tick
+      optMultiAt = Date.now();
+      const ds = (await Promise.all(list.map((t) => api("GET", `/api/torrents/${t.hash}/details`).catch(() => null)))).filter(Boolean);
+      if (chosen().map((t) => t.hash).sort().join(",") !== key) return;
+      optMulti = { key, ds };
+    }
+    fillMultiOptions(list, optMulti.ds, key);
+  }
+  function fillMultiOptions(list, ds, key) {
+    const focused = optForm().contains(document.activeElement);
+    if (optHash !== key) { optHash = key; optDirty = false; }
+    setTri($("op-seq"), ds.map((d) => !!d.sequential));
+    setTri($("op-edge"), ds.map((d) => !!d.edgePieces));
+    if (!optDirty && !focused) {
+      const on = $("op-movedone-on"), ons = ds.map((d) => !d.moveDoneOff), paths = ds.map((d) => d.moveDone || "");
+      setTri(on, ons);
+      $("op-movedone").value = mixedOf(paths) ? "" : paths[0] || "";
+      $("op-movedone").placeholder = mixedOf(paths) ? "у раздач разные папки" : settings && settings.moveCompletedDir ? `общая настройка: ${settings.moveCompletedDir}` : "папка для завершённых";
+      $("op-movedone").disabled = $("op-movedone-pick").disabled = !on.checked && !on.indeterminate;
+    }
+    const sel = $("op-label");
+    if (document.activeElement !== sel) {
+      const labels = list.map((t) => t.label || "");
+      sel.innerHTML = (mixedOf(labels) ? `<option value="${MIXED}" disabled>Разные</option>` : "") + '<option value="">Без метки</option>' + allLabels().map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
+      sel.value = mixedOf(labels) ? MIXED : labels[0];
+    }
+    const saves = ds.map((d) => d.savePath || "");
+    $("op-path").textContent = !saves.length ? "—" : mixedOf(saves) ? "у раздач разные папки" : saves[0];
+    $("op-path").title = mixedOf(saves) ? "" : saves[0] || "";
+    $("op-move").disabled = list.some((t) => t.moving);
+  }
 
   async function renderDetails() {
     const t = cur();
@@ -903,6 +972,7 @@
     $("peer-add").hidden = tab !== "peers" || !t;
     if (tab !== "peers" || !t) $("peer-stale").hidden = true;
     if (t) pc.textContent = `Подключено пиров: ${t.peers}` + (t.seeds ? ` · из них раздающих: ${t.seeds}` : "");
+    if (!t && tab === "options" && chosen().length > 1) return renderMultiOptions(chosen());
     if (!t) { // the panel is always there; without one chosen torrent it only says so
       const n = chosen().length;
       $("file-actions").hidden = true;
@@ -1303,7 +1373,7 @@
   });
   $("files").addEventListener("click", (e) => {
     const chev = e.target.closest("[data-toggle]");
-    if (chev) { const t = cur(); if (!t) return; const c = closedOf(t.hash), p = chev.dataset.toggle; c.has(p) ? c.delete(p) : c.add(p); renderFiles(); return; }
+    if (chev) { const t = cur(); if (!t) return; const o = openOf(t.hash), p = chev.dataset.toggle; o.has(p) ? o.delete(p) : o.add(p); renderFiles(); return; }
     if (e.target.closest("select, button, option")) return;
     const row = e.target.closest(".file"); if (!row) return;
     if (row.dataset.dir !== undefined) dirClick(e, row.dataset.dir); else fileClick(e, Number(row.dataset.i));
