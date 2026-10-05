@@ -52,6 +52,10 @@ func addArgs(a *app.App, args []string) {
 	}
 }
 
+// maxForwardReply caps what forward reads back from the running instance. The reply to staging a .torrent lists
+// its files, about a hundred bytes each, so this leaves room for a torrent of some hundred thousand files.
+const maxForwardReply = 32 << 20
+
 // forward hands command-line arguments to the already running instance through its local API, the
 // same way addArgs does within this process: they end up in the "Add torrents" dialog rather than
 // being added at once. The instance's address and access key are in ui-url next to the settings.
@@ -77,9 +81,20 @@ func forward(stateDir string, args []string) error {
 			return nil, err
 		}
 		defer res.Body.Close()
-		b, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		// The reply to /api/stage lists every file of the torrent: for one with hundreds of files it is far more than
+		// a few kilobytes, and a cut reply cannot be read (the window for adding then came up empty).
+		b, err := io.ReadAll(io.LimitReader(res.Body, maxForwardReply+1))
+		if err != nil {
+			return nil, err
+		}
 		if res.StatusCode >= 300 {
+			if len(b) > 4096 {
+				b = b[:4096]
+			}
 			return nil, fmt.Errorf("%s: %s", res.Status, b)
+		}
+		if len(b) > maxForwardReply {
+			return nil, fmt.Errorf("the reply is larger than %d bytes", maxForwardReply)
 		}
 		return b, nil
 	}
