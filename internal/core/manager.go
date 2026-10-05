@@ -101,6 +101,7 @@ type Manager struct {
 	pending          []queuedAdd              // magnets/staged files opened from outside, waiting for the dialog
 	phase            map[string]*checkPhase   // torrents in their first check of local files
 	checkProg        map[string]float64       // check progress (0..1) of torrents being checked
+	checkPos         map[string]int           // the next piece of a recheck of ours (see recheck.go)
 	held             map[string]*heldInfo     // torrents whose info waits for a free check slot
 	gateActive       map[string]bool          // released torrents that are still in their first check
 	rechecking       map[string]bool          // rechecks the user asked for that hold a slot
@@ -169,6 +170,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		staged:     map[string]*stagedEntry{},
 		phase:      map[string]*checkPhase{},
 		checkProg:  map[string]float64{},
+		checkPos:   map[string]int{},
 		seedPend:   map[string]time.Duration{},
 		activePend: map[string]time.Duration{},
 		held:       map[string]*heldInfo{},
@@ -249,6 +251,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	go m.loop(ctx)
+	m.resumeChecks() // the rechecks the last run did not finish go on from where they were
 	return m, nil
 }
 
