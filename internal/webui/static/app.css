@@ -412,8 +412,7 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 .lc-cyan { --lc: var(--lc-cyan); } .lc-brown { --lc: var(--lc-brown); }
 .side-item .tagdot { background: var(--lc, var(--muted)); }
 .badge.lbl { background: color-mix(in srgb, var(--lc, var(--muted)) 18%, transparent); color: var(--lc, var(--muted)); }
-.lbl-cell { display: inline-flex; align-items: center; gap: 7px; }
-.lbl-cell .tagdot { width: 9px; height: 9px; border-radius: 50%; background: var(--lc, var(--muted)); flex: none; }
+td .badge.lbl { margin-left: 0; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 @media (max-width: 640px) { .lb-row { grid-template-columns: 1fr; } }
 /* the delete button of a label is red */
 .lb-row .btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); }
