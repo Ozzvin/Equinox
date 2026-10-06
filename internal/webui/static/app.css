@@ -918,3 +918,20 @@ html[data-window="add"] dialog#dlg-add.fitting, html[data-window="add"] dialog#d
 .k-periods button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .k-periods button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .k-note { margin: 8px 0 0; }
+/* side panel groups: a title that folds its list */
+.side-fold { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; cursor: pointer; text-align: left; font: inherit; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+.side-fold:hover { color: var(--text); }
+.side-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.side-fold .sg-arr { width: 10px; font-size: 10px; letter-spacing: 0; }
+.side-group[hidden], .side-fold[hidden] { display: none; }
+.side-group.folded > div { display: none; }
+html:not([data-density="large"]) .side-fold { font-size: 10.5px; }
+/* the list of labels under a label field */
+.lpick { position: fixed; z-index: 40; max-height: 220px; overflow: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+.lpick[hidden] { display: none; }
+.lpick button { display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; }
+.lpick button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lpick button:hover, .lpick button[aria-selected="true"] { background: var(--hover); }
+.lpick button[aria-selected="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
+.lpick .tagdot { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--lc, var(--muted)); }
+html[data-density="compact"] .lpick button { height: 26px; font-size: 12.5px; }

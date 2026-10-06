@@ -53,10 +53,16 @@
 <nav id="side" aria-label="Разделы">
   <div class="side-title">Раздачи</div>
   <div id="side-states"></div>
-  <div class="side-title" id="side-labels-title" hidden>Метки</div>
-  <div id="side-labels"></div>
-  <div class="side-title" id="side-trackers-title" hidden>Трекеры</div>
-  <div id="side-trackers"></div>
+  <div id="side-groups">
+    <section class="side-group" data-group="labels">
+      <button type="button" class="side-title side-fold" id="side-labels-title" data-sgfold="labels" aria-expanded="true" hidden><span class="sg-arr" aria-hidden="true">▾</span>Метки</button>
+      <div id="side-labels"></div>
+    </section>
+    <section class="side-group" data-group="trackers">
+      <button type="button" class="side-title side-fold" id="side-trackers-title" data-sgfold="trackers" aria-expanded="true" hidden><span class="sg-arr" aria-hidden="true">▾</span>Трекеры</button>
+      <div id="side-trackers"></div>
+    </section>
+  </div>
 </nav>
 <div class="vsplit" id="side-split" role="separator" aria-orientation="vertical" aria-label="Ширина левой панели" tabindex="0" title="Потяните, чтобы изменить ширину; двойной клик — по умолчанию"></div>
 <div class="content">
@@ -168,7 +174,7 @@
       <span class="pick"><input id="ao-save" autocomplete="off" aria-label="Папка загрузки"><button type="button" class="btn icon small" data-pick="ao-save" title="Обзор…" aria-label="Обзор…"><svg class="i"><use href="#i-folder"/></svg></button></span>
       <label class="check"><input type="checkbox" id="ao-movedone-on"><span>Переместить после завершения</span></label>
       <span class="pick"><input id="ao-movedone" autocomplete="off" aria-label="Папка для завершённых"><button type="button" class="btn icon small" data-pick="ao-movedone" title="Обзор…" aria-label="Обзор…"><svg class="i"><use href="#i-folder"/></svg></button></span>
-      <label class="ao-inline"><span>Метка</span><input id="ao-label" list="lb-list" maxlength="40" placeholder="без метки" autocomplete="off"></label>
+      <label class="ao-inline"><span>Метка</span><input id="ao-label" maxlength="40" placeholder="без метки" autocomplete="off"></label>
       <label class="check"><input type="checkbox" id="ao-paused"><span>Добавить в паузе</span></label>
       <label class="check"><input type="checkbox" id="ao-seq"><span>Последовательная загрузка</span></label>
       <label class="check"><input type="checkbox" id="ao-edges"><span>Первые и последние части</span></label>
@@ -266,8 +272,7 @@
   <form method="dialog" id="f-label-form">
     <h2>Метка</h2>
     <p id="lb-name" class="muted"></p>
-    <label>Название метки<input id="lb-input" list="lb-list" maxlength="40" placeholder="например, Фильмы" autocomplete="off"></label>
-    <datalist id="lb-list"></datalist>
+    <label>Название метки<input id="lb-input" maxlength="40" placeholder="например, Фильмы" autocomplete="off"></label>
     <p class="muted small">Оставьте поле пустым, чтобы убрать метку.</p>
     <div class="row-end">
       <button type="button" class="btn" data-close>Отмена</button>

@@ -247,16 +247,50 @@
 
   const HIDDEN_WHEN_EMPTY = ["checking", "moving", "paused", "queued"];
 
+  // The groups of the side panel under the states ("Метки", "Трекеры"): each can be folded (a click on its title),
+  // hidden, and their order swapped, from the menu of a right click on the panel. Remembered in this browser.
+  const SIDE_GROUPS = { labels: "Метки", trackers: "Трекеры" };
+  let sideCfg = { order: ["labels", "trackers"], hidden: [], folded: [] };
+  try { Object.assign(sideCfg, JSON.parse(localStorage.getItem("sideGroups") || "{}")); } catch (_) {}
+  sideCfg.order = [...new Set([...sideCfg.order.filter((g) => g in SIDE_GROUPS), ...Object.keys(SIDE_GROUPS)])];
+  const saveSideCfg = () => { try { localStorage.setItem("sideGroups", JSON.stringify(sideCfg)); } catch (_) {} };
+  function applySideGroups() {
+    const box = $("side-groups");
+    sideCfg.order.forEach((g, i) => {
+      const sec = box.querySelector(`[data-group="${g}"]`); if (!sec) return;
+      if (box.children[i] !== sec) box.insertBefore(sec, box.children[i] || null);
+      sec.hidden = sideCfg.hidden.includes(g);
+      const folded = sideCfg.folded.includes(g);
+      sec.classList.toggle("folded", folded);
+      const title = sec.querySelector(".side-fold");
+      title.setAttribute("aria-expanded", String(!folded));
+      title.querySelector(".sg-arr").textContent = folded ? "▸" : "▾";
+    });
+  }
+  const toggleIn = (list, v) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  function sideMenu(x, y) {
+    const ck = (on) => `<span class="ck">${on ? "✓" : ""}</span>`;
+    const allFolded = sideCfg.order.every((g) => sideCfg.folded.includes(g));
+    $("ctx").innerHTML = sideCfg.order.map((g) => `<button role="menuitemcheckbox" aria-checked="${!sideCfg.hidden.includes(g)}" data-sgshow="${g}">${ck(!sideCfg.hidden.includes(g))}${SIDE_GROUPS[g]}</button>`).join("") +
+      `<hr><button role="menuitem" data-sgswap="1">Поднять «${SIDE_GROUPS[sideCfg.order[1]]}» выше</button>` +
+      `<button role="menuitem" data-sgfoldall="1">${allFolded ? "Развернуть группы" : "Свернуть группы"}</button>`;
+    $("ctx").hidden = false;
+    if (x !== undefined) { $("ctx").style.left = Math.min(x, innerWidth - $("ctx").offsetWidth - 8) + "px"; $("ctx").style.top = Math.max(8, Math.min(y, innerHeight - $("ctx").offsetHeight - 8)) + "px"; }
+  }
+
   function renderSide(gone) {
     const svg = (id) => `<svg class="i"><use href="#${id}"/></svg>`;
     $("side-states").innerHTML = VIEWS.filter(([k]) => !gone.has(k)).map(([k, n, ic]) =>
       sideItem("s:" + k, n, svg(ic), k ? torrents.filter((t) => matches(t, { state: k })).length : torrents.length,
         !filter.label && !filter.tracker && filter.state === k)).join("");
-    const labels = allLabels();
+    applySideGroups();
+    // the labels some torrent carries (a label nobody has is not shown, unless it is the one chosen)
+    const labels = allLabels().filter((l) => filter.label === "l:" + l || torrents.some((t) => t.label === l));
+    const unlabelled = torrents.filter((t) => !t.label).length;
     $("side-labels-title").hidden = labels.length === 0;
     $("side-labels").innerHTML = labels.length === 0 ? "" :
       labels.map((l) => sideItem("l:" + l, esc(l), `<i class="tagdot lc-${labelColor(l)}"></i>`, torrents.filter((t) => t.label === l).length, filter.label === "l:" + l)).join("") +
-      sideItem("none", "Без метки", '<i class="tagdot" style="opacity:.35"></i>', torrents.filter((t) => !t.label).length, filter.label === "none");
+      (unlabelled || filter.label === "none" ? sideItem("none", "Без метки", '<i class="tagdot" style="opacity:.35"></i>', unlabelled, filter.label === "none") : "");
     // the trackers of the torrents (with the icon of the site of each), the ones with most torrents first; a long list is folded after the first few
     const trs = trackerCounts();
     $("side-trackers-title").hidden = trs.length === 0; // (the torrents with no tracker are only shown next to some that have one)
@@ -347,7 +381,6 @@
       labels.map((l) => `<option value="l:${esc(l)}">${esc(l)}</option>`).join("");
     if (filter.label.startsWith("l:") && !labels.includes(filter.label.slice(2))) { filter.label = ""; saveFilter(); }
     sel.value = filter.label;
-    $("lb-list").innerHTML = labels.map((l) => `<option value="${esc(l)}">`).join("");
   }
 
   function stateOf(t) {
@@ -1452,7 +1485,18 @@
     const b = e.target.closest("[data-play]"); if (b) copyLink(Number(b.dataset.play));
   });
   // sidebar: one view at a time (a state, a label or a tracker)
+  $("side").addEventListener("contextmenu", (e) => { e.preventDefault(); sideMenu(e.clientX, e.clientY); });
+  $("ctx").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sgshow],[data-sgswap],[data-sgfoldall]"); if (!b) return;
+    e.stopPropagation(); // the menu stays open, so several things can be changed in a row
+    if (b.dataset.sgshow) sideCfg.hidden = toggleIn(sideCfg.hidden, b.dataset.sgshow);
+    else if (b.dataset.sgswap) sideCfg.order = [...sideCfg.order].reverse();
+    else sideCfg.folded = sideCfg.order.every((g) => sideCfg.folded.includes(g)) ? [] : [...sideCfg.order];
+    saveSideCfg(); applySideGroups(); sideMenu();
+  });
   $("side").addEventListener("click", (e) => {
+    const fold = e.target.closest("[data-sgfold]");
+    if (fold) { sideCfg.folded = toggleIn(sideCfg.folded, fold.dataset.sgfold); saveSideCfg(); applySideGroups(); return; }
     if (e.target.closest("[data-more]")) { trackersOpen = !trackersOpen; render(); return; }
     const b = e.target.closest("[data-view]"); if (!b) return;
     const v = b.dataset.view;
@@ -1739,7 +1783,7 @@
     const list = chosen(); if (!list.length) return;
     $("lb-name").textContent = list.length === 1 ? list[0].name : `Выбрано раздач: ${list.length}`;
     $("lb-input").value = list.every((t) => t.label === list[0].label) ? list[0].label || "" : "";
-    $("dlg-label").showModal(); $("lb-input").select();
+    $("dlg-label").showModal(); $("lb-input").select(); $("lb-input").click();
   };
   $("f-label-form").addEventListener("submit", (e) => {
     e.preventDefault(); const list = chosen(); if (!list.length) return;
@@ -3011,6 +3055,54 @@
   $("wz-skip").onclick = wzSkip;
   $("dlg-wizard").addEventListener("cancel", (e) => { e.preventDefault(); wzSkip(); }); // Esc counts as "skip"
   $("st-wizard").onclick = () => { $("dlg-settings").close(); openWizard(); };
+  // A label field with a list of the labels in the look of the program (the browser's own list of a <datalist> is a
+  // grey system box): the list opens on focus, narrows to what is typed, and is driven by the arrows, Enter and Escape.
+  function labelPicker(input) {
+    const box = document.createElement("div");
+    box.className = "lpick"; box.hidden = true; box.setAttribute("role", "listbox");
+    input.after(box);
+    input.setAttribute("aria-autocomplete", "list");
+    let items = [], at = -1, typed = false, picking = false;
+    const draw = () => {
+      const q = typed ? input.value.trim().toLowerCase() : "";
+      items = allLabels().filter((l) => !q || l.toLowerCase().includes(q));
+      if (!items.length) { box.hidden = true; return; }
+      box.innerHTML = items.map((l, i) => `<button type="button" role="option" tabindex="-1" data-lp="${i}" aria-selected="${i === at}"><i class="tagdot lc-${labelColor(l)}"></i><span>${esc(l)}</span></button>`).join("");
+      // fixed to the window, so the list may hang below the dialog instead of giving it a scrollbar; upwards when
+      // there is no room under the field
+      const r = input.getBoundingClientRect();
+      box.hidden = false;
+      box.style.left = r.left + "px"; box.style.width = r.width + "px";
+      const h = box.offsetHeight;
+      box.style.top = (r.bottom + 4 + h > innerHeight - 8 && r.top - 4 - h > 8 ? r.top - 4 - h : r.bottom + 4) + "px";
+      const cur = box.querySelector('[aria-selected="true"]'); if (cur) cur.scrollIntoView({ block: "nearest" });
+    };
+    const pick = (i) => {
+      picking = true;
+      input.value = items[i]; box.hidden = true; typed = false;
+      input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true }));
+      picking = false;
+    };
+    const open = () => { if (box.hidden) { at = -1; typed = false; draw(); } };
+    input.addEventListener("focus", open);
+    input.addEventListener("click", open);
+    addEventListener("resize", () => { box.hidden = true; });
+    addEventListener("scroll", (e) => { if (e.target !== box) box.hidden = true; }, true);
+    input.addEventListener("input", () => { if (picking) return; typed = true; at = -1; draw(); });
+    input.addEventListener("blur", () => setTimeout(() => { box.hidden = true; }, 120));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (box.hidden) { draw(); return; }
+        at = e.key === "ArrowDown" ? Math.min(at + 1, items.length - 1) : Math.max(at - 1, 0); draw();
+      } else if (e.key === "Enter" && !box.hidden && at >= 0) { e.preventDefault(); pick(at); }
+      else if (e.key === "Escape" && !box.hidden) { e.preventDefault(); e.stopPropagation(); box.hidden = true; }
+    });
+    box.addEventListener("mousedown", (e) => { const b = e.target.closest("[data-lp]"); if (b) { e.preventDefault(); pick(Number(b.dataset.lp)); } });
+  }
+  labelPicker($("lb-input"));
+  labelPicker($("ao-label"));
+
   // the first start: offer the guide once
   if (!ADD_WINDOW) (async () => { if (!token) return; try { const s = await api("GET", "/api/settings"); if (!s.setupDone) openWizard(); } catch (_) {} })();
 
