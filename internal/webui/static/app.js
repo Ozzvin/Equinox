@@ -573,7 +573,6 @@
       const total = files.filter((f) => fileSel.has(f.index)).reduce((a, f) => a + f.size, 0);
       $("fs-info").textContent = `Выбрано ${n} из ${files.length} · ${bytes(total)}`;
     }
-    $("f-prio").value = "";
   }
   function fileClick(e, index) {
     if (e.shiftKey && fileAnchor !== null) {
@@ -1378,11 +1377,14 @@
     if (chev) { const t = cur(); if (!t) return; const o = openOf(t.hash), p = chev.dataset.toggle; o.has(p) ? o.delete(p) : o.add(p); renderFiles(); return; }
     if (e.target.closest("select, button, option")) return;
     const row = e.target.closest(".file"); if (!row) return;
+    // a double click on a file shows it in Explorer, as a double click on a torrent does (with Shift or Ctrl it only selects)
+    if (e.detail === 2 && row.dataset.dir === undefined && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      const t = cur(); if (!t) return;
+      getSelection().removeAllRanges();
+      api("POST", `/api/torrents/${t.hash}/files/${row.dataset.i}/open`).catch((x) => toast(x.message, true));
+      return;
+    }
     if (row.dataset.dir !== undefined) dirClick(e, row.dataset.dir); else fileClick(e, Number(row.dataset.i));
-  });
-  $("f-prio").addEventListener("change", () => {
-    const v = $("f-prio").value; if (!v || !fileSel.size) return;
-    setPriority(filesForAction(), v); $("f-prio").value = "";
   });
   // a click on the empty place of the files tab (between or below the rows) clears the selection, like in a list of torrents
   document.querySelector(".details-body").addEventListener("click", (e) => {
@@ -1431,7 +1433,6 @@
       (chosen.length === 1 ? `: ${chosen[0].path.split("/").pop()}` : ".");
     $("dlg-filedel").showModal();
   }
-  $("f-del").onclick = askDeleteFiles;
   $("f-filedel").addEventListener("submit", async () => {
     const t = cur(); if (!t || !fileSel.size) return;
     const idx = filesForAction();
