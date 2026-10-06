@@ -258,7 +258,9 @@ func decode(r *http.Request, v any) error {
 // ---------------------------------------------------------------- torrents
 
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.m.List())
+	list := s.m.List()
+	s.colorLabels(list)
+	writeJSON(w, http.StatusOK, list)
 }
 
 // add accepts either multipart form field "file" (.torrent) or JSON {"magnet": "..."}.

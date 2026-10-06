@@ -357,10 +357,10 @@
   }
 
   let labelsKey = "";
-  // Colours labels can have; none is a state colour. There is no setting for it: a new label gets a random
-  // colour that no other label has yet (if the palette is used up, any), and one without a stored colour
-  // gets a steady colour from its name.
-  const LABEL_COLORS = [["violet", "Фиолетовый"], ["purple", "Пурпурный"], ["pink", "Розовый"], ["cyan", "Бирюзовый"], ["brown", "Коричневый"]];
+  // Colours labels can have; none is a state colour. There is no setting for it: the server gives each new label
+  // the colour fewest labels have (the earlier in this order on a tie, each next one far from those before it);
+  // a colour from the name is only a stand-in until the list of torrents brings that.
+  const LABEL_COLORS = [["cyan", "Бирюзовый"], ["pink", "Розовый"], ["violet", "Фиолетовый"], ["olive", "Оливковый"], ["coral", "Коралловый"], ["purple", "Пурпурный"], ["brown", "Коричневый"]];
   const labelColor = (name) => {
     const own = settings && settings.labelColors && settings.labelColors[name];
     if (own && LABEL_COLORS.some(([id]) => id === own)) return own;
@@ -368,10 +368,8 @@
     return LABEL_COLORS[h % LABEL_COLORS.length][0];
   };
   function newLabelColor() {
-    const taken = new Set(lbRows.map((r) => r.color));
-    const free = LABEL_COLORS.map(([id]) => id).filter((id) => !taken.has(id));
-    const from = free.length ? free : LABEL_COLORS.map(([id]) => id);
-    return from[Math.floor(Math.random() * from.length)];
+    const used = (id) => lbRows.filter((r) => r.color === id).length;
+    return LABEL_COLORS.map(([id]) => id).reduce((best, id) => (used(id) < used(best) ? id : best));
   }
   // Labels the user created in the settings count even when no torrent carries them yet.
   const allLabels = () => [...new Set([...torrents.map((t) => t.label), ...Object.keys((settings && settings.labelPaths) || {})].filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -1089,12 +1087,15 @@
     try { await post(t, "recheck"); toast("Проверка файлов запущена"); refresh(); } catch (x) { toast(x.message, true); }
   }
   // ---------- data loop ----------
+  let colourAsked = "";
   async function refresh() {
     if (ADD_WINDOW) return; // it shows no list
     try {
       [torrents, stats, port] = await Promise.all([api("GET", "/api/torrents"), api("GET", "/api/stats"), api("GET", "/api/port")]);
       dataLoaded = true;
-      if (!settings) settings = await api("GET", "/api/settings");
+      // the server gives a new label its colour while it lists the torrents: fetch the settings again to have it
+      const uncoloured = torrents.filter((t) => t.label && !(settings && settings.labelColors && settings.labelColors[t.label])).map((t) => t.label).sort().join("\u0001");
+      if (!settings || (uncoloured && uncoloured !== colourAsked)) { colourAsked = uncoloured; settings = await api("GET", "/api/settings"); }
       for (const h of [...sel]) if (!torrents.some((t) => t.hash === h)) sel.delete(h); // torrents that are gone
       reportMoves();
       reportErrors();
