@@ -254,8 +254,8 @@
 
   // The groups of the side panel under the states ("Метки", "Трекеры"): each can be folded (a click on its title),
   // hidden, and their order swapped, from the menu of a right click on the panel. Remembered in this browser.
-  const SIDE_GROUPS = { labels: "Метки", trackers: "Трекеры" };
-  let sideCfg = { order: ["labels", "trackers"], hidden: [], folded: [] };
+  const SIDE_GROUPS = { trackers: "Трекеры", labels: "Метки" };
+  let sideCfg = { order: ["trackers", "labels"], hidden: [], folded: [] };
   try { Object.assign(sideCfg, JSON.parse(localStorage.getItem("sideGroups") || "{}")); } catch (_) {}
   sideCfg.order = [...new Set([...sideCfg.order.filter((g) => g in SIDE_GROUPS), ...Object.keys(SIDE_GROUPS)])];
   const saveSideCfg = () => { try { localStorage.setItem("sideGroups", JSON.stringify(sideCfg)); } catch (_) {} };
