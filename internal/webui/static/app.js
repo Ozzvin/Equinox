@@ -170,7 +170,7 @@
     // Place in the download queue (queue order, whatever the filter or sort). Finished torrents, which are seeding, have none.
     { id: "num", title: "#", menu: "Место в очереди загрузки", tip: "Место в очереди загрузки", always: true, fit: { pad: 12, text: (t) => String(queuePos.get(t.hash) || "") }, cls: "c-num c-qn", w: 48, sort: (t) => queuePos.get(t.hash) || 1e9, cell: (t) => queuePos.get(t.hash) || "" },
     { id: "name", title: "Название", always: true, cls: "c-name", sort: (t) => (t.name || t.hash).toLowerCase(),
-      cell: (t) => `<div class="nm" title="${esc(t.name)}">${esc(t.name || t.hash)}${t.label ? `<span class="badge lbl lc-${labelColor(t.label)}">${esc(t.label)}</span>` : ""}</div>` },
+      cell: (t) => `<div class="nm" title="${esc(t.name)}">${esc(t.name || t.hash)}</div>` },
     { id: "size", title: "Размер", fit: { pad: 24, text: (t) => (t.hasMetadata || t.checkQueued > 0 ? bytes(t.size) : "—") }, cls: "c-size", w: 92, sort: (t) => t.size, cell: (t) => (t.hasMetadata || t.checkQueued > 0 ? bytes(t.size) : "—") },
     { id: "downloaded", title: "Скачано", menu: "Скачано (за всё время)", cls: "c-num", w: 92, sort: (t) => t.downloaded, cell: (t) => bytes(t.downloaded) },
     { id: "uploaded", title: "Отдано", menu: "Отдано (за всё время)", cls: "c-num", w: 92, sort: (t) => t.uploaded, cell: (t) => bytes(t.uploaded) },
@@ -185,16 +185,21 @@
     { id: "ratio", title: "Рейтинг", cls: "c-num", w: 86, sort: (t) => t.ratio, cell: (t) => t.ratio.toFixed(2), tipOf: (t) => (t.ratioLimit ? "Лимит " + t.ratioLimit : "") },
     { id: "seedtime", title: "Время раздачи", cls: "c-num", w: 120, sort: (t) => t.seedSeconds || 0, cell: (t) => (t.seedSeconds ? fmtDuration(t.seedSeconds) : "—") },
     { id: "added", title: "Добавлена", cls: "c-txt", w: 110, sort: (t) => dateOf(t.added), cell: (t) => shortDate(t.added) },
-    { id: "label", title: "Метка", cls: "c-txt", w: 120, sort: (t) => (t.label || "").toLowerCase(), cell: (t) => (t.label ? `<span class="lbl-cell lc-${labelColor(t.label)}"><i class="tagdot"></i>${esc(t.label)}</span>` : "—") },
+    { id: "label", title: "Метка", cls: "c-txt", w: 120, sort: (t) => (t.label || "").toLowerCase(), cell: (t) => (t.label ? `<span class="badge lbl lc-${labelColor(t.label)}">${esc(t.label)}</span>` : "") },
     { id: "path", title: "Папка", menu: "Папка загрузки", cls: "c-txt", w: 240, sort: (t) => (t.savePath || "").toLowerCase(), cell: (t) => `<span title="${esc(t.savePath || "")}">${esc(t.savePath || "—")}</span>` },
   ];
   const COL = Object.fromEntries(COLS.map((c) => [c.id, c]));
-  const DEFAULT_COLS = ["num", "name", "size", "progress", "down", "up", "eta", "ratio"];
+  const DEFAULT_COLS = ["num", "name", "label", "size", "progress", "down", "up", "eta", "ratio"];
   const PINNED = ["num", "name"]; // always the first two, in this order
   let colIds = [...DEFAULT_COLS];
   try {
     const saved = JSON.parse(localStorage.getItem("cols") || "null");
     if (Array.isArray(saved)) colIds = [...new Set(saved)].filter((id) => id in COL);
+    // the label used to be shown after the name; now it has only its own column, put once next to the name
+    if (Array.isArray(saved) && !localStorage.getItem("colsLabel")) {
+      if (!colIds.includes("label")) colIds.splice(colIds.indexOf("name") + 1, 0, "label");
+      localStorage.setItem("colsLabel", "1"); localStorage.setItem("cols", JSON.stringify(colIds));
+    }
   } catch (_) {}
   colIds = [...PINNED, ...colIds.filter((id) => !PINNED.includes(id))];
   const saveCols = () => { try { localStorage.setItem("cols", JSON.stringify(colIds)); } catch (_) {} };
