@@ -272,8 +272,32 @@ func (st *Store) save() error {
 
 // LabelPalette lists the colours a label can have. They are chosen so that none of them looks like
 // a state colour of the interface: green (downloading), blue (seeding), yellow (checking), grey
-// (stopped) and red (error).
-var LabelPalette = []string{"violet", "purple", "pink", "cyan", "brown"}
+// (stopped) and red (error). The order is the one new labels take them in: each next colour is far
+// from the ones before it.
+var LabelPalette = []string{"cyan", "pink", "violet", "olive", "coral", "purple", "brown"}
+
+// AssignLabelColors gives each of labels (in this order) the colour of the palette fewest labels of
+// colors have, the earlier in the palette on a tie, and returns the map (made when colors is nil).
+func AssignLabelColors(colors map[string]string, labels []string) map[string]string {
+	if colors == nil {
+		colors = map[string]string{}
+	}
+	used := map[string]int{}
+	for _, id := range colors {
+		used[id]++
+	}
+	for _, l := range labels {
+		best := LabelPalette[0]
+		for _, id := range LabelPalette {
+			if used[id] < used[best] {
+				best = id
+			}
+		}
+		colors[l] = best
+		used[best]++
+	}
+	return colors
+}
 
 // ValidLabelColor tells whether id is one of LabelPalette.
 func ValidLabelColor(id string) bool {
