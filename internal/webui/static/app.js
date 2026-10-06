@@ -2038,6 +2038,8 @@
   let fitTimer = 0, fitDone = 0;
   const fitEnd = () => { clearTimeout(fitDone); $("dlg-add").classList.remove("fitting"); };
   addEventListener("resize", () => { if ($("dlg-add").classList.contains("fitting")) { clearTimeout(fitDone); fitDone = setTimeout(fitEnd, 60); } });
+  // the fonts can come after the first measure and make the texts longer
+  if (ADD_WINDOW && document.fonts) document.fonts.ready.then(() => { if ($("dlg-add").open) fitAddWindow(); });
   function fitAddWindow() {
     if (!ADD_WINDOW || typeof window.resizeAddWindow !== "function") return;
     $("dlg-add").classList.add("fitting"); // at once, before the next paint
@@ -2047,13 +2049,15 @@
       const d = $("dlg-add"), split = d.querySelector(".ad-split"), foot = d.querySelector(":scope > .row-end");
       if (!d.open || !split || !foot) return;
       const cs = getComputedStyle(d);
-      const above = split.getBoundingClientRect().top - d.getBoundingClientRect().top;
+      // measured as if nothing were scrolled: when the window was too low and the dialog or the options were scrolled
+      // down, the parts would come out shorter than they are and the window would stay too low
+      const above = split.getBoundingClientRect().top - d.getBoundingClientRect().top + d.scrollTop;
       const err = $("ad-err").hidden ? 0 : $("ad-err").getBoundingClientRect().height + 8;
       // the options' own height (the column itself is stretched to the window, so its last item is measured), or
       // room for a few rows of files
       const side = $("ad-opts"), kids = [...side.children].filter((k) => k.offsetParent !== null);
       const last = kids[kids.length - 1];
-      const body = Math.max(last ? last.getBoundingClientRect().bottom - side.getBoundingClientRect().top : 0, 220);
+      const body = Math.max(last ? last.getBoundingClientRect().bottom - side.getBoundingClientRect().top + side.scrollTop : 0, 220);
       const need = above + body + err + foot.getBoundingClientRect().height + parseFloat(cs.paddingBottom) + 14;
       window.resizeAddWindow(Math.ceil(need * (window.devicePixelRatio || 1)));
     }, 30);
