@@ -899,7 +899,8 @@ html[data-density="compact"] .file, html[data-density="compact"] .fhead { grid-t
 .tree-row { min-height: 22px; padding: 0; font-size: 12.5px; }
 dialog.add { width: min(620px, calc(100vw - 32px)); }
 html[data-window="add"] .ad-split { flex: 1 1 auto; }
-html[data-window="add"] #dlg-add .ad-list { flex: none; } /* never squeezed: the window grows instead */
+html[data-window="add"] #dlg-add .ad-list { flex: none; }
+html[data-window="add"] #dlg-add .dlg-head [data-close] { display: none; } /* the window has its own cross */ /* never squeezed: the window grows instead */
 html[data-window="add"] .ad-split .ad-pane { overflow: visible; }
 html[data-window="add"] .ad-side { overflow-y: auto; }
 @media (max-width: 560px) { .ad-split { grid-template-columns: 1fr; } .ad-side { margin: 8px 0 0; padding: 8px 0 0; border-left: 0; border-top: 1px solid var(--line); } }
