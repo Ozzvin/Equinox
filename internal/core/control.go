@@ -448,11 +448,11 @@ func torrentLength(info *metainfo.Info) int64 {
 	return info.TotalLength()
 }
 
-func ratio(down, up, size int64) float64 {
-	den := down
-	if den == 0 {
-		den = size // seeding data that was not downloaded here
-	}
+// ratio divides what was uploaded by what this client holds of the torrent: the bytes downloaded here, or the bytes
+// it has, whichever is more. Data that was already on disk when the torrent was added (or was finished elsewhere) is
+// not "downloaded", so dividing by that alone made a 368 GB seed with 224 MB downloaded show a ratio of 3625.
+func ratio(down, up, have int64) float64 {
+	den := max(down, have)
 	if den <= 0 {
 		return 0
 	}
@@ -565,7 +565,7 @@ func (m *Manager) List() []Status {
 		st.Tracker, st.TrackerSite = mainTracker(announce, t)
 		ts := t.Stats()
 		st.Peers, st.Seeds = ts.ActivePeers, ts.ConnectedSeeders
-		st.Ratio = ratio(r.Downloaded, r.Uploaded, st.Size)
+		st.Ratio = ratio(r.Downloaded, r.Uploaded, st.Done)
 		st.RatioLimit = r.RatioLimit
 		if st.RatioLimit == 0 {
 			st.RatioLimit = global
@@ -612,9 +612,9 @@ func (m *Manager) List() []Status {
 
 // GlobalRatio is the lifetime share ratio across all torrents, including removed ones.
 // GlobalRatio returns lifetime downloaded/uploaded bytes and the share ratio across every
-// torrent ever added. Like the per-torrent ratio (see ratio below), a torrent seeded from
-// data acquired outside this client has nothing in Downloaded, so its size stands in for it
-// in the denominator instead of letting it drag the whole total down to zero.
+// torrent ever added. Like the per-torrent ratio (see ratio above), each torrent counts in the
+// denominator with what was downloaded here or what is on disk, whichever is more, so data
+// acquired outside this client does not inflate the ratio or drag it down to zero.
 func (m *Manager) GlobalRatio() (down, up int64, r float64) {
 	var removedDown, removedUp int64
 	m.state.view(func(s *state) { removedDown, removedUp = s.RemovedDownloaded, s.RemovedUploaded })
@@ -623,11 +623,7 @@ func (m *Manager) GlobalRatio() (down, up int64, r float64) {
 	for _, t := range m.List() {
 		down += t.Downloaded
 		up += t.Uploaded
-		if t.Downloaded > 0 {
-			den += t.Downloaded
-		} else {
-			den += t.Size
-		}
+		den += max(t.Downloaded, t.Done)
 	}
 	if den > 0 {
 		r = float64(up) / float64(den)
@@ -785,7 +781,7 @@ func (m *Manager) enforce(ts []*torrent.Torrent) {
 			down := r.Downloaded + d - m.seenDown[t.InfoHash()]
 			up := r.Uploaded + u - m.seenUp[t.InfoHash()]
 			m.mu.Unlock()
-			if ratio(down, up, torrentLength(info)) >= limit {
+			if ratio(down, up, done) >= limit {
 				m.setPaused(t, hash, true)
 				text, code, args := limitReason("ratio", limit)
 				m.emit(Event{Kind: "limit", Hash: hash, Name: t.Name(), Detail: text, DetailCode: code, DetailArgs: args})
