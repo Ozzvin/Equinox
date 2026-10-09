@@ -318,6 +318,7 @@ body.dragging .rs { cursor: col-resize; }
 .pbar .lb.base { color: var(--text); }
 .pbar.down .fill { background: var(--ok); } .pbar.seed .fill { background: var(--accent); }
 .pbar.check .fill { background: var(--warn); --on: #1a1f29; } .pbar.check .fill .lb { color: #1a1f29; }
+.pbar.checked .fill { background: var(--ok); }
 .pbar.paused .fill { background: var(--muted); } .pbar.bad .fill { background: var(--bad); }
 .pbar.bad .lb.base { color: var(--bad); }
 td.c-qn { color: var(--muted); font-variant-numeric: tabular-nums; text-align: center !important; } th.c-qn { text-align: center !important; }

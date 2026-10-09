@@ -585,9 +585,11 @@
       <button class="btn icon" data-play="${f.index}" title="Скопировать ссылку для плеера (VLC, mpv)"><svg class="i"><use href="#i-play"/></svg></button></div>`;
   }
   // Mirrors peerBar(): blue once everything is there (a seed), green while still downloading.
+  // While the torrent is checked, a file (or folder) already checked through turns green, "Проверено".
   function setFileBar(bar, pct, checking) {
-    const text = checking ? `${L("Проверка", "Checking")} ${Math.floor(pct)}%` : pct >= 100 ? "100%" : pct.toFixed(1) + "%";
-    bar.className = "pbar " + (checking ? "check" : pct >= 100 ? "seed" : "down");
+    const checked = checking && pct >= 100;
+    const text = checked ? L("Проверено", "Checked") : checking ? `${L("Проверка", "Checking")} ${Math.floor(pct)}%` : pct >= 100 ? "100%" : pct.toFixed(1) + "%";
+    bar.className = "pbar " + (checked ? "checked" : checking ? "check" : pct >= 100 ? "seed" : "down");
     bar.title = text;
     bar.querySelector(".fill").style.width = pct.toFixed(1) + "%";
     for (const lb of bar.querySelectorAll(".lb")) lb.textContent = text;
