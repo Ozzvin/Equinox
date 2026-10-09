@@ -240,7 +240,8 @@ func TestPreallocateRefusesWhenNoSpace(t *testing.T) {
 	if _, err := freeSpace(t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	if ratio(0, 500, 1000) != 0.5 || ratio(100, 300, 1000) != 3 {
+	// a seed whose data was mostly on disk already: 224 MB downloaded of 368 GB must not give a ratio of 3625
+	if ratio(0, 500, 1000) != 0.5 || ratio(100, 300, 100) != 3 || ratio(100, 300, 1000) != 0.3 || ratio(0, 0, 0) != 0 {
 		t.Fatal("ratio math")
 	}
 }
