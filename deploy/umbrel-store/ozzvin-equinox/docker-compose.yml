@@ -7,7 +7,7 @@ services:
       APP_PORT: 8080
 
   server:
-    image: ghcr.io/ozzvin/equinox:1.1.0-rc6
+    image: ghcr.io/ozzvin/equinox:1.1.0-rc7
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 1m
@@ -27,9 +27,10 @@ services:
       # the one port published below: the page cannot move the program off it (51413 is Transmission's)
       - -torrent-port
       - "51420"
-      # Downloads by the name Umbrel's Files shows it under
+      # Downloads by the path Umbrel's Files shows it at; a folder added in the app's settings shows by its mount
+      # point, so mounted at /External/RAID/Torrents it reads as in Files too
       - -place
-      - Downloads=/downloads
+      - Home/Downloads=/downloads
     volumes:
       - ${APP_DATA_DIR}/data:/data
       - ${UMBREL_ROOT}/data/storage/downloads:/downloads
