@@ -832,6 +832,7 @@ html[data-window="add"] dialog#dlg-add > .row-end:last-child { flex: 0 0 auto; m
 .srow.one > .muted.small { margin: 2px 0 4px; }
 .srow.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .srow.portline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#st-port { white-space: pre-line; } /* the router's answer on lines of its own */
 .more { margin: 2px 0 4px; }
 .more summary { cursor: pointer; color: var(--accent); font-size: 12px; width: max-content; list-style: none; user-select: none; }
 .more summary::-webkit-details-marker { display: none; }
