@@ -48,6 +48,8 @@ type Options struct {
 	// TorrentPort, if not 0, is the torrent port on every start whatever the settings say, and the page cannot
 	// change it: a container publishes just this port, so any other one would get no incoming connections.
 	TorrentPort int
+	// Places are the folders the server is given, by the names the system around it shows (see api.Server.SetPlaces).
+	Places []api.Place
 }
 
 // Start brings everything up. listen is the preferred HTTP address; if it is taken, a
@@ -117,6 +119,7 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 	}
 	handler := api.New(m, cfg, token, webui.Handler())
 	handler.SetFixedPort(opts.TorrentPort)
+	handler.SetPlaces(opts.Places)
 	url := fmt.Sprintf("http://%s/#token=%s", ln.Addr(), token)
 	if opts.Open {
 		handler.SetOpen(opts.AllowedHosts)
