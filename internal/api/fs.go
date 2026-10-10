@@ -42,6 +42,26 @@ type fsListing struct {
 	Truncated bool      `json:"truncated,omitempty"`
 }
 
+// Place is a folder the server is given by the system around it, under the name that system shows it by (see
+// Server.SetPlaces).
+type Place struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// placeOf returns the place p lies in (the deepest one, if places nest).
+func (s *Server) placeOf(p string) (Place, bool) {
+	var best Place
+	found := false
+	for _, pl := range s.places {
+		root := filepath.Clean(pl.Path)
+		if (p == root || strings.HasPrefix(p, root+string(filepath.Separator))) && (!found || len(root) > len(best.Path)) {
+			best, found = Place{Name: pl.Name, Path: root}, true
+		}
+	}
+	return best, found
+}
+
 // rootsMark is the path a client sends to see the drives.
 const rootsMark = "@"
 
@@ -56,6 +76,11 @@ func (s *Server) fsList(w http.ResponseWriter, r *http.Request) {
 	}
 	if want == "" || want == rootsMark {
 		want = s.cfg.Get().DataDir
+	}
+	if len(s.places) > 0 {
+		s.placeListing(&out, filepath.Clean(want))
+		writeJSON(w, http.StatusOK, out)
+		return
 	}
 	p, ok := nearestFolder(filepath.Clean(want))
 	if !ok {
@@ -81,6 +106,36 @@ func nearestFolder(p string) (string, bool) {
 			return "", false
 		}
 		p = up
+	}
+}
+
+// placeListing shows a folder inside the given places only: a path outside them (or one that no longer exists)
+// shows the first place, "up" stops at the top of a place, and the way there starts with the place's name.
+func (s *Server) placeListing(out *fsListing, want string) {
+	p, ok := nearestFolder(want)
+	pl, in := s.placeOf(p)
+	if !ok || !in {
+		if len(out.Places) == 0 {
+			out.Error, out.ErrorCode = "Папка не найдена.", "fs.not_found"
+			return
+		}
+		p = out.Places[0].Path
+		pl, _ = s.placeOf(p)
+	}
+	out.Path = p
+	out.readInto(p)
+	out.Parent = nil
+	if p != pl.Path {
+		up := filepath.Dir(p)
+		out.Parent = &up
+	}
+	out.Crumbs = []fsPlace{{Name: pl.Name, Path: pl.Path}}
+	cur := pl.Path
+	for _, part := range strings.Split(strings.Trim(strings.TrimPrefix(p, pl.Path), `\/`), string(filepath.Separator)) {
+		if part != "" {
+			cur = filepath.Join(cur, part)
+			out.Crumbs = append(out.Crumbs, fsPlace{Name: part, Path: cur})
+		}
 	}
 }
 
@@ -185,6 +240,12 @@ func (s *Server) fsPlaces() []fsPlace {
 			out = append(out, fsPlace{Name: name, Path: path, Kind: kind})
 		}
 	}
+	if len(s.places) > 0 { // the given folders only, the ones that are there (a slot left empty is not)
+		for _, pl := range s.places {
+			add(pl.Name, filepath.Clean(pl.Path), "place")
+		}
+		return out
+	}
 	add("Папка загрузок", s.cfg.Get().DataDir, "data")
 	if home, err := os.UserHomeDir(); err == nil {
 		add("Домашняя папка", home, "home")
@@ -225,6 +286,10 @@ func (s *Server) fsMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parent := filepath.Clean(strings.TrimSpace(b.Parent))
+	if _, in := s.placeOf(parent); len(s.places) > 0 && !in {
+		fail(w, badInputCode("fs.parent_missing", "Папка, в которой нужно создать новую, не найдена."))
+		return
+	}
 	if st, err := os.Stat(parent); err != nil || !st.IsDir() {
 		fail(w, badInputCode("fs.parent_missing", "Папка, в которой нужно создать новую, не найдена."))
 		return

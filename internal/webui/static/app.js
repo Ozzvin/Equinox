@@ -22,13 +22,55 @@
   async function api(method, path, body) {
     const opt = { method, headers: { Authorization: "Bearer " + token } };
     if (body instanceof FormData) opt.body = body;
-    else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
-    const res = await fetch(path, opt);
+    else if (body !== undefined) { opt.body = JSON.stringify(placePaths(body, realPath)); opt.headers["Content-Type"] = "application/json"; }
+    const res = await fetch(placeQuery(path), opt);
     if (res.status === 401) { askToken(); throw new Error("Нет доступа"); }
     if (res.status === 204) return null;
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(window.__trCode(data && data.code, data && data.args, (data && data.error) || res.statusText));
-    return data;
+    return placePaths(data, showPath);
+  }
+
+  // ---------- folders by the names of the system around (Umbrel) ----------
+  // A server in a container is given a few folders (see -place): Umbrel's Downloads is /downloads inside it. The page
+  // shows every path by the name the system shows it under ("Downloads/Equinox/complete", as in Umbrel's Files) and
+  // turns it back when sending. Only the fields that hold paths are touched: a label named "Downloads" stays a label.
+  const PLACES = (window.__equinoxPlaces || []).map((p) => ({ name: p.name, path: p.path.replace(/[\\/]+$/, "") || "/", sep: p.path.includes("\\") ? "\\" : "/" }));
+  const PATH_KEYS = new Set(["dataDir", "moveCompletedDir", "watchDir", "torrentCopyDir", "labelPaths", "labels", "savePath",
+    "moveDone", "copyPath", "moveTo", "moveDir", "path", "parent", "source", "output"]);
+  function showPath(p) {
+    if (typeof p !== "string") return p;
+    for (const pl of [...PLACES].sort((a, b) => b.path.length - a.path.length)) {
+      if (p === pl.path) return pl.name;
+      if (p.startsWith(pl.path + pl.sep)) return pl.name + p.slice(pl.path.length).split(pl.sep).join("/");
+    }
+    return p;
+  }
+  function realPath(p) {
+    if (typeof p !== "string") return p;
+    const t = p.trim();
+    for (const pl of [...PLACES].sort((a, b) => b.name.length - a.name.length)) {
+      if (t === pl.name) return pl.path;
+      if (t.startsWith(pl.name + "/")) return pl.path + t.slice(pl.name.length).split("/").join(pl.sep);
+    }
+    return p;
+  }
+  function placePaths(v, conv) {
+    if (!PLACES.length || v === null || typeof v !== "object") return v;
+    if (Array.isArray(v)) return v.map((x) => placePaths(x, conv));
+    const out = {};
+    for (const [k, x] of Object.entries(v)) {
+      if (!PATH_KEYS.has(k)) out[k] = placePaths(x, conv);
+      else if (typeof x === "string") out[k] = conv(x);
+      else if (x && typeof x === "object" && !Array.isArray(x)) out[k] = Object.fromEntries(Object.entries(x).map(([n, s]) => [n, conv(s)])); // label -> folder
+      else out[k] = placePaths(x, conv);
+    }
+    return out;
+  }
+  function placeQuery(url) { // the folder asked of the picker travels in the address
+    if (!PLACES.length) return url;
+    const i = url.indexOf("?path=");
+    return i < 0 ? url : url.slice(0, i) + "?path=" + encodeURIComponent(realPath(decodeURIComponent(url.slice(i + 6))));
   }
 
   // ---------- language ----------
@@ -2862,7 +2904,8 @@
     $("pk-crumbs").scrollLeft = 1e6;
     const inside = (p) => d.path && (d.path === p || d.path.toLowerCase().startsWith(p.replace(/[\\/]+$/, "").toLowerCase() + (p.endsWith("\\") || p.endsWith("/") ? "" : "\\")) );
     const cur = d.places.filter((p) => d.path === p.path);
-    const curPlace = cur[0] || d.places.filter((p) => p.kind === "drive" && inside(p.path))[0];
+    const curPlace = cur[0] || d.places.filter((p) => p.kind === "drive" && inside(p.path))[0] ||
+      d.places.filter((p) => p.kind === "place" && (d.path === p.path || d.path.startsWith(p.path + "/")))[0]; // Umbrel's folders, by their names
     let last = "";
     $("pk-places").innerHTML = d.places.map((p) => {
       const sep = last && last !== p.kind && (p.kind === "drive") ? '<div class="sp"></div>' : "";

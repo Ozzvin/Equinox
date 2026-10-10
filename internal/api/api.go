@@ -45,6 +45,7 @@ type Server struct {
 	open       bool     // a proxy in front does the signing in: no personal key, more host names
 	extraHosts []string // host names allowed in open mode besides the usual ones
 	fixedPort  int      // the torrent port given at start (-torrent-port), 0 = the setting rules
+	places     []Place  // the folders a container is given, by the names its system shows (-place); none = the whole disk
 }
 
 // SetOpen puts the server in open mode, for running behind a proxy that signs the user in (Umbrel's app proxy
@@ -56,6 +57,11 @@ func (s *Server) SetOpen(extraHosts []string) {
 	s.token = OpenToken
 	s.extraHosts = extraHosts
 }
+
+// SetPlaces gives the folders the server may use, by the names the system around it shows them under (Umbrel's
+// Files: "Downloads" is /downloads in the container). The page then shows paths by those names, and the folder
+// picker offers just these folders and does not go above them.
+func (s *Server) SetPlaces(ps []Place) { s.places = ps }
 
 // SetFixedPort says the torrent port was given at start and is not the page's to change: a container publishes just
 // that port, and a different one would get no incoming connections at all (found on Umbrel, where the button for a
@@ -97,6 +103,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if s.open {
 			_, _ = w.Write([]byte("window.__equinoxToken = \"" + OpenToken + "\";\n"))
+		}
+		if len(s.places) > 0 { // before the page's first request: it shows every path by these names
+			b, _ := json.Marshal(s.places)
+			_, _ = w.Write([]byte("window.__equinoxPlaces = " + string(b) + ";\n"))
 		}
 		return
 	}
