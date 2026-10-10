@@ -7,7 +7,7 @@ services:
       APP_PORT: 8080
 
   server:
-    image: ghcr.io/ozzvin/equinox:1.1.0-rc5
+    image: ghcr.io/ozzvin/equinox:1.1.0-rc6
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 1m
@@ -27,11 +27,9 @@ services:
       # the one port published below: the page cannot move the program off it (51413 is Transmission's)
       - -torrent-port
       - "51420"
-      # the folders by the names Umbrel's Files shows them under; Media is mounted only once chosen in the app's settings
+      # Downloads by the name Umbrel's Files shows it under
       - -place
       - Downloads=/downloads
-      - -place
-      - Media=/media
     volumes:
       - ${APP_DATA_DIR}/data:/data
       - ${UMBREL_ROOT}/data/storage/downloads:/downloads
