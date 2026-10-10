@@ -119,7 +119,9 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 	}
 	handler := api.New(m, cfg, token, webui.Handler())
 	handler.SetFixedPort(opts.TorrentPort)
-	handler.SetPlaces(opts.Places)
+	if len(opts.Places) > 0 { // a container: the folders the user mounted into it count as places too
+		handler.SetPlaces(withAddedMounts(stateDir, opts.Places))
+	}
 	url := fmt.Sprintf("http://%s/#token=%s", ln.Addr(), token)
 	if opts.Open {
 		handler.SetOpen(opts.AllowedHosts)
