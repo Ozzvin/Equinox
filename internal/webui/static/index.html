@@ -157,19 +157,19 @@
 
 <!-- Добавить -->
 <dialog id="dlg-add" class="wide add">
-  <div class="dlg-head"><h2 id="ad-title">Добавить раздачи</h2><button class="btn icon" data-close aria-label="Закрыть"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="dlg-head"><h2 id="addw-title">Добавить раздачи</h2><button class="btn icon" data-close aria-label="Закрыть"><svg class="i"><use href="#i-x"/></svg></button></div>
 
-  <div class="ad-list" id="ad-list" role="listbox" aria-label="Раздачи, которые будут добавлены"></div>
-  <div class="ad-buttons">
-    <button type="button" class="btn small" id="ad-file"><svg class="i"><use href="#i-plus"/></svg><span>Файл…</span></button>
-    <button type="button" class="btn small" id="ad-links" title="Magnet-ссылки, infohash и ссылки на .torrent"><svg class="i"><use href="#i-tag"/></svg><span>Ссылка…</span></button>
-    <button type="button" class="btn small" id="ad-remove" disabled>Убрать</button>
-    <input type="file" id="ad-fileinput" accept=".torrent,application/x-bittorrent" multiple hidden>
+  <div class="addw-list" id="addw-list" role="listbox" aria-label="Раздачи, которые будут добавлены"></div>
+  <div class="addw-buttons">
+    <button type="button" class="btn small" id="addw-file"><svg class="i"><use href="#i-plus"/></svg><span>Файл…</span></button>
+    <button type="button" class="btn small" id="addw-links" title="Magnet-ссылки, infohash и ссылки на .torrent"><svg class="i"><use href="#i-tag"/></svg><span>Ссылка…</span></button>
+    <button type="button" class="btn small" id="addw-remove" disabled>Убрать</button>
+    <input type="file" id="addw-fileinput" accept=".torrent,application/x-bittorrent" multiple hidden>
   </div>
 
-  <div class="ad-split">
-    <div id="ad-files" class="ad-pane"></div>
-    <div id="ad-opts" class="ad-side">
+  <div class="addw-split">
+    <div id="addw-files" class="addw-pane"></div>
+    <div id="addw-opts" class="addw-side">
       <span class="ao-l">Папка загрузки</span>
       <span class="pick"><input id="ao-save" autocomplete="off" aria-label="Папка загрузки"><button type="button" class="btn icon small" data-pick="ao-save" title="Обзор…" aria-label="Обзор…"><svg class="i"><use href="#i-folder"/></svg></button></span>
       <label class="check"><input type="checkbox" id="ao-movedone-on"><span>Переместить после завершения</span></label>
@@ -192,11 +192,11 @@
     </div>
   </div>
 
-  <p class="err" id="ad-err" hidden></p>
+  <p class="err" id="addw-err" hidden></p>
   <div class="row-end">
-    <button type="button" class="btn ad-all" id="ao-all" title="Скопировать параметры выбранной раздачи всем остальным в списке">Применить ко всем</button>
-    <button type="button" class="btn" data-close id="ad-cancel">Отмена</button>
-    <button type="button" class="btn primary" id="ad-go" disabled>Добавить</button>
+    <button type="button" class="btn addw-all" id="ao-all" title="Скопировать параметры выбранной раздачи всем остальным в списке">Применить ко всем</button>
+    <button type="button" class="btn" data-close id="addw-cancel">Отмена</button>
+    <button type="button" class="btn primary" id="addw-go" disabled>Добавить</button>
   </div>
 </dialog>
 

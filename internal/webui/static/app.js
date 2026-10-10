@@ -1928,7 +1928,7 @@
     }
     try { addInfo = await api("GET", "/api/add-dialog"); } catch (x) { return toast(x.message, true); }
     if (!$("dlg-add").open) {
-      adItems = []; adSel = -1; adTab = "files"; adBusy = false; $("ad-err").hidden = true;
+      adItems = []; adSel = -1; adTab = "files"; adBusy = false; $("addw-err").hidden = true;
       renderAdd(); $("dlg-add").showModal();
     }
     if (files && files.length) await stageFiles(files);
@@ -2016,20 +2016,20 @@
   // -- list
   function renderAdd() {
     const n = adItems.length;
-    $("ad-title").textContent = `Добавить раздачи (${n})`;
-    $("ad-list").innerHTML = n === 0 ? '<div class="none">Список пуст. Добавьте .torrent файлы, ссылки (magnet или на .torrent) или infohash.</div>' :
-      adItems.map((e, i) => `<div class="ad-row" role="option" data-i="${i}" aria-selected="${i === adSel}">
+    $("addw-title").textContent = `Добавить раздачи (${n})`;
+    $("addw-list").innerHTML = n === 0 ? '<div class="none">Список пуст. Добавьте .torrent файлы, ссылки (magnet или на .torrent) или infohash.</div>' :
+      adItems.map((e, i) => `<div class="addw-row" role="option" data-i="${i}" aria-selected="${i === adSel}">
         <span class="nm" title="${esc(e.name)}">${esc(e.name)}</span>
         ${e.kind === "magnet" ? '<span class="badge">magnet</span>' : e.kind === "hash" ? '<span class="badge">infohash</span>' : ""}
         ${e.exists ? '<span class="badge warn">уже добавлена</span>' : ""}
         ${e.error ? `<span class="badge bad" title="${esc(e.error)}">ошибка</span>` : ""}
         <span class="sz">${e.size ? bytes(e.size) : ""}</span></div>`).join("");
-    $("ad-remove").disabled = adSel < 0 || adBusy;
-    $("ad-go").disabled = n === 0 || adBusy;
-    $("ad-go").textContent = n > 1 ? `Добавить (${n})` : "Добавить";
+    $("addw-remove").disabled = adSel < 0 || adBusy;
+    $("addw-go").disabled = n === 0 || adBusy;
+    $("addw-go").textContent = n > 1 ? `Добавить (${n})` : "Добавить";
     renderAdFiles(); fillOpts();
     const err = adCur() && adCur().error;
-    $("ad-err").hidden = !err; if (err) $("ad-err").textContent = `${adCur().name}: ${err}`;
+    $("addw-err").hidden = !err; if (err) $("addw-err").textContent = `${adCur().name}: ${err}`;
     fitAddWindow();
   }
   // The window made for adding is as high as the dialog needs: low with "Ещё" folded, higher with it open. The page
@@ -2048,16 +2048,16 @@
     clearTimeout(fitDone); fitDone = setTimeout(fitEnd, 400); // the height did not change, or the window did not answer
     clearTimeout(fitTimer);
     fitTimer = setTimeout(() => {
-      const d = $("dlg-add"), split = d.querySelector(".ad-split"), foot = d.querySelector(":scope > .row-end");
+      const d = $("dlg-add"), split = d.querySelector(".addw-split"), foot = d.querySelector(":scope > .row-end");
       if (!d.open || !split || !foot) return;
       const cs = getComputedStyle(d);
       // measured as if nothing were scrolled: when the window was too low and the dialog or the options were scrolled
       // down, the parts would come out shorter than they are and the window would stay too low
       const above = split.getBoundingClientRect().top - d.getBoundingClientRect().top + d.scrollTop;
-      const err = $("ad-err").hidden ? 0 : $("ad-err").getBoundingClientRect().height + 8;
+      const err = $("addw-err").hidden ? 0 : $("addw-err").getBoundingClientRect().height + 8;
       // the options' own height (the column itself is stretched to the window, so its last item is measured), or
       // room for a few rows of files
-      const side = $("ad-opts"), kids = [...side.children].filter((k) => k.offsetParent !== null);
+      const side = $("addw-opts"), kids = [...side.children].filter((k) => k.offsetParent !== null);
       const last = kids[kids.length - 1];
       const body = Math.max(last ? last.getBoundingClientRect().bottom - side.getBoundingClientRect().top + side.scrollTop : 0, 220);
       const need = above + body + err + foot.getBoundingClientRect().height + parseFloat(cs.paddingBottom) + 14;
@@ -2082,7 +2082,7 @@
   const treeIdx = (n) => [...n.files.map((f) => f.i), ...[...n.dirs.values()].flatMap(treeIdx)];
 
   function renderAdFiles() {
-    const box = $("ad-files"), e = adCur();
+    const box = $("addw-files"), e = adCur();
     if (!e) { box.innerHTML = '<p class="note">Выберите раздачу из списка.</p>'; return; }
     if (e.kind !== "file") {
       box.innerHTML = '<p class="note">Список файлов появится после получения метаданных. Чтобы выбрать файлы до начала загрузки, отметьте справа «Добавить в паузе» и выберите файлы в панели подробностей.</p>';
@@ -2160,15 +2160,15 @@
 
   // -- events
   $("btn-add").onclick = () => openAdd();
-  $("ad-list").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { adSel = Number(r.dataset.i); renderAdd(); } });
-  $("ad-file").onclick = () => $("ad-fileinput").click();
-  $("ad-fileinput").addEventListener("change", async (e) => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) await stageFiles(fl); });
-  $("ad-remove").onclick = () => {
+  $("addw-list").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { adSel = Number(r.dataset.i); renderAdd(); } });
+  $("addw-file").onclick = () => $("addw-fileinput").click();
+  $("addw-fileinput").addEventListener("change", async (e) => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) await stageFiles(fl); });
+  $("addw-remove").onclick = () => {
     const e = adCur(); if (!e) return;
     if (e.stage) api("DELETE", `/api/stage/${e.stage}`).catch(() => {});
     adItems.splice(adSel, 1); adSel = Math.min(adSel, adItems.length - 1); renderAdd();
   };
-  $("ad-links").onclick = () => { $("lk-text").value = ""; $("lk-err").hidden = true; $("dlg-links").showModal(); $("lk-text").focus(); };
+  $("addw-links").onclick = () => { $("lk-text").value = ""; $("lk-err").hidden = true; $("dlg-links").showModal(); $("lk-text").focus(); };
   // A line that is a web address leads to a .torrent file: the program downloads it and it goes on the list as a file that
   // was chosen. The magnets and infohashes are put on the list first; a link that could not be downloaded stays in the
   // text with the reason, so the rest is not added twice when it is sent again.
@@ -2197,8 +2197,8 @@
     if (failed.length) { $("lk-text").value = left.join("\n"); $("lk-err").textContent = failed.join("\n"); $("lk-err").hidden = false; renderAdd(); return; }
     $("dlg-links").close(); renderAdd();
   };
-  $("ad-opts").addEventListener("input", readOpts);
-  $("ad-opts").addEventListener("change", () => { readOpts(); });
+  $("addw-opts").addEventListener("input", readOpts);
+  $("addw-opts").addEventListener("change", () => { readOpts(); });
   $("ao-reset").onclick = () => { const e = adCur(); if (e) { e.opts = optDefaults(); fillOpts(); } };
   $("ao-all").onclick = () => {
     const e = adCur(); if (!e) return;
@@ -2212,13 +2212,13 @@
       toast("Сохранено: эти значения будут предлагаться при следующих добавлениях");
     } catch (x) { toast(x.message, true); }
   };
-  $("ad-files").addEventListener("click", (ev) => {
+  $("addw-files").addEventListener("click", (ev) => {
     const e = adCur(); if (!e) return;
     const fold = ev.target.closest("[data-fold]");
     if (fold) { const p = fold.dataset.fold; e.open.has(p) ? e.open.delete(p) : e.open.add(p); renderAdFiles(); return; }
     if (ev.target.id === "tr-all" || ev.target.id === "tr-none") { e.sel.fill(ev.target.id === "tr-all"); renderAdFiles(); }
   });
-  $("ad-files").addEventListener("change", (ev) => {
+  $("addw-files").addEventListener("change", (ev) => {
     const e = adCur(); if (!e) return;
     const f = ev.target.closest("[data-file]"), d = ev.target.closest("[data-dir]");
     if (f) e.sel[Number(f.dataset.file)] = f.checked;
@@ -2237,7 +2237,7 @@
     adItems = []; adSel = -1;
   });
 
-  $("ad-go").onclick = async () => {
+  $("addw-go").onclick = async () => {
     if (adBusy || !adItems.length) return;
     for (const [i, e] of adItems.entries()) {
       e.error = "";
@@ -2250,10 +2250,10 @@
         files: e.kind === "file" && e.sel.some((x) => !x) ? e.sel.map((x) => (x ? "normal" : "skip")) : [] };
       return e.kind === "file" ? { stage: e.stage, options } : e.kind === "magnet" ? { magnet: e.magnet, options } : { infohash: e.infohash, options };
     });
-    adBusy = true; $("ad-go").disabled = true; $("ad-go").textContent = "Добавляю…";
+    adBusy = true; $("addw-go").disabled = true; $("addw-go").textContent = "Добавляю…";
     let res;
     try { res = (await api("POST", "/api/add-batch", { items })).results; }
-    catch (x) { adBusy = false; renderAdd(); $("ad-err").textContent = x.message; $("ad-err").hidden = false; return; }
+    catch (x) { adBusy = false; renderAdd(); $("addw-err").textContent = x.message; $("addw-err").hidden = false; return; }
     adBusy = false;
     const failed = [];
     let added = 0, already = 0;
