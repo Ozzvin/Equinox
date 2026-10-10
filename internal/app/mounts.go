@@ -10,10 +10,12 @@ import (
 	"github.com/Ozzvin/equinox/internal/api"
 )
 
-// Folders the user adds to the container themselves (umbrelOS 2.0: the app's settings → "Add your own folder", e.g.
-// an external drive mounted at /storage) are shown next to the given places, by the name of the folder they are
-// mounted at, which is the name Umbrel shows for them too. Without this the folder picker, which offers only the
-// places, did not show such a folder at all (found on Umbrel, 2026-10-11).
+// Folders the user adds to the container themselves (umbrelOS 2.0: the app's settings → "Add your own folder") are
+// shown next to the given places, by their whole mount point without the leading slash. The container cannot see
+// where the folder really is (Umbrel says nothing of it), but the mount point is the user's own choice: mounted at
+// /External/RAID/Torrents, the very path Umbrel's Files shows, it reads "External/RAID/Torrents/<film>" here, which
+// is where the user finds the files. Without this the folder picker, which offers only the places, did not show such
+// a folder at all (found on Umbrel, 2026-10-11).
 
 // systemMounts are where the container's own mounts live; nothing there is the user's folder.
 var systemMounts = []string{"/proc", "/sys", "/dev", "/run", "/etc", "/tmp", "/var", "/usr", "/lib", "/bin", "/sbin"}
@@ -54,7 +56,7 @@ func addedMounts(mountinfo io.Reader, stateDir string, places []api.Place, isDir
 			continue
 		}
 		seen[p] = true
-		out = append(out, api.Place{Name: filepath.Base(p), Path: p})
+		out = append(out, api.Place{Name: strings.TrimPrefix(p, "/"), Path: p})
 	}
 	return out
 }

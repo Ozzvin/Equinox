@@ -15,7 +15,7 @@ const sampleMountinfo = `1083 935 0:265 / / rw,relatime master:410 - overlay ove
 1090 1083 8:2 /umbrel/app-data/ozzvin-equinox/data /data rw,relatime - ext4 /dev/sda2 rw
 1091 1083 8:2 /umbrel/home/Downloads /downloads rw,relatime - ext4 /dev/sda2 rw
 1092 1083 9:0 /Torrents /storage rw,relatime - ext4 /dev/md0 rw
-1093 1083 9:0 /Films\040HD /my\040films rw,relatime - ext4 /dev/md0 rw
+1093 1083 9:0 /Films\040HD /External/RAID/my\040films rw,relatime - ext4 /dev/md0 rw
 1094 1083 8:2 /docker/containers/abc/resolv.conf /etc/resolv.conf rw,relatime - ext4 /dev/sda2 rw
 1095 1083 8:2 /docker/containers/abc/hostname /hostname-file rw,relatime - ext4 /dev/sda2 rw
 1096 1084 0:270 / /proc/sys ro - proc proc ro
@@ -25,7 +25,7 @@ const sampleMountinfo = `1083 935 0:265 / / rw,relatime master:410 - overlay ove
 func TestAddedMounts(t *testing.T) {
 	isDir := func(p string) bool { return p != "/hostname-file" }
 	got := addedMounts(strings.NewReader(sampleMountinfo), "/data", []api.Place{{Name: "Downloads", Path: "/downloads"}}, isDir)
-	want := []api.Place{{Name: "storage", Path: "/storage"}, {Name: "my films", Path: "/my films"}}
+	want := []api.Place{{Name: "storage", Path: "/storage"}, {Name: "External/RAID/my films", Path: "/External/RAID/my films"}} // the whole mount point: as in Files
 	if len(got) != len(want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
