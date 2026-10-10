@@ -5,7 +5,7 @@ storage:
 folderAccess:
   - id: umbrel-downloads
     name: Downloads
-    note: Equinox downloads into Home/Downloads/Equinox/incomplete and moves finished torrents to Home/Downloads/Equinox/complete. To use another folder (an external drive), add it under "Add your own folder" with the path Files shows for it, such as /External/RAID/Torrents, and pick it in Equinox.
+    note: Equinox downloads into Home/Downloads/Equinox/incomplete and moves finished torrents to Home/Downloads/Equinox/complete. To use another folder (an external drive), add it under "Add your own folder" with any path inside the app, and pick it in Equinox, where it shows by its path in Files.
     mounts:
       - service: server
         targetPath: /downloads
@@ -29,8 +29,8 @@ description: >-
 
   Downloads go to Home/Downloads/Equinox/incomplete and move to Home/Downloads/Equinox/complete when finished, so a
   media server pointed at the complete folder never sees a half-downloaded file. Any other folder, such as an external
-  drive, can be added in the app's settings: mount it at the path Files shows for it (for example
-  /External/RAID/Torrents) and Equinox shows it by that path.
+  drive, can be added in the app's settings under "Add your own folder"; Equinox shows it by its path in Files
+  (for example External/RAID/Torrents).
 
 
   Sign in with your Umbrel password as usual: Equinox itself has no separate login here. For incoming connections
