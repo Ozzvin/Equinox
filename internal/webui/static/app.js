@@ -2505,6 +2505,7 @@
     for (const id of Object.keys(FILL)) FILL[id](settings);
     $("st-autoupdate").checked = settings.autoUpdateCheck !== false;
     $("sn-system").hidden = !window.__equinoxDesktop;
+    $("st-wizard").title = window.__equinoxDesktop ? "Пошаговая помощь: папки, скорость, порт, запуск с Windows" : "Пошаговая помощь: папки, скорость, порт";
     if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
     openLabelRows();
     setSearch.value = ""; applySearch();
@@ -3022,6 +3023,8 @@
     $("wz-autostart").checked = false;
     if (wzDesktop() && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("wz-autostart").checked = !!on; }).catch(() => {});
     wz.steps = wzSections().filter((x) => x.dataset.wz !== "system" || wzDesktop());
+    // the step about Windows is only in the desktop app: elsewhere (Umbrel, the server) the welcome does not promise it
+    $("wz-lead").textContent = wzDesktop() ? "Несколько вопросов, и клиент готов к работе: куда качать, какую скорость использовать, как соединяться с другими и как вести себя в Windows." : "Несколько вопросов, и клиент готов к работе: куда качать, какую скорость использовать и как соединяться с другими.";
     wz.i = 0; wzShow();
     $("dlg-wizard").showModal();
   }

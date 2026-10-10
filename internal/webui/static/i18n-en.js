@@ -308,7 +308,9 @@ window.__i18nEn = [
   ["Скачать со страницы релиза", "Download from the release page"],
   ["Быстрая настройка", "Quick setup"],
   // ---- first-run wizard
+  ["Пошаговая помощь: папки, скорость, порт", "Step by step: folders, speed, port"],
   ["Пошаговая помощь: папки, скорость, порт, запуск с Windows", "Step by step: folders, speed, port, start with Windows"],
+  ["Несколько вопросов, и клиент готов к работе: куда качать, какую скорость использовать и как соединяться с другими.", "A few questions and the client is ready: where to download, what speed to use and how to connect to others."],
   ["Несколько вопросов, и клиент готов к работе: куда качать, какую скорость использовать, как соединяться с другими и как вести себя в Windows.", "A few questions and the client is ready: where to download, what speed to use, how to connect to others and how to behave in Windows."],
   ["Всё можно изменить позже в «Настройках». Если сейчас не до этого, нажмите «Пропустить»: останутся значения по умолчанию.", "Everything can be changed later in “Settings”. If this is not the time, click “Skip”: the defaults stay."],
   ["Куда и откуда", "Where to and from where"],
