@@ -13,8 +13,8 @@ import (
 // Folders the user adds to the container themselves (umbrelOS 2.0: the app's settings → "Add your own folder") are
 // shown next to the given places, by their whole mount point without the leading slash. The container cannot see
 // where the folder really is (Umbrel says nothing of it), but the mount point is the user's own choice: mounted at
-// /External/RAID/Torrents, the very path Umbrel's Files shows, it reads "External/RAID/Torrents/<film>" here, which
-// is where the user finds the files. Without this the folder picker, which offers only the places, did not show such
+// /External/RAID/Torrents it reads "External/RAID/Torrents/<film>" here. Where Umbrel's settings are at hand, the name
+// comes from them instead (see placesFor). Without this the folder picker, which offers only the places, did not show such
 // a folder at all (found on Umbrel, 2026-10-11).
 
 // systemMounts are where the container's own mounts live; nothing there is the user's folder.

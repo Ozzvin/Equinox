@@ -44,11 +44,11 @@ func TestPlacesNamedByUmbrelFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, umbrelSettingsFile), []byte(sampleUmbrelSettings), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := placesFor(dir, []api.Place{{Name: "Home/Downloads", Path: "/downloads"}, {Name: "x", Path: "/storage"}})
-	if got[0].Name != "Home/Downloads" || got[1].Name != "External/RAID/Torrents" {
+	got := placesFor(dir, []api.Place{{Name: "Downloads", Path: "/downloads"}, {Name: "x", Path: "/storage"}})
+	if got[0].Name != "Downloads" || got[1].Name != "RAID/Torrents" { // as Umbrel shows them: RAID › Torrents
 		t.Fatalf("places %+v", got)
 	}
-	if got := placesFor(t.TempDir(), []api.Place{{Name: "Home/Downloads", Path: "/downloads"}}); got[0].Name != "Home/Downloads" {
+	if got := placesFor(t.TempDir(), []api.Place{{Name: "Downloads", Path: "/downloads"}}); got[0].Name != "Downloads" {
 		t.Fatalf("without the copy the names stay: %+v", got)
 	}
 }

@@ -75,10 +75,20 @@ func placesFor(stateDir string, given []api.Place) []api.Place {
 	downloads, mounts := umbrelNames(f)
 	for i, p := range places {
 		if src, ok := mounts[path.Clean(filepath.ToSlash(p.Path))]; ok {
-			places[i].Name = strings.TrimPrefix(src, "/")
+			places[i].Name = filesName(src)
 		} else if downloads != "" && filepath.ToSlash(filepath.Clean(p.Path)) == "/downloads" { // Umbrel's Downloads slot
-			places[i].Name = strings.TrimPrefix(downloads, "/")
+			places[i].Name = filesName(downloads)
 		}
 	}
 	return places
+}
+
+// filesName is how Umbrel itself shows a folder it mounts: its path without the first step (Home, External, Network),
+// "/External/RAID/Torrents" as RAID › Torrents, here "RAID/Torrents".
+func filesName(src string) string {
+	s := strings.Trim(src, "/")
+	if _, rest, ok := strings.Cut(s, "/"); ok && rest != "" {
+		return rest
+	}
+	return s
 }
