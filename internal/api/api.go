@@ -44,6 +44,7 @@ type Server struct {
 
 	open       bool     // a proxy in front does the signing in: no personal key, more host names
 	extraHosts []string // host names allowed in open mode besides the usual ones
+	fixedPort  int      // the torrent port given at start (-torrent-port), 0 = the setting rules
 }
 
 // SetOpen puts the server in open mode, for running behind a proxy that signs the user in (Umbrel's app proxy
@@ -55,6 +56,11 @@ func (s *Server) SetOpen(extraHosts []string) {
 	s.token = OpenToken
 	s.extraHosts = extraHosts
 }
+
+// SetFixedPort says the torrent port was given at start and is not the page's to change: a container publishes just
+// that port, and a different one would get no incoming connections at all (found on Umbrel, where the button for a
+// random port moved the program off the published one).
+func (s *Server) SetFixedPort(port int) { s.fixedPort = port }
 
 // LoadToken returns the persistent API token stored at path, creating it if needed.
 func LoadToken(path string) (string, error) {
@@ -837,7 +843,15 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------- settings & status
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.cfg.Get())
+	writeJSON(w, http.StatusOK, s.settingsView())
+}
+
+// settingsView is the settings as the page gets them, with what the page must know besides.
+func (s *Server) settingsView() any {
+	return struct {
+		config.Settings
+		PortFixed bool `json:"portFixed,omitempty"` // the port was given at start: the page shows it but does not change it
+	}{s.cfg.Get(), s.fixedPort > 0}
 }
 
 // getSettingsDefaults gives the settings as a fresh install has them, for "reset the section to the defaults" in
@@ -965,6 +979,10 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if b.ListenPort != nil && s.fixedPort > 0 && *b.ListenPort != s.fixedPort {
+		fail(w, &core.CodedError{Code: "port.fixed", Msg: "порт задан при запуске сервера, здесь его не поменять", Err: core.ErrInvalidInput})
+		return
+	}
 	if b.ListenPort != nil {
 		if err := s.m.SetListenPort(*b.ListenPort); err != nil {
 			fail(w, err)
@@ -1056,7 +1074,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cfg.Get())
+	writeJSON(w, http.StatusOK, s.settingsView())
 }
 
 // altSpeed toggles the turtle mode: POST {"enabled": true|false}.

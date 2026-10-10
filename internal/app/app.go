@@ -42,6 +42,12 @@ type Options struct {
 	AllowedHosts []string
 	// Downloads is where a first start saves torrents, instead of the user's Downloads folder.
 	Downloads string
+	// Completed, if set, is where a first start moves finished torrents (Umbrel: Downloads/Equinox/complete next to
+	// .../incomplete, so a media server pointed at the first never sees a half-downloaded file).
+	Completed string
+	// TorrentPort, if not 0, is the torrent port on every start whatever the settings say, and the page cannot
+	// change it: a container publishes just this port, so any other one would get no incoming connections.
+	TorrentPort int
 }
 
 // Start brings everything up. listen is the preferred HTTP address; if it is taken, a
@@ -72,12 +78,30 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 				log.Println("cannot use the Downloads folder as the default:", err)
 			}
 		}
+		if opts.Completed != "" {
+			if err := cfg.Update(func(s *config.Settings) { s.MoveCompletedDir = opts.Completed }); err != nil {
+				log.Println("cannot set the folder for finished torrents:", err)
+			}
+		}
+		// both folders at once, so they are there to be seen (and pointed at) before the first download
+		for _, dir := range []string{opts.Downloads, opts.Completed} {
+			if dir != "" {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					log.Println("cannot create", dir+":", err)
+				}
+			}
+		}
 		if opts.Open {
 			// Such a server mostly runs in a container, where UPnP cannot reach the router and only fills the log with
 			// failures; the port is forwarded by hand. It can still be switched on in the settings.
 			if err := cfg.Update(func(s *config.Settings) { s.PortMapping = false }); err != nil {
 				log.Println("cannot switch the router port mapping off:", err)
 			}
+		}
+	}
+	if opts.TorrentPort > 0 && cfg.Get().ListenPort != opts.TorrentPort {
+		if err := cfg.Update(func(s *config.Settings) { s.ListenPort = opts.TorrentPort }); err != nil {
+			return nil, err
 		}
 	}
 	m, err := core.New(cfg, stateDir)
@@ -99,6 +123,7 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 		return nil, err
 	}
 	handler := api.New(m, cfg, token, webui.Handler())
+	handler.SetFixedPort(opts.TorrentPort)
 	url := fmt.Sprintf("http://%s/#token=%s", ln.Addr(), token)
 	if opts.Open {
 		handler.SetOpen(opts.AllowedHosts)
