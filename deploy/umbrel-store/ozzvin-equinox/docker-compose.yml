@@ -7,7 +7,7 @@ services:
       APP_PORT: 8080
 
   server:
-    image: ghcr.io/ozzvin/equinox:1.1.0-rc2
+    image: ghcr.io/ozzvin/equinox:1.1.0-rc3
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 1m
@@ -19,11 +19,17 @@ services:
       - -no-browser
       - -state
       - /data
+      # its own folder in Downloads: downloading into incomplete, finished torrents moved to complete
       - -downloads
-      - /downloads
+      - /downloads/Equinox/incomplete
+      - -completed
+      - /downloads/Equinox/complete
+      # the one port published below: the page cannot move the program off it (51413 is Transmission's)
+      - -torrent-port
+      - "51420"
     volumes:
       - ${APP_DATA_DIR}/data:/data
       - ${UMBREL_ROOT}/data/storage/downloads:/downloads
     ports:
-      - 51413:51413/tcp
-      - 51413:51413/udp
+      - 51420:51420/tcp
+      - 51420:51420/udp
