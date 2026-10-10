@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Ozzvin/equinox/internal/api"
 	"github.com/Ozzvin/equinox/internal/app"
 )
 
@@ -27,6 +28,15 @@ func main() {
 	downloads := flag.String("downloads", "", "where a first start saves torrents (default: the Downloads folder)")
 	completed := flag.String("completed", "", "where a first start moves finished torrents (default: they stay where they were downloaded)")
 	torrentPort := flag.Int("torrent-port", 0, "fixed torrent port: overrides the setting, and the page cannot change it (for a container that publishes just this port)")
+	var places []api.Place
+	flag.Func("place", "NAME=PATH: a folder the server is given, shown by NAME (\"Downloads=/downloads\" on Umbrel); may repeat. With it the folder picker offers only these folders", func(v string) error {
+		name, path, ok := strings.Cut(v, "=")
+		if name, path = strings.TrimSpace(name), strings.TrimSpace(path); !ok || name == "" || !filepath.IsAbs(path) {
+			return fmt.Errorf("want NAME=/absolute/path, got %q", v)
+		}
+		places = append(places, api.Place{Name: name, Path: filepath.Clean(path)})
+		return nil
+	})
 	add := flag.String("add", "", ".torrent file or magnet link to add at startup")
 	noBrowser := flag.Bool("no-browser", false, "do not open the web interface in the browser")
 	flag.Parse()
@@ -52,7 +62,7 @@ func main() {
 			hosts = append(hosts, h)
 		}
 	}
-	a, err := app.StartWith(*stateDir, *listen, app.Options{Open: *open, AllowedHosts: hosts, Downloads: *downloads, Completed: *completed, TorrentPort: *torrentPort})
+	a, err := app.StartWith(*stateDir, *listen, app.Options{Open: *open, AllowedHosts: hosts, Downloads: *downloads, Completed: *completed, TorrentPort: *torrentPort, Places: places})
 	if err != nil {
 		fatal(err)
 	}
