@@ -27,8 +27,8 @@ services:
       # the one port published below: the page cannot move the program off it (51413 is Transmission's)
       - -torrent-port
       - "51420"
-      # Downloads by the path Umbrel's Files shows it at; a folder added in the app's settings shows by its mount
-      # point, so mounted at /External/RAID/Torrents it reads as in Files too
+      # Downloads by the path Umbrel's Files shows it at; a folder added in the app's settings shows by its path in
+      # Files too (hooks/pre-start hands Equinox the app's settings, where Umbrel keeps it)
       - -place
       - Home/Downloads=/downloads
     volumes:
