@@ -899,6 +899,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		MoveCompleted    *string                 `json:"moveCompletedDir"`
 		WatchDir         *string                 `json:"watchDir"`
 		ListenPort       *int                    `json:"listenPort"`
+		RouterAddress    *string                 `json:"routerAddress"`
 		Network          *config.Network         `json:"network"`
 		Preallocate      *bool                   `json:"preallocate"`
 		CopyRemovePolicy config.CopyRemovePolicy `json:"copyRemovePolicy"`
@@ -975,6 +976,17 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			colors[l] = id
 		}
 		if err := s.cfg.Update(func(c *config.Settings) { c.LabelColors = colors }); err != nil {
+			fail(w, err)
+			return
+		}
+	}
+	if b.RouterAddress != nil {
+		a := strings.TrimSpace(*b.RouterAddress)
+		if ip := net.ParseIP(a); a != "" && (ip == nil || ip.To4() == nil) {
+			fail(w, &core.CodedError{Code: "port.router", Args: []string{a}, Msg: "адрес роутера должен быть IPv4-адресом, например 192.168.1.1: " + a, Err: core.ErrInvalidInput})
+			return
+		}
+		if err := s.m.SetRouterAddress(a); err != nil {
 			fail(w, err)
 			return
 		}

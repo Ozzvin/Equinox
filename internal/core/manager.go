@@ -224,7 +224,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	}
 
 	if s.PortMapping {
-		m.ports = portmap.New(m.cl.LocalPort(), portmap.Options{})
+		m.ports = portmap.New(m.cl.LocalPort(), portmap.Options{Router: m.routerAddress})
 		m.ports.Start()
 	}
 

@@ -517,6 +517,10 @@
           <p class="muted small" id="st-port-note" hidden>Новый порт вступит в силу после перезапуска приложения.</p>
           <p class="muted small" id="st-port-fixed" hidden>Порт задан при запуске сервера, здесь его не поменять.</p>
           <div class="srow one"><label class="check"><input type="checkbox" id="st-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: демон сам открывает порт на роутере и следит, чтобы он не пропал</span></span></label></div>
+          <div class="srow">
+            <span class="sl">Адрес роутера<br><span class="muted small">Необязательно. Нужен, если программа работает в контейнере (Umbrel, Docker) и не находит роутер сама.</span></span>
+            <span class="sc"><input id="st-router" autocomplete="off" spellcheck="false" placeholder="найти самому"></span>
+          </div>
           <div class="srow one portline"><span id="st-port" class="small"></span><button type="button" class="btn small" id="st-port-refresh">Проверить порт сейчас</button></div>
         </fieldset>
         <fieldset>
