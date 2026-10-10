@@ -95,6 +95,24 @@ func externalIPNotPublic(s string) bool {
 }
 
 // SetPortMapping turns automatic router forwarding on or off without a restart.
+// routerAddress is the router's address from the settings, for the port mapping.
+func (m *Manager) routerAddress() string { return m.cfg.Get().RouterAddress }
+
+// SetRouterAddress stores the router's address for NAT-PMP ("" = find it). The running mapping reads it on its next
+// try, and is asked to try now.
+func (m *Manager) SetRouterAddress(addr string) error {
+	if err := m.cfg.Update(func(s *config.Settings) { s.RouterAddress = addr }); err != nil {
+		return err
+	}
+	m.portMu.Lock()
+	p := m.ports
+	m.portMu.Unlock()
+	if p != nil {
+		p.Refresh()
+	}
+	return nil
+}
+
 func (m *Manager) SetPortMapping(on bool) error {
 	if err := m.cfg.Update(func(s *config.Settings) { s.PortMapping = on }); err != nil {
 		return err
@@ -108,7 +126,7 @@ func (m *Manager) SetPortMapping(on bool) error {
 	m.portMu.Lock()
 	defer m.portMu.Unlock()
 	if m.ports == nil {
-		m.ports = portmap.New(m.cl.LocalPort(), portmap.Options{})
+		m.ports = portmap.New(m.cl.LocalPort(), portmap.Options{Router: m.routerAddress})
 		m.ports.Start()
 	}
 	return nil

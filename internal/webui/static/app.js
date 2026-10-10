@@ -2468,6 +2468,7 @@
       // a port given at start (a container publishes just that one) is shown but not changed; "reset" keeps it too
       const fixed = !!(settings && settings.portFixed);
       $("st-port-num").value = fixed ? settings.listenPort : s.listenPort;
+      $("st-router").value = s.routerAddress || "";
       $("st-port-num").readOnly = fixed; $("st-port-rnd").hidden = fixed; $("st-port-fixed").hidden = !fixed;
       $("st-port-note").hidden = fixed || !(port && s.listenPort !== port.port);
       if (!isReset) { $("st-port").textContent = portDetails(port); $("st-mapping").checked = !!port.enabled; } // the mapping applies at once, not on Save
@@ -2575,7 +2576,7 @@
         trackerIcons: $("st-trackericons").checked,
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: tgText("tg-movedone", "st-movedone"), watchDir: tgText("tg-watch", "st-watch"), torrentCopyDir: tgText("tg-copydir", "st-copydir"), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
-        preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
+        preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"), routerAddress: $("st-router").value.trim(),
         ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
