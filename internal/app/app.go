@@ -91,13 +91,6 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 				}
 			}
 		}
-		if opts.Open {
-			// Such a server mostly runs in a container, where UPnP cannot reach the router and only fills the log with
-			// failures; the port is forwarded by hand. It can still be switched on in the settings.
-			if err := cfg.Update(func(s *config.Settings) { s.PortMapping = false }); err != nil {
-				log.Println("cannot switch the router port mapping off:", err)
-			}
-		}
 	}
 	if opts.TorrentPort > 0 && cfg.Get().ListenPort != opts.TorrentPort {
 		if err := cfg.Update(func(s *config.Settings) { s.ListenPort = opts.TorrentPort }); err != nil {

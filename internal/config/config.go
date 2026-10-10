@@ -90,6 +90,9 @@ type Settings struct {
 	Network    Network `json:"network"`
 	// PortMapping keeps the port forwarded on the router (UPnP / NAT-PMP) and renews it.
 	PortMapping bool `json:"portMapping"`
+	// RouterAddress is where NAT-PMP asks for the port when the router is not the default gateway (a container on
+	// Umbrel or Docker) and is not found on its own. Empty = find it.
+	RouterAddress string `json:"routerAddress,omitempty"`
 
 	// Preallocate checks, when a torrent is added, that the disk has room for it together with what every other
 	// active torrent on the same disk still has left to download, and refuses early if not; each file is then set
