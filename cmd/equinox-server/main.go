@@ -25,9 +25,14 @@ func main() {
 	listen := flag.String("listen", "127.0.0.1:9091", "HTTP address (must be loopback on Windows; a non-loopback address needs -open where that flag exists)")
 	open, allowHosts := openFlags() // see open_windows.go: not registered at all on a Windows build
 	downloads := flag.String("downloads", "", "where a first start saves torrents (default: the Downloads folder)")
+	completed := flag.String("completed", "", "where a first start moves finished torrents (default: they stay where they were downloaded)")
+	torrentPort := flag.Int("torrent-port", 0, "fixed torrent port: overrides the setting, and the page cannot change it (for a container that publishes just this port)")
 	add := flag.String("add", "", ".torrent file or magnet link to add at startup")
 	noBrowser := flag.Bool("no-browser", false, "do not open the web interface in the browser")
 	flag.Parse()
+	if *torrentPort < 0 || *torrentPort > 65535 {
+		fatal(fmt.Errorf("-torrent-port must be between 1 and 65535, got %d", *torrentPort))
+	}
 	if *stateDir == "" {
 		*stateDir = app.DefaultStateDir()
 	}
@@ -47,7 +52,7 @@ func main() {
 			hosts = append(hosts, h)
 		}
 	}
-	a, err := app.StartWith(*stateDir, *listen, app.Options{Open: *open, AllowedHosts: hosts, Downloads: *downloads})
+	a, err := app.StartWith(*stateDir, *listen, app.Options{Open: *open, AllowedHosts: hosts, Downloads: *downloads, Completed: *completed, TorrentPort: *torrentPort})
 	if err != nil {
 		fatal(err)
 	}

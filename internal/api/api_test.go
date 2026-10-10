@@ -28,7 +28,7 @@ type env struct {
 	srv *httptest.Server
 }
 
-func setup(t *testing.T) *env {
+func setup(t *testing.T, opts ...func(*Server)) *env {
 	t.Helper()
 	dir := t.TempDir()
 	cfg, err := config.Load(filepath.Join(dir, "settings.json"), dir)
@@ -43,7 +43,11 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(New(m, cfg, tok, nil))
+	h := New(m, cfg, tok, nil)
+	for _, o := range opts {
+		o(h)
+	}
+	srv := httptest.NewServer(h)
 	t.Cleanup(func() { srv.Close(); m.Close(); time.Sleep(500 * time.Millisecond) })
 	return &env{dir, m, srv}
 }

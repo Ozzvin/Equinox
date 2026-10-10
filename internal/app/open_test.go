@@ -2,7 +2,9 @@ package app
 
 import (
 	"io"
+	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,5 +44,50 @@ func TestOpenServer(t *testing.T) {
 	b, _ := io.ReadAll(res.Body)
 	if res.StatusCode != 200 || !strings.Contains(string(b), "open") {
 		t.Errorf("session.js: %d %q", res.StatusCode, b)
+	}
+}
+
+// Umbrel's start: the port given at start wins over the setting on every start, and a first start moves finished
+// torrents into the folder it is told to, both folders made at once.
+func TestFixedPortAndCompletedFolder(t *testing.T) {
+	dir := t.TempDir()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	dl, done := filepath.Join(dir, "Equinox", "incomplete"), filepath.Join(dir, "Equinox", "complete")
+	opts := Options{Open: true, Downloads: dl, Completed: done, TorrentPort: port}
+
+	a, err := StartWith(dir, "127.0.0.1:0", opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := a.Settings.Get(); s.MoveCompletedDir != done || s.ListenPort != port {
+		t.Errorf("first start: finished torrents to %q, port %d; want %q, %d", s.MoveCompletedDir, s.ListenPort, done, port)
+	}
+	for _, d := range []string{dl, done} {
+		if fi, err := os.Stat(d); err != nil || !fi.IsDir() {
+			t.Errorf("%s was not made: %v", d, err)
+		}
+	}
+	// the setting changed by hand (or by the button for a random port, as on Umbrel): the next start puts it back
+	if err := a.Manager.SetListenPort(51757); err != nil {
+		t.Fatal(err)
+	}
+	a.Close()
+	time.Sleep(500 * time.Millisecond)
+
+	a, err = StartWith(dir, "127.0.0.1:0", opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Close(); time.Sleep(500 * time.Millisecond) })
+	if got := a.Settings.Get().ListenPort; got != port {
+		t.Errorf("after a restart the port is %d, want the fixed %d", got, port)
+	}
+	if got := a.Manager.Port(); got != port {
+		t.Errorf("the engine listens on %d, want the fixed %d", got, port)
 	}
 }

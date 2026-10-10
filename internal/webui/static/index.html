@@ -515,6 +515,7 @@
             <span class="sc pick"><input type="number" min="1" max="65535" id="st-port-num"><button type="button" class="btn small" id="st-port-rnd" title="Подставить случайный порт из диапазона 49152–65535">Случайный</button></span>
           </div>
           <p class="muted small" id="st-port-note" hidden>Новый порт вступит в силу после перезапуска приложения.</p>
+          <p class="muted small" id="st-port-fixed" hidden>Порт задан при запуске сервера, здесь его не поменять.</p>
           <div class="srow one"><label class="check"><input type="checkbox" id="st-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: демон сам открывает порт на роутере и следит, чтобы он не пропал</span></span></label></div>
           <div class="srow one portline"><span id="st-port" class="small"></span><button type="button" class="btn small" id="st-port-refresh">Проверить порт сейчас</button></div>
         </fieldset>
@@ -728,6 +729,7 @@
           <p class="muted small">Обычно подходит порт по умолчанию (51413, его же используют Transmission и другие клиенты). Случайный порт из диапазона 49152–65535 может помочь, если провайдер режет привычные порты BitTorrent.</p>
           <label class="check"><input type="checkbox" id="wz-mapping"><span>Автоматический проброс порта<br><span class="muted small">UPnP / NAT-PMP: программа сама откроет порт на роутере. Без открытого порта вам подключаются реже, а скорость раздачи ниже.</span></span></label>
           <p class="muted small" id="wz-port-note" hidden>Новый порт вступит в силу после перезапуска приложения.</p>
+          <p class="muted small" id="wz-port-fixed" hidden>Порт задан при запуске сервера, здесь его не поменять.</p>
         </fieldset>
       </section>
       <section data-wz="system" data-title="Windows" hidden>

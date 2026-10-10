@@ -2465,8 +2465,11 @@
     },
     network(s, isReset) {
       fillNetwork(s.network || {});
-      $("st-port-num").value = s.listenPort;
-      $("st-port-note").hidden = !(port && s.listenPort !== port.port);
+      // a port given at start (a container publishes just that one) is shown but not changed; "reset" keeps it too
+      const fixed = !!(settings && settings.portFixed);
+      $("st-port-num").value = fixed ? settings.listenPort : s.listenPort;
+      $("st-port-num").readOnly = fixed; $("st-port-rnd").hidden = fixed; $("st-port-fixed").hidden = !fixed;
+      $("st-port-note").hidden = fixed || !(port && s.listenPort !== port.port);
       if (!isReset) { $("st-port").textContent = portDetails(port); $("st-mapping").checked = !!port.enabled; } // the mapping applies at once, not on Save
     },
     view(s, isReset) {
@@ -3009,6 +3012,7 @@
     limitFillPlain("wz-down", s.downLimitKBps, bits); limitFillPlain("wz-up", s.upLimitKBps, bits);
     $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
     $("wz-port").value = s.listenPort; $("wz-mapping").checked = !!wz.port.enabled; $("wz-port-note").hidden = true;
+    $("wz-port").readOnly = !!s.portFixed; $("wz-port-rnd").hidden = !!s.portFixed; $("wz-port-fixed").hidden = !s.portFixed;
     $("wz-starthidden").checked = s.startHidden !== false; $("wz-closetray").checked = s.closeToTray !== false; $("wz-notify").checked = s.notifyOnComplete !== false;
     $("wz-autostart").checked = false;
     if (wzDesktop() && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("wz-autostart").checked = !!on; }).catch(() => {});
