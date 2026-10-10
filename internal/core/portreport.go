@@ -77,11 +77,9 @@ func makeReport(st portmap.Status, public int64, last time.Time, unknown bool, n
 		}
 	case st.Failures > 0:
 		r.Verdict = PortClosed
+		// what the router answered stays in LastError: the settings show it on lines of its own, the hint of the
+		// port dot does not (a technical answer there made the hint unreadable)
 		r.Advice, r.AdviceCode = "Роутер не отвечает на запросы проброса. Включите UPnP или NAT-PMP в настройках роутера либо пробросьте порт вручную.", "port.closed"
-		if st.LastError != "" {
-			r.Advice += " Ответ: " + st.LastError
-			r.AdviceCode, r.AdviceArgs = "port.closed_answer", []string{st.LastError}
-		}
 	default:
 		r.Verdict = PortChecking
 		r.Advice, r.AdviceCode = "Проверяем роутер…", "port.checking"

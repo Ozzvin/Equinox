@@ -504,7 +504,10 @@
     if (port.wantedPort) more = `Порт ${port.wantedPort} занят другой программой или недоступен, поэтому выбран порт ${port.port}. ${advice}`.trim();
     el.lastElementChild.textContent = head; // for screen readers; the page shows only the dot
     const ips = [port.publicIP && `IP: ${port.publicIP}:${port.port}`, port.publicIPv6 && `IPv6: [${port.publicIPv6}]:${port.port}`].filter(Boolean);
-    el.dataset.tip = [head, more, ips.length ? ips.join("\n") : "IP: пока не известен, подскажут подключившиеся пиры", port.publicIP ? "Правый клик — скопировать адрес" : ""].filter(Boolean).join("\n");
+    // short blocks with a blank line between: what is going on, what to do, the address. What the router answered
+    // is technical and long: only the settings show it (see portDetails)
+    const addr = [ips.length ? ips.join("\n") : "IP: пока не известен", port.publicIP ? "Правый клик — скопировать адрес" : ""].filter(Boolean).join("\n");
+    el.dataset.tip = [head, more, addr].filter(Boolean).join("\n\n");
     // Settings keeps its own copy of this text (shown only while the dialog is open), so a
     // manual "Проверить порт сейчас" — or just time passing — is reflected there too, not
     // only in the status-bar dot.
@@ -515,6 +518,7 @@
     let t = window.__trCode(p.adviceCode, p.adviceArgs, p.advice || "");
     if (p.mapped) t += ` Метод: ${p.method}, внешний IP ${p.externalIP}.`;
     if (p.remaps) t += ` Проброс пришлось восстанавливать после потери: ${p.remaps}.`;
+    if (p.verdict === "closed" && p.lastError) t += `\n\nОтвет роутера:\n${p.lastError}`;
     return t;
   }
   // The file list is built once per torrent and then updated in place, so an open

@@ -24,7 +24,7 @@ func TestPortReportAdviceHasACode(t *testing.T) {
 		"mapped":         {portmap.Status{Enabled: true, Mapped: true}, 0, false, "port.mapped", nil},
 		"mapped unknown": {portmap.Status{Enabled: true, Mapped: true}, 0, true, "port.mapped_unknown", nil},
 		"closed":         {portmap.Status{Enabled: true, Failures: 2}, 0, false, "port.closed", nil},
-		"closed answer":  {portmap.Status{Enabled: true, Failures: 2, LastError: "SOAP fault"}, 0, false, "port.closed_answer", []string{"SOAP fault"}},
+		"closed answer":  {portmap.Status{Enabled: true, Failures: 2, LastError: "SOAP fault"}, 0, false, "port.closed", nil},
 		"checking":       {portmap.Status{Enabled: true}, 0, false, "port.checking", nil},
 	} {
 		r := makeReport(tc.st, tc.public, now, tc.unknown, now, 0)
