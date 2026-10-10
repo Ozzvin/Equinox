@@ -10,18 +10,11 @@ folderAccess:
       - service: server
         targetPath: /downloads
         readOnly: false
-  - id: media-library
-    name: Media Library
-    note: Optional. Choose a folder (for example your media library on an external drive) and it appears as Media in Equinox, so finished torrents can be moved straight there.
-    mounts:
-      - service: server
-        targetPath: /media
-        readOnly: false
 permissions:
   - STORAGE_DOWNLOADS
 category: files
 name: Equinox
-version: "1.1.0-rc5"
+version: "1.1.0-rc6"
 tagline: A fast, tidy BitTorrent client
 icon: https://cdn.jsdelivr.net/gh/Ozzvin/umbrel-community-app-store@main/ozzvin-equinox/icon.svg
 description: >-
