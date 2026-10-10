@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ozzvin-equinox
 category: files
 name: Equinox
-version: "1.1.0-rc3"
+version: "1.1.0-rc4"
 tagline: A fast, tidy BitTorrent client
 icon: https://cdn.jsdelivr.net/gh/Ozzvin/umbrel-community-app-store@main/ozzvin-equinox/icon.svg
 description: >-
@@ -20,7 +20,8 @@ description: >-
 
 
   Sign in with your Umbrel password as usual: Equinox itself has no separate login here. For incoming connections
-  forward TCP and UDP port 51420 on your router to your Umbrel.
+  Equinox opens port 51420 on your router itself when the router supports NAT-PMP; otherwise forward TCP and UDP
+  port 51420 on your router to your Umbrel by hand.
 developer: Ozzvin
 website: https://github.com/Ozzvin/equinox
 dependencies: []
