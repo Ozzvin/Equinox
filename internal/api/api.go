@@ -763,9 +763,17 @@ func (s *Server) createStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
-// recheck re-hashes the torrent's data in the background (202); see the "checking" field.
+// recheck re-hashes the torrent's data in the background (202); see the "checking" field. With {"files": [1, 4]}
+// only those files are checked (the pieces they lie in); no body or no files: the whole torrent.
 func (s *Server) recheck(w http.ResponseWriter, r *http.Request) {
-	if err := s.m.Recheck(r.PathValue("hash")); err != nil {
+	var b struct {
+		Files []int `json:"files"`
+	}
+	if err := decode(r, &b); err != nil && !errors.Is(err, io.EOF) {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	if err := s.m.RecheckFiles(r.PathValue("hash"), b.Files); err != nil {
 		fail(w, err)
 		return
 	}

@@ -348,7 +348,7 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 			name = "low"
 		}
 		out[i] = FileStatus{Index: i, Path: root + f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
-		if checked != nil {
+		if checked != nil && checked[i] >= 0 {
 			out[i].Checking, out[i].Check = true, checked[i]
 		}
 	}
