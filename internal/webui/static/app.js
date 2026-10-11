@@ -31,6 +31,11 @@
     return placePaths(data, showPath);
   }
 
+  // A server on another machine (Umbrel, behind its proxy) cannot show its files in a file manager anyone would see:
+  // "Показать в Проводнике" is not offered there, nor is it what a double click does.
+  const REMOTE = !!window.__equinoxRemote;
+  if (REMOTE) $("btn-open").hidden = true;
+
   // ---------- copying ----------
   // The browser lends its clipboard to a page only over HTTPS or from localhost: on Umbrel the page comes by plain
   // http://umbrel.local:8091, navigator.clipboard is missing there and every "copy" failed. The old way, a selected
@@ -1225,7 +1230,7 @@
     const tr = e.target.closest("tr");
     if (!tr) return;
     select(tr.dataset.h, e);
-    if (e.detail === 2 && !e.shiftKey && !e.ctrlKey && !e.metaKey) { getSelection().removeAllRanges(); $("btn-open").onclick(); }
+    if (!REMOTE && e.detail === 2 && !e.shiftKey && !e.ctrlKey && !e.metaKey) { getSelection().removeAllRanges(); $("btn-open").onclick(); }
   });
 
   // Run one request per selected torrent; report failures together.
@@ -1484,7 +1489,7 @@
     if (e.target.closest("select, button, option")) return;
     const row = e.target.closest(".file"); if (!row) return;
     // a double click on a file shows it in Explorer, as a double click on a torrent does (with Shift or Ctrl it only selects)
-    if (e.detail === 2 && row.dataset.dir === undefined && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    if (!REMOTE && e.detail === 2 && row.dataset.dir === undefined && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const t = cur(); if (!t) return;
       getSelection().removeAllRanges();
       api("POST", `/api/torrents/${t.hash}/files/${row.dataset.i}/open`).catch((x) => toast(x.message, true));
@@ -1512,7 +1517,7 @@
     const recheckDisabled = !t || !t.hasMetadata || t.checking || !!t.moving;
     menu.innerHTML = `<div class="ctx-head">${n > 1 ? `Выбрано файлов: ${n}` : "Файл"}</div>` +
       PRIO.map(([v, name]) => `<button role="menuitem" data-fprio="${v}">${name}</button>`).join("") +
-      `<hr><button role="menuitem" data-fopen="${i}"${n > 1 ? " disabled" : ""}>Показать в Проводнике</button>` +
+      "<hr>" + (REMOTE ? "" : `<button role="menuitem" data-fopen="${i}"${n > 1 ? " disabled" : ""}>Показать в Проводнике</button>`) +
       `<button role="menuitem" data-frecheck="1"${recheckDisabled ? " disabled" : ""}>Проверить файлы</button>` +
       `<button role="menuitem" class="danger" data-fdel="1">Удалить с диска…</button>`;
     menu.hidden = false;
@@ -1801,7 +1806,7 @@
     const allPaused = list.every((t) => t.paused);
     const items = [
       [allPaused ? "Продолжить" : "Приостановить", "btn-toggle", busy],
-      [one ? "Показать в Проводнике" : undefined, "btn-open", false],
+      [one && !REMOTE ? "Показать в Проводнике" : undefined, "btn-open", false],
       [null],
       ["Метка…", "btn-label", busy], ["Переместить в другую папку…", "btn-move", busy || list.some((t) => !t.hasMetadata)],
       [one ? "Проверить файлы" : undefined, "btn-recheck", busy || !list[0]?.hasMetadata],
