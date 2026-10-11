@@ -271,8 +271,15 @@ func (m *Manager) startRecheck(t *torrent.Torrent, hash string, files []int, sta
 			case <-ctx.Done():
 			}
 		}()
+		// while it waits its turn, the Files tab shows which files will be checked ("Ждёт проверки")
+		m.mu.Lock()
+		m.checkSel[hash] = checkSel{files: files}
+		m.mu.Unlock()
 		release, ok := m.acquireRecheck(hash, ctx.Done())
 		if !ok {
+			m.mu.Lock()
+			delete(m.checkSel, hash)
+			m.mu.Unlock()
 			return
 		}
 		m.mu.Lock()

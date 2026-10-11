@@ -308,6 +308,7 @@ type FileStatus struct {
 	Priority string  `json:"priority"`        // skip | normal | high
 	Check    float64 `json:"check,omitempty"` // while the torrent is checked: the share of the file already checked (0 is sent as missing)
 	Checking bool    `json:"checking,omitempty"`
+	Waiting  bool    `json:"checkWaiting,omitempty"` // a recheck that includes this file waits for its turn
 }
 
 // Files lists the files of a torrent whose metadata is known.
@@ -350,6 +351,8 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 		out[i] = FileStatus{Index: i, Path: root + f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
 		if checked != nil && checked[i] >= 0 {
 			out[i].Checking, out[i].Check = true, checked[i]
+		} else if checked != nil && checked[i] == -2 {
+			out[i].Waiting = true
 		}
 	}
 	return out, nil
