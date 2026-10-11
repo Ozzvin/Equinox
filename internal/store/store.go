@@ -34,6 +34,9 @@ type Storage struct {
 
 	regMu sync.Mutex
 	reg   map[metainfo.Hash]*torrentStore // the torrents that are open, so files can be released on request
+
+	partsDir string                     // where the part files live ("" = no part file, see parts.go)
+	skipped  func(metainfo.Hash) []bool // the files a torrent marks "do not download"
 }
 
 // BlockFiles makes the given files of a torrent unreachable for the engine until the returned function is called: reads
@@ -165,11 +168,16 @@ func (s *Storage) OpenTorrent(_ context.Context, info *metainfo.Info, ih metainf
 			}
 		}
 	}
+	if s.partsDir != "" && info.PieceLength > 0 {
+		t.parts = loadParts(s.partsDir, ih, info.PieceLength)
+		// files wanted again while the torrent was closed get their bytes now, before anything looks at the disk
+		_ = t.syncParts(s.skipList(ih, len(t.files)))
+	}
 	t.healStaleCompletion(info)
 	switch {
 	case s.consumeTrust(ih):
 		t.trustPresent(info)
-	case filesAbsent(t.files):
+	case filesAbsent(t.files) && !t.partsHold():
 		// A fresh destination: nothing to verify, so skip the hash check and go straight to
 		// downloading instead of hashing pieces that are certainly missing.
 		t.trustAbsent(info)
@@ -201,6 +209,7 @@ type torrentStore struct {
 	ih    metainfo.Hash
 	owner *Storage
 	files []fileSpan
+	parts *parts // nil without a part file
 
 	mu      sync.Mutex
 	open    map[string]*handle
@@ -299,6 +308,12 @@ func (t *torrentStore) janitor() {
 }
 
 func (t *torrentStore) close() error {
+	if t.parts != nil { // first, and not under t.mu: the part file's lock is taken before it (see exportFile)
+		t.parts.mu.Lock()
+		t.parts.closed = true
+		t.parts.closeFile()
+		t.parts.mu.Unlock()
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {
@@ -331,7 +346,7 @@ func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 	} else {
 		t.owner.disk.waitForWrites()
 	}
-	for _, f := range t.files {
+	for i, f := range t.files {
 		if len(b) == 0 {
 			break
 		}
@@ -345,6 +360,16 @@ func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 		chunk := int64(len(b))
 		if rem := end - off; chunk > rem {
 			chunk = rem
+		}
+		if t.parts != nil {
+			if handled, m, err := t.partsIO(i, f, b[:chunk], off, write); handled {
+				n += m
+				if err != nil {
+					return n, err
+				}
+				b, off = b[chunk:], off+chunk
+				continue
+			}
 		}
 		if write && t.isBlocked(f.path) { // being deleted: the data has nowhere to go and is dropped
 			n += int(chunk)
@@ -456,8 +481,16 @@ func (t *torrentStore) trustPresent(info *metainfo.Info) {
 // fullyPresent is present() with the stricter rule that every file the range touches is
 // complete on disk, not merely long enough for this range.
 func (t *torrentStore) fullyPresent(off, n int64) bool {
-	for _, f := range t.files {
+	unlock := t.lockParts()
+	defer unlock()
+	for i, f := range t.files {
 		if f.length == 0 || off >= f.offset+f.length || off+n <= f.offset {
+			continue
+		}
+		if t.keptInParts(i) {
+			if !t.parts.has(int(off / t.parts.pieceLen)) {
+				return false
+			}
 			continue
 		}
 		if f.size < f.length {
@@ -471,8 +504,16 @@ func (t *torrentStore) fullyPresent(off, n int64) bool {
 // touches must have been at least long enough at open time. (Files grow while they are
 // downloaded, so a shorter file is fine as long as it covers this range.)
 func (t *torrentStore) present(off, n int64) bool {
-	for _, f := range t.files {
+	unlock := t.lockParts()
+	defer unlock()
+	for i, f := range t.files {
 		if f.length == 0 || off >= f.offset+f.length || off+n <= f.offset {
+			continue
+		}
+		if t.keptInParts(i) { // its bytes of a piece are there when the piece has a slot
+			if !t.parts.has(int(off / t.parts.pieceLen)) {
+				return false
+			}
 			continue
 		}
 		end := off + n
@@ -484,4 +525,23 @@ func (t *torrentStore) present(off, n int64) bool {
 		}
 	}
 	return true
+}
+
+// lockParts holds the part file's lock (the sizes of files and the slots change under it) and returns its unlock.
+func (t *torrentStore) lockParts() func() {
+	if t.parts == nil {
+		return func() {}
+	}
+	t.parts.mu.Lock()
+	return t.parts.mu.Unlock
+}
+
+// keptInParts tells whether file i is kept in the part file. The part file's lock is held.
+func (t *torrentStore) keptInParts(i int) bool { return t.parts != nil && t.parts.files[i] }
+
+// partsHold tells whether the part file holds any bytes of the torrent.
+func (t *torrentStore) partsHold() bool {
+	unlock := t.lockParts()
+	defer unlock()
+	return t.parts != nil && len(t.parts.slots) > 0
 }

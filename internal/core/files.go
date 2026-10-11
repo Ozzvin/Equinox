@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/anacrolix/torrent"
 )
@@ -185,6 +186,10 @@ func (m *Manager) SetFilePriorities(hash string, indexes []int, prio int8) error
 		}
 	}); err != nil {
 		return err
+	}
+	// Files wanted again take their bytes out of the part file before the engine may write to them.
+	if err := m.store.FilesChanged(t.InfoHash()); err != nil {
+		fmt.Fprintf(os.Stderr, "part file of %s: %v\n", t.Name(), err)
 	}
 	m.applyFiles(t, hash)
 	return nil
