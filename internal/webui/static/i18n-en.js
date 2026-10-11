@@ -800,6 +800,7 @@ window.__i18nCodes = {
   "port.closed": "The router does not answer the forwarding requests. Turn on UPnP or NAT-PMP in the settings of the router, or forward the port by hand.",
   "port.checking": "Checking the router…",
   "port.router": "the router address must be an IPv4 address such as 192.168.1.1: {1}",
+  "fs.no_file_manager": "a folder cannot be opened on this server: it runs on another device",
   "port.fixed": "the port was set when the server started and cannot be changed here",
   "torrent.busy": "the torrent is being moved right now, wait a moment",
   "torrent.file_missing": "file not found: “{1}”",
