@@ -31,6 +31,25 @@
     return data;
   }
 
+  // ---------- copying ----------
+  // The browser lends its clipboard to a page only over HTTPS or from localhost: on Umbrel the page comes by plain
+  // http://umbrel.local:8091, navigator.clipboard is missing there and every "copy" failed. The old way, a selected
+  // text field and execCommand("copy"), still works there while the click that asked for it is fresh.
+  async function copyText(text) {
+    if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+      try { await navigator.clipboard.writeText(text); return; } catch (_) { /* try the old way */ }
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+    // inside an open modal dialog: elsewhere the dialog keeps the focus and nothing is selected
+    (document.querySelector("dialog[open]") || document.body).appendChild(ta);
+    ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    ta.remove();
+    if (!ok) throw new Error("copy failed");
+  }
+
   // ---------- language ----------
   // i18n.js decides the language and, in English, translates the texts the page shows. What it cannot do is here: the
   // numbers, units and dates that are put together from pieces are made in the language of the page.
@@ -488,7 +507,7 @@
     e.preventDefault();
     if (!port || !port.publicIP) { toast("IP пока не известен"); return; }
     try {
-      await navigator.clipboard.writeText(`${port.publicIP}:${port.port}`);
+      await copyText(`${port.publicIP}:${port.port}`);
       toast("Адрес скопирован");
     } catch (_) { toast("Не удалось скопировать адрес", true); }
   });
@@ -1053,7 +1072,7 @@
           ${d.publisherUrl ? `<dt>Раздача на трекере</dt><dd><a class="src-link" href="${esc(d.publisherUrl)}" target="_blank" rel="noopener noreferrer" title="${esc(d.publisherUrl)}">${esc(d.publisher || hostOf(d.publisherUrl))} — открыть страницу раздачи</a></dd>` : ""}
           ${d.comment ? `<dt>Комментарий</dt><dd class="src-comment">${linkify(d.comment)}</dd>` : ""}
           <dt>Magnet-ссылка</dt><dd><button class="btn small" id="copy-magnet">Скопировать</button></dd></dl>`;
-        $("copy-magnet").onclick = () => navigator.clipboard.writeText(d.magnet).then(() => toast("Magnet-ссылка скопирована"), () => toast("Не удалось скопировать", true));
+        $("copy-magnet").onclick = () => copyText(d.magnet).then(() => toast("Magnet-ссылка скопирована"), () => toast("Не удалось скопировать", true));
       } else if (tab === "peers") {
         const p = await api("GET", `/api/torrents/${t.hash}/peers`); if (!same()) return;
         if (peersBusy) return; // a click or a drag is under way: drawing again would lose it
@@ -1078,7 +1097,7 @@
   }
   $("tr-list").addEventListener("click", async (e) => {
     const b = e.target.closest(".tr-copy"); if (!b) return;
-    try { await navigator.clipboard.writeText(b.dataset.url); toast("Адрес трекера скопирован"); }
+    try { await copyText(b.dataset.url); toast("Адрес трекера скопирован"); }
     catch (_) { toast("Не удалось скопировать", true); }
   });
   $("tr-list").addEventListener("click", (e) => { const el = e.target.closest(".tr-url"); if (el && !getSelection().toString()) toggleTracker(el); });
@@ -1406,7 +1425,7 @@
     if (!t.sequential) await api("POST", `/api/torrents/${t.hash}/sequential`, { enabled: true }).catch(() => {});
     await setPriority([index], "high");
     try {
-      await navigator.clipboard.writeText(location.origin + streamPath(t.hash, index));
+      await copyText(location.origin + streamPath(t.hash, index));
       toast("Ссылка скопирована — вставьте её в VLC или mpv (Медиа → Открыть URL)");
     } catch (_) { toast("Не удалось скопировать ссылку", true); }
     refresh();
