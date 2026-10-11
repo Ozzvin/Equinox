@@ -92,10 +92,12 @@ func (m *Manager) checkHolds(hash string) bool {
 }
 
 // fileChecked is the share of each file of t already checked while it is being checked, nil when it is not: for a
-// recheck of ours what lies before its place, for the engine's own check the pieces no longer waiting for a hash.
+// recheck of ours its pieces already done, for the engine's own check the pieces no longer waiting for a hash. A file a
+// check of chosen files does not include gets -1: it is not being checked and shows its usual progress.
 func (m *Manager) fileChecked(t *torrent.Torrent, hash string) []float64 {
 	m.mu.Lock()
 	pos, ours := m.checkPos[hash]
+	sel := m.checkSel[hash]
 	_, checking := m.checkProg[hash]
 	m.mu.Unlock()
 	if !ours && !checking {
@@ -104,13 +106,36 @@ func (m *Manager) fileChecked(t *torrent.Torrent, hash string) []float64 {
 	fs := t.Files()
 	out := make([]float64, len(fs))
 	if ours {
-		upto := checkedBytes(t, pos)
+		done := make([]bool, t.NumPieces())
+		for k := 0; k < pos && k < len(sel.pieces); k++ {
+			done[sel.pieces[k]] = true
+		}
+		in := map[int]bool{}
+		for _, i := range sel.files {
+			in[i] = true
+		}
+		info := t.Info()
 		for i, f := range fs {
-			if f.Length() > 0 {
-				out[i] = float64(min(max(upto-f.Offset(), 0), f.Length())) / float64(f.Length())
-			} else {
-				out[i] = 1
+			if len(sel.files) > 0 && !in[i] {
+				out[i] = -1
+				continue
 			}
+			if f.Length() == 0 || info == nil {
+				out[i] = 1
+				continue
+			}
+			var got int64
+			for p := f.BeginPieceIndex(); p < f.EndPieceIndex() && p < len(done); p++ {
+				if !done[p] {
+					continue
+				}
+				pc := info.Piece(p)
+				lo, hi := max(pc.Offset(), f.Offset()), min(pc.Offset()+pc.Length(), f.Offset()+f.Length())
+				if hi > lo {
+					got += hi - lo
+				}
+			}
+			out[i] = float64(got) / float64(f.Length())
 		}
 		return out
 	}

@@ -460,6 +460,9 @@ func TestDetailsPeersTrackersRecheckEndpoints(t *testing.T) {
 		t.Fatalf("a bad body must be 400, got %d", code)
 	}
 
+	if r := e.do(t, "POST", base+"/recheck", bytes.NewReader([]byte(`{"files":[99]}`)), nil); r.StatusCode != 400 {
+		t.Fatalf("a check of a file that is not there must be 400, got %d", r.StatusCode)
+	}
 	r := e.do(t, "POST", base+"/recheck", nil, nil)
 	r.Body.Close()
 	if r.StatusCode != http.StatusAccepted {

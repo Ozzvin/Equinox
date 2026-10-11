@@ -214,7 +214,10 @@ func (m *Manager) reapplyTrackers(t *torrent.Torrent, r record) {
 // a limit on simultaneous checks already in use, it waits its turn instead — at the front of
 // that line, ahead of anything else waiting (see acquireRecheck) — and Status.CheckQueued shows
 // its place. It runs in the background; Status.Checking is true only once it actually starts.
-func (m *Manager) Recheck(hash string) error {
+func (m *Manager) Recheck(hash string) error { return m.RecheckFiles(hash, nil) }
+
+// RecheckFiles checks only the given files of a torrent (the pieces they lie in); none means the whole torrent.
+func (m *Manager) RecheckFiles(hash string, files []int) error {
 	t, err := m.get(hash)
 	if err != nil {
 		return err
@@ -222,6 +225,22 @@ func (m *Manager) Recheck(hash string) error {
 	if t.Info() == nil {
 		return ErrNoMetadata
 	}
+	n := len(t.Files())
+	seen := map[int]bool{}
+	var sel []int
+	for _, i := range files {
+		if i < 0 || i >= n {
+			return errInvalid("file index %d out of range", i)
+		}
+		if !seen[i] {
+			seen[i] = true
+			sel = append(sel, i)
+		}
+	}
+	if len(sel) == n {
+		sel = nil // every file: the same as the whole torrent
+	}
+	sort.Ints(sel)
 	m.mu.Lock()
 	busy := m.checking[hash] || m.rechecking[hash]
 	if !busy {
@@ -236,12 +255,12 @@ func (m *Manager) Recheck(hash string) error {
 	if busy {
 		return ErrBusy
 	}
-	return m.startRecheck(t, hash, 0)
+	return m.startRecheck(t, hash, sel, 0)
 }
 
 // startRecheck runs a recheck from piece start on, in the background, behind the limit on simultaneous checks.
 // While it runs the torrent does not download (see syncPerm): what it would fetch could be thrown away by the check.
-func (m *Manager) startRecheck(t *torrent.Torrent, hash string, start int) error {
+func (m *Manager) startRecheck(t *torrent.Torrent, hash string, files []int, start int) error {
 	go func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -264,6 +283,7 @@ func (m *Manager) startRecheck(t *torrent.Torrent, hash string, start int) error
 			m.mu.Lock()
 			delete(m.checking, hash)
 			delete(m.checkPos, hash)
+			delete(m.checkSel, hash)
 			// The loop only refreshes progress of torrents it watches, which this one no
 			// longer is: without this a last percentage below 100 could stay on the status.
 			if m.phase[hash] == nil {
@@ -273,7 +293,7 @@ func (m *Manager) startRecheck(t *torrent.Torrent, hash string, start int) error
 			release()
 			m.syncPerm(t, hash)
 		}()
-		_ = m.verifyFrom(ctx, t, hash, start)
+		_ = m.verifyFrom(ctx, t, hash, files, start)
 	}()
 	return nil
 }

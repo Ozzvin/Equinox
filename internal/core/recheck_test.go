@@ -25,15 +25,15 @@ func TestRecheckKeepsItsPlaceAndHoldsTheDownload(t *testing.T) {
 	// stopped at once (the program closing): the place is kept
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := m.verifyFrom(ctx, tor, hash, 10); err == nil {
+	if err := m.verifyFrom(ctx, tor, hash, nil, 10); err == nil {
 		t.Fatal("a stopped check must say so")
 	}
-	if pos, ok := m.loadCheckPlaces()[hash]; !ok || pos != 10 {
-		t.Fatalf("the place must be kept, got %d (%v)", pos, ok)
+	if pl, ok := m.loadCheckPlaces()[hash]; !ok || pl.Pos != 10 {
+		t.Fatalf("the place must be kept, got %d (%v)", pl.Pos, ok)
 	}
 
 	// going on from there: the progress is the share of the bytes checked, and the place is forgotten at the end
-	if err := m.verifyFrom(context.Background(), tor, hash, 10); err != nil {
+	if err := m.verifyFrom(context.Background(), tor, hash, nil, 10); err != nil {
 		t.Fatal(err)
 	}
 	m.mu.Lock()
@@ -78,7 +78,7 @@ func TestRecheckGoesOnAfterARestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 && !s.Checking })
-	m.saveCheckPlace(hash, 20) // as if the program had closed in the middle of a recheck
+	m.saveCheckPlace(hash, 20, nil) // as if the program had closed in the middle of a recheck
 	m.resumeChecks()
 	waitFor(t, func() bool {
 		_, err := os.Stat(m.checksPath())
