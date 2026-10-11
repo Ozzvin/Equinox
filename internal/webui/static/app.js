@@ -1158,6 +1158,12 @@
     const t = cur(); if (!t) return;
     try { await post(t, "recheck"); toast("Проверка файлов запущена"); refresh(); } catch (x) { toast(x.message, true); }
   }
+  // only the chosen files of the Files tab (the pieces they lie in), not the whole torrent
+  async function recheckFiles(list) {
+    const t = cur(); if (!t || !list.length) return;
+    try { await post(t, "recheck", { files: list }); toast(list.length > 1 ? `Проверка выбранных файлов запущена: ${list.length}` : "Проверка файла запущена"); refresh(); }
+    catch (x) { toast(x.message, true); }
+  }
   // ---------- data loop ----------
   let colourAsked = "";
   async function refresh() {
@@ -1518,7 +1524,7 @@
     menu.innerHTML = `<div class="ctx-head">${n > 1 ? `Выбрано файлов: ${n}` : "Файл"}</div>` +
       PRIO.map(([v, name]) => `<button role="menuitem" data-fprio="${v}">${name}</button>`).join("") +
       "<hr>" + (REMOTE ? "" : `<button role="menuitem" data-fopen="${i}"${n > 1 ? " disabled" : ""}>Показать в Проводнике</button>`) +
-      `<button role="menuitem" data-frecheck="1"${recheckDisabled ? " disabled" : ""}>Проверить файлы</button>` +
+      `<button role="menuitem" data-frecheck="1"${recheckDisabled ? " disabled" : ""}>${n > 1 ? "Проверить выбранные файлы" : "Проверить файл"}</button>` +
       `<button role="menuitem" class="danger" data-fdel="1">Удалить с диска…</button>`;
     menu.hidden = false;
     menu.style.left = Math.min(e.clientX, innerWidth - menu.offsetWidth - 8) + "px";
@@ -1534,7 +1540,7 @@
       const t = cur(); if (!t) return;
       try { await api("POST", `/api/torrents/${t.hash}/files/${open.dataset.fopen}/open`); } catch (x) { toast(x.message, true); }
     } else if (del) askDeleteFiles();
-    else if (recheck && !recheck.disabled) recheckCurrent();
+    else if (recheck && !recheck.disabled) recheckFiles(filesForAction());
   });
   function askDeleteFiles() {
     if (!fileSel.size) return;
