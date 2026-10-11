@@ -93,17 +93,32 @@ func (m *Manager) checkHolds(hash string) bool {
 
 // fileChecked is the share of each file of t already checked while it is being checked, nil when it is not: for a
 // recheck of ours its pieces already done, for the engine's own check the pieces no longer waiting for a hash. A file a
-// check of chosen files does not include gets -1: it is not being checked and shows its usual progress.
+// check of chosen files does not include gets -1: it is not being checked and shows its usual progress. While a
+// recheck of ours waits for its turn, the files it will check get -2.
 func (m *Manager) fileChecked(t *torrent.Torrent, hash string) []float64 {
 	m.mu.Lock()
 	pos, ours := m.checkPos[hash]
-	sel := m.checkSel[hash]
+	sel, chosen := m.checkSel[hash]
 	_, checking := m.checkProg[hash]
 	m.mu.Unlock()
-	if !ours && !checking {
-		return nil
-	}
 	fs := t.Files()
+	if !ours && !checking {
+		if !chosen {
+			return nil
+		}
+		in := map[int]bool{}
+		for _, i := range sel.files {
+			in[i] = true
+		}
+		out := make([]float64, len(fs))
+		for i := range out {
+			out[i] = -1
+			if len(sel.files) == 0 || in[i] {
+				out[i] = -2
+			}
+		}
+		return out
+	}
 	out := make([]float64, len(fs))
 	if ours {
 		done := make([]bool, t.NumPieces())

@@ -103,6 +103,14 @@ func TestFileCheckedShowsOnlyChosenFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// waiting for its turn: the chosen file says so, the others show nothing about a check
+	m.mu.Lock()
+	m.checkSel[hash] = checkSel{files: []int{1}}
+	m.mu.Unlock()
+	if fs, _ := m.Files(hash); fs[0].Waiting || !fs[1].Waiting || fs[2].Waiting || fs[1].Checking {
+		t.Fatalf("only the chosen file waits for the check: %+v", fs)
+	}
+
 	pieces := checkPieces(tor, []int{1})
 	if len(pieces) != 4 || pieces[0] != 4 || pieces[3] != 7 {
 		t.Fatalf("the pieces of the second file: %v", pieces)

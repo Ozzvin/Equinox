@@ -609,10 +609,12 @@
   }
   // Mirrors peerBar(): blue once everything is there (a seed), green while still downloading.
   // While the torrent is checked, a file (or folder) already checked through turns green, "Проверено".
-  function setFileBar(bar, pct, checking) {
+  // A file a recheck will go through once its turn comes says so: "Ждёт проверки".
+  function setFileBar(bar, pct, checking, waiting) {
     const checked = checking && pct >= 100;
-    const text = checked ? L("Проверено", "Checked") : checking ? `${L("Проверка", "Checking")} ${Math.floor(pct)}%` : pct >= 100 ? "100%" : pct.toFixed(1) + "%";
-    bar.className = "pbar " + (checked ? "checked" : checking ? "check" : pct >= 100 ? "seed" : "down");
+    const text = waiting ? L("Ждёт проверки", "Queued for checking") : checked ? L("Проверено", "Checked") : checking ? `${L("Проверка", "Checking")} ${Math.floor(pct)}%` : pct >= 100 ? "100%" : pct.toFixed(1) + "%";
+    if (waiting) pct = 100; // the whole bar in the colour of a check, as the torrent's own "Ждёт проверки"
+    bar.className = "pbar " + (waiting ? "check" : checked ? "checked" : checking ? "check" : pct >= 100 ? "seed" : "down");
     bar.title = text;
     bar.querySelector(".fill").style.width = pct.toFixed(1) + "%";
     for (const lb of bar.querySelectorAll(".lb")) lb.textContent = text;
@@ -685,17 +687,20 @@
     for (const f of files) {
       const row = box.querySelector(`.file[data-i="${f.index}"]`); if (!row) continue;
       row.classList.toggle("skip", f.priority === "skip");
-      setFileBar(row.querySelector(".pbar"), (f.checking ? f.check || 0 : f.progress) * 100, !!f.checking);
+      setFileBar(row.querySelector(".pbar"), (f.checking ? f.check || 0 : f.progress) * 100, !!f.checking, !!f.checkWaiting);
       const sel = row.querySelector("select");
       if (document.activeElement !== sel) sel.value = f.priority;
     }
     for (const [path, idxs] of dirIdx) {
       const row = box.querySelector(`.file.dir[data-dir="${CSS.escape(path)}"]`); if (!row) continue;
       const all = idxs.map((i) => byIdx.get(i)).filter(Boolean);
-      const checking = all.some((f) => f.checking);
-      const size = all.reduce((a, f) => a + f.size, 0), done = all.reduce((a, f) => a + f.size * (checking ? f.check || 0 : f.progress), 0);
+      // a check of chosen files: the folder shows the check of those of its files that are checked, the rest of the
+      // folder is not being checked
+      const inCheck = all.filter((f) => f.checking), waiting = !inCheck.length && all.some((f) => f.checkWaiting);
+      const checking = inCheck.length > 0, part = checking ? inCheck : all;
+      const size = part.reduce((a, f) => a + f.size, 0), done = part.reduce((a, f) => a + f.size * (checking ? f.check || 0 : f.progress), 0);
       row.classList.toggle("skip", all.length > 0 && all.every((f) => f.priority === "skip"));
-      setFileBar(row.querySelector(".pbar"), size ? (done / size) * 100 : 0, checking);
+      setFileBar(row.querySelector(".pbar"), size ? (done / size) * 100 : 0, checking, waiting);
       const sel = row.querySelector("select"), same = all.length && all.every((f) => f.priority === all[0].priority);
       if (document.activeElement !== sel) sel.value = same ? all[0].priority : "";
     }
