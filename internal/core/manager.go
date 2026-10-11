@@ -182,6 +182,15 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	m.applyLimits()
 
 	m.store = store.NewResolver(func(h metainfo.Hash) string { return m.saveDir(h.HexString()) }, comp)
+	// the bytes a skipped file gets from the pieces it shares with wanted files are kept apart (store/parts.go)
+	m.store.UseParts(filepath.Join(stateDir, "parts"), func(h metainfo.Hash) []bool {
+		prios := m.filePrios(h.HexString())
+		out := make([]bool, len(prios))
+		for i, p := range prios {
+			out[i] = p == PrioSkip
+		}
+		return out
+	})
 	newConfig := func(port int) *torrent.ClientConfig {
 		cc := torrent.NewDefaultClientConfig()
 		cc.ListenPort = port
@@ -642,6 +651,7 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	down, up := m.finalCounters(t, hash)
 
 	t.Drop()
+	m.store.DropParts(h)
 	m.dropHeld(hash)
 	m.mu.Lock()
 	delete(m.torrents, h)

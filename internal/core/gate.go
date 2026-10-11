@@ -78,6 +78,9 @@ func (m *Manager) needsCheck(hash string, info *metainfo.Info) bool {
 	if err != nil {
 		return true // unsure: check as before
 	}
+	if h, ok := parseHash(hash); ok && m.store.HasParts(metainfo.Hash(h)) {
+		return true
+	}
 	for i, f := range info.UpvertedFiles() {
 		if f.Length == 0 {
 			continue

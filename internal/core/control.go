@@ -322,6 +322,7 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 	fs := t.Files()
 	prios := m.filePrios(hash)
 	checked := m.fileChecked(t, hash)
+	kept := m.store.InParts(t.InfoHash()) // skipped files that are not on the disk: their bytes are only in the part file
 	out := make([]FileStatus, len(fs))
 	// the engine reports the path inside the torrent; a torrent made from a folder keeps that folder as its root
 	root := ""
@@ -330,6 +331,9 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 	}
 	for i, f := range fs {
 		done := f.BytesCompleted()
+		if i < len(kept) && kept[i] {
+			done = 0
+		}
 		p := 0.0
 		if f.Length() > 0 {
 			p = float64(done) / float64(f.Length())
