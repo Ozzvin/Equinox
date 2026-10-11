@@ -103,6 +103,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if s.open {
 			_, _ = w.Write([]byte("window.__equinoxToken = \"" + OpenToken + "\";\n"))
+			// on another machine (Umbrel): the page offers nothing that opens a file manager there
+			_, _ = w.Write([]byte("window.__equinoxRemote = true;\n"))
 		}
 		if len(s.places) > 0 { // before the page's first request: it shows every path by these names
 			b, _ := json.Marshal(s.places)
@@ -511,8 +513,21 @@ func (s *Server) restartRequired(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.m.RestartInfo())
 }
 
+// noFileManager refuses "show in the file manager" for a server behind a proxy (Umbrel): it runs in a container on
+// another machine, where no one would see a file manager open; the page does not offer it there either.
+func (s *Server) noFileManager(w http.ResponseWriter) bool {
+	if !s.open {
+		return false
+	}
+	fail(w, &core.CodedError{Code: "fs.no_file_manager", Msg: "на этом сервере нельзя открыть папку: он работает на другом устройстве", Err: core.ErrInvalidInput})
+	return true
+}
+
 // openFolder shows the torrent's files in the system file manager (this machine only).
 func (s *Server) openFolder(w http.ResponseWriter, r *http.Request) {
+	if s.noFileManager(w) {
+		return
+	}
 	if err := s.m.OpenFolder(r.PathValue("hash")); err != nil {
 		fail(w, err)
 		return
@@ -522,6 +537,9 @@ func (s *Server) openFolder(w http.ResponseWriter, r *http.Request) {
 
 // openFile shows one file of a torrent in the file manager.
 func (s *Server) openFile(w http.ResponseWriter, r *http.Request) {
+	if s.noFileManager(w) {
+		return
+	}
 	idx, err := strconv.Atoi(r.PathValue("idx"))
 	if err != nil {
 		fail(w, core.ErrInvalidInput)
