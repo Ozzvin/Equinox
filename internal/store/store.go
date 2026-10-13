@@ -136,7 +136,7 @@ func Paths(base string, info *metainfo.Info) ([]string, error) {
 
 type fileSpan struct {
 	path   string
-	offset int64 // offset of the file inside the torrent
+	offset int64 // offset of the file inside the torrent (in v2 and hybrid torrents every file starts on a piece boundary)
 	length int64
 	size   int64 // at open time: size on disk, 0 if the file does not exist
 }
@@ -151,14 +151,15 @@ func (s *Storage) OpenTorrent(_ context.Context, info *metainfo.Info, ih metainf
 		open: map[string]*handle{},
 		stop: make(chan struct{}),
 	}
-	var off int64
+	// The engine's offsets: in a torrent with a v2 part (BEP 52, hybrid ones too) every file starts on a piece boundary
+	// and the gaps between files are padding, which is not on the disk; summing up the lengths would put every file
+	// from the second on at the wrong place.
 	for i, f := range info.UpvertedFiles() {
 		var size int64
 		if fi, err := os.Stat(paths[i]); err == nil {
 			size = fi.Size()
 		}
-		t.files = append(t.files, fileSpan{path: paths[i], offset: off, length: f.Length, size: size})
-		off += f.Length
+		t.files = append(t.files, fileSpan{path: paths[i], offset: f.TorrentOffset, length: f.Length, size: size})
 		if f.Length == 0 { // the engine never writes these
 			if err := os.MkdirAll(filepath.Dir(paths[i]), 0o755); err != nil {
 				return storage.TorrentImpl{}, err
@@ -355,7 +356,16 @@ func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 			continue
 		}
 		if off < f.offset {
-			return n, io.ErrUnexpectedEOF
+			// the padding before this file (v2): nothing of it is on the disk, it is all zeros
+			gap := min(f.offset-off, int64(len(b)))
+			if !write {
+				clear(b[:gap])
+			}
+			n += int(gap)
+			b, off = b[gap:], off+gap
+			if len(b) == 0 {
+				break
+			}
 		}
 		chunk := int64(len(b))
 		if rem := end - off; chunk > rem {
