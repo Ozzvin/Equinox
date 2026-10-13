@@ -213,7 +213,7 @@ window.__i18nEn = [
   ["только при удалении раздачи вместе с файлами", "only when the torrent is removed with its files"],
   ["при любом удалении раздачи", "whenever the torrent is removed"],
   ["никогда", "never"],
-  ["Метка собирает раздачи в группу в левом меню. Для метки можно задать папку: новые раздачи с этой меткой сохраняются туда (без папки — в общую папку загрузок). Уже добавленные раздачи остаются в своих папках.", "A label gathers torrents into a group in the left menu. A label can have a folder: new torrents with this label are saved there (with no folder — to the common download folder). Torrents already added stay in their folders."],
+  ["Метка собирает раздачи в группу в левом меню. Для метки можно задать папку — там раздачи с этой меткой окажутся в итоге: если завершённые раздачи переносятся, они качаются в общую папку загрузок и по завершении переезжают в папку метки, иначе качаются сразу в неё. Без папки — как остальные раздачи. Уже скачанные раздачи остаются на месте.", "A label groups torrents in the menu on the left. A label can have a folder — where its torrents end up: if finished torrents are moved, they are downloaded into the general download folder and moved to the label's folder when they finish, otherwise they are downloaded straight into it. Without a folder — like the other torrents. Torrents already downloaded stay where they are."],
   ["Название новой метки", "Name of the new label"],
   ["Добавить метку", "Add a label"],
   // ---- settings: queue and seeding
