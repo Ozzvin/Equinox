@@ -49,8 +49,42 @@ func (m *Manager) saveDir(hash string) string {
 	return p
 }
 
-// resolveSaveDir fills in the record's folder for a torrent that is being added: the
-// folder asked for, else the label's folder, else the default one. The folder is created.
+// A label's folder is where its torrents end up, as qBittorrent's categories: with finished torrents moved (a folder of
+// their own or the general one), a torrent is downloaded into the general download folder and moved to its label's
+// folder when it finishes; without moving, it is downloaded straight into the label's folder.
+
+// labelDir is the folder of a label, "" when it has none.
+func labelDir(s config.Settings, label string) string {
+	if label == "" {
+		return ""
+	}
+	return strings.TrimSpace(s.LabelPaths[label])
+}
+
+// movesWhenDone tells whether a finished torrent is moved: not switched off for it, and a folder for it to go to (its
+// own or the general one).
+func movesWhenDone(s config.Settings, r *record) bool {
+	return !r.MoveDoneOff && (r.MoveDone != "" || strings.TrimSpace(s.MoveCompletedDir) != "")
+}
+
+// doneDir is where a finished torrent is moved, "" for nowhere: its own folder, else its label's folder, else the
+// general folder for finished torrents.
+func doneDir(s config.Settings, r *record) string {
+	if !movesWhenDone(s, r) {
+		return ""
+	}
+	if r.MoveDone != "" {
+		return r.MoveDone
+	}
+	if l := labelDir(s, r.Label); l != "" {
+		return l
+	}
+	return strings.TrimSpace(s.MoveCompletedDir)
+}
+
+// resolveSaveDir fills in the record's folder for a torrent that is being added: the folder asked for, else the
+// label's folder when the torrent is not moved when finished (when it is, it goes there at the end), else the default
+// one. The folder is created.
 func (m *Manager) resolveSaveDir(rec *record) error {
 	if err := m.checkOptions(rec); err != nil {
 		return err
@@ -61,8 +95,8 @@ func (m *Manager) resolveSaveDir(rec *record) error {
 	}
 	s := m.cfg.Get()
 	dir := strings.TrimSpace(rec.SavePath)
-	if dir == "" && rec.Label != "" {
-		dir = strings.TrimSpace(s.LabelPaths[rec.Label])
+	if dir == "" && !movesWhenDone(s, rec) {
+		dir = labelDir(s, rec.Label)
 	}
 	if dir == "" {
 		dir = s.DataDir
