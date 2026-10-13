@@ -83,7 +83,7 @@ func TestTrackAvailabilityRemembersASeedThatWasSeen(t *testing.T) {
 	// still incomplete and connected to a's peer (see trackAvailability's "already complete" skip). The full
 	// (not just per-peer) availability check only runs every availabilityCheckEvery-th tick, so the transfer
 	// needs to still be running at tick 15, not just any tick: 8 KiB/s keeps ~120 KiB (of 200) still to go at
-	// the 15s mark, finishing around 25s, comfortably inside waitFor's 30s budget.
+	// the 15s mark; the cap is lifted once the fields are seen (below).
 	b := newManager(t, dirB, func(s *config.Settings) { s.DownLimitKBps = 8 })
 	hashB, err := b.AddFile(tp)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestTrackAvailabilityRemembersASeedThatWasSeen(t *testing.T) {
 	}
 	// As in TestAddedPeerIsUsed: the engine can drop an address it could not reach at the first try, so keep
 	// offering it until the connection (and with it, the fields under test) actually takes.
-	waitFor(t, func() bool {
+	waitForTransfer(t, a, hashA, b, hashB, func() bool {
 		rec := b.snapshotRecords()[hashB]
 		if s, ok := statusOf(b, hashB); ok && s.Progress < 1 && s.Peers == 0 {
 			_, _ = b.AddPeers(hashB, []string{addr})
@@ -110,10 +110,22 @@ func TestTrackAvailabilityRemembersASeedThatWasSeen(t *testing.T) {
 	if err != nil || x.LastSeedSeen.IsZero() || x.LastFullAvailable.IsZero() {
 		t.Fatalf("status extras did not pick up the record: %+v %v", x, err)
 	}
+	// Seen: the cap has done its job. Lifted, the rest of the transfer is quick, instead of another ten-odd seconds
+	// at 8 KiB/s that left only a few to spare in waitFor's 30 on a slow runner (and it did run out now and then).
+	cur := b.cfg.Get()
+	if err := b.SetLimits(0, 0, cur.AltDownLimitKBps, cur.AltUpLimitKBps); err != nil {
+		t.Fatal(err)
+	}
 
 	// once it finishes, an already-complete torrent is skipped (nothing left to learn), and what was already
 	// remembered must not be wiped by that.
-	waitFor(t, func() bool { s, ok := statusOf(b, hashB); return ok && s.Progress == 1 })
+	waitForTransfer(t, a, hashA, b, hashB, func() bool {
+		s, ok := statusOf(b, hashB)
+		if ok && s.Progress < 1 && s.Peers == 0 { // as above: a connection lost on the way is offered again
+			_, _ = b.AddPeers(hashB, []string{addr})
+		}
+		return ok && s.Progress == 1
+	})
 	time.Sleep(200 * time.Millisecond) // let a couple more ticks pass, now that it is complete
 	if x, _ = b.StatusExtra(hashB); x.LastSeedSeen.IsZero() || x.LastFullAvailable.IsZero() {
 		t.Fatalf("finishing must not clear what was already seen: %+v", x)

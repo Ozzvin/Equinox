@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
@@ -61,12 +62,17 @@ func TestSkippedFileStaysOffTheDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	addr := "127.0.0.1:" + strconv.Itoa(a.Port())
-	waitFor(t, func() bool {
+	tb, err := b.get(hashB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForTransfer(t, a, hashA, b, hashB, func() bool {
 		s, ok := statusOf(b, hashB)
 		if ok && s.Progress < 1 && s.Peers == 0 {
 			_, _ = b.AddPeers(hashB, []string{addr})
 		}
-		return ok && s.Progress == 1
+		// Progress counts a chunk the moment it arrives: the files are read only once every piece is on the disk
+		return ok && s.Progress == 1 && wantedVerified(tb, prios)
 	})
 
 	srtPath := filepath.Join(dl, "season", "e01.srt")
@@ -76,7 +82,16 @@ func TestSkippedFileStaysOffTheDisk(t *testing.T) {
 	for _, name := range []string{"e01.mkv", "e02.mkv"} {
 		got, err := os.ReadFile(filepath.Join(dl, "season", name))
 		if err != nil || !bytes.Equal(got, content[name]) {
-			t.Fatalf("%s is not what was seeded (%d bytes, %v)", name, len(got), err)
+			// what differs, and whether it is still so a moment later (a late write) or stays (a wrong one)
+			first := describeDiff(got, content[name])
+			ih := metainfo.NewHashFromHex(hashB)
+			inParts := b.store.InParts(ih) // which files the part file held at that moment
+			idx, _ := os.ReadFile(filepath.Join(b.stateDir, "parts", hashB+".json"))
+			files, _ := b.Files(hashB)
+			time.Sleep(2 * time.Second)
+			again, _ := os.ReadFile(filepath.Join(dl, "season", name))
+			t.Fatalf("%s is not what was seeded (%d bytes, %v): %s; 2s later: %s\n  in parts: %v, index %s\n  files: %+v\n  seed:  %s\n  leech: %s\n--- leech engine:\n%s",
+				name, len(got), err, first, describeDiff(again, content[name]), inParts, idx, files, swarmState(a, hashA), swarmState(b, hashB), engineStatus(b))
 		}
 	}
 	files, _ := b.Files(hashB)

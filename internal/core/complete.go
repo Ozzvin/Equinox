@@ -28,7 +28,7 @@ func (m *Manager) handleCompletion(t *torrent.Torrent, hash string, r record) {
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "saving WasIncomplete for %s: %v\n", t.Name(), err)
 		}
-	case done >= size && r.WasIncomplete:
+	case done >= size && r.WasIncomplete && wantedVerified(t, r.FilePrios): // see wantedVerified
 		if err := m.state.with(func(s *state) {
 			if x := s.Torrents[hash]; x != nil {
 				x.WasIncomplete = false
