@@ -256,10 +256,11 @@ func (m *Manager) prioritise(t *torrent.Torrent, withWindow bool) {
 	s := m.cfg.Get()
 	edge, window := s.EdgePieces, s.SequentialWindow
 	prios := m.filePrios(t.InfoHash().HexString())
-	wanted := wantedPieces(t, prios) // never fetch pieces that only belong to skipped files
+	lowOn := m.lowIsOn(t)
+	wanted := activePieces(t, prios, lowOn) // never fetch pieces that only belong to skipped files (or low ones not yet due)
 
 	for fi, f := range t.Files() {
-		if prioAt(prios, fi) == PrioSkip {
+		if !fileOn(prios, fi, lowOn) {
 			continue
 		}
 		b, e := f.BeginPieceIndex(), f.EndPieceIndex() // [b, e)
