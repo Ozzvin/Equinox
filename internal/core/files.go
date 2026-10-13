@@ -80,9 +80,51 @@ func (m *Manager) applyFiles(t *torrent.Torrent, hash string) {
 			f.SetPriority(torrent.PiecePriorityNormal)
 		}
 	}
+	// A piece keeps a priority of its own (the edges of a file, the window of sequential downloading) on top of its
+	// files': without this, the pieces raised before a file was skipped would still be downloaded.
+	on := activePieces(t, prios, lowOn)
+	for i, ok := range on {
+		if !ok {
+			if p := t.Piece(i); !p.State().Complete {
+				p.SetPriority(torrent.PiecePriorityNone)
+			}
+		}
+	}
 	if rec, ok := m.record(hash); ok {
 		m.keepEdges(t, rec)
 	}
+}
+
+// fileOn tells whether file i is to be downloaded now: not skipped, and a low one only once the others are done.
+func fileOn(prios []int8, i int, lowOn bool) bool {
+	switch prioAt(prios, i) {
+	case PrioSkip:
+		return false
+	case PrioLow:
+		return lowOn
+	}
+	return true
+}
+
+// activePieces marks the pieces that belong to at least one file to be downloaded now (see fileOn).
+func activePieces(t *torrent.Torrent, prios []int8, lowOn bool) []bool {
+	w := make([]bool, t.NumPieces())
+	for i, f := range t.Files() {
+		if !fileOn(prios, i, lowOn) {
+			continue
+		}
+		for p := f.BeginPieceIndex(); p < f.EndPieceIndex() && p < len(w); p++ {
+			w[p] = true
+		}
+	}
+	return w
+}
+
+// lowIsOn tells whether the low files of t may be downloaded (see applyFiles).
+func (m *Manager) lowIsOn(t *torrent.Torrent) bool {
+	m.lowMu.Lock()
+	defer m.lowMu.Unlock()
+	return m.lowOn[t.InfoHash()]
 }
 
 // othersDone reports whether every normal and high file is complete: then the low ones may start.
@@ -134,20 +176,6 @@ func selection(t *torrent.Torrent, prios []int8) (size, done int64) {
 		done += f.BytesCompleted()
 	}
 	return size, done
-}
-
-// wantedPieces marks the pieces that belong to at least one file that is not skipped.
-func wantedPieces(t *torrent.Torrent, prios []int8) []bool {
-	w := make([]bool, t.NumPieces())
-	for i, f := range t.Files() {
-		if prioAt(prios, i) == PrioSkip {
-			continue
-		}
-		for p := f.BeginPieceIndex(); p < f.EndPieceIndex() && p < len(w); p++ {
-			w[p] = true
-		}
-	}
-	return w
 }
 
 // SetFilePriorities sets the priority of the given files. Files that become wanted get

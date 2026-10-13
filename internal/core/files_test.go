@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
 )
@@ -134,5 +135,47 @@ func TestLowPriorityWaitsForTheOtherFiles(t *testing.T) {
 	}
 	if _, err := ParsePriority("low"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A file marked "do not download" stops downloading even the pieces that were raised before (its edges, the window of
+// sequential downloading): a piece keeps a priority of its own on top of its files'. Found on a real torrent: a skipped
+// season went on downloading its raised pieces.
+func TestSkipDropsThePiecesRaisedBefore(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, nil)
+	hash, err := m.AddMetaInfo(twoFileTorrent(t, dir)) // no peers: nothing is downloaded
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { l := m.List(); return len(l) == 1 && l[0].HasMeta })
+	tor, err := m.get(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := tor.Files()[0], tor.Files()[1]
+	inB := b.EndPieceIndex() - 1 // the last piece of b.bin, none of a.bin's
+	raise(tor, a.BeginPieceIndex(), torrent.PiecePriorityNow)
+	raise(tor, inB, torrent.PiecePriorityNow)
+	if got := tor.Piece(inB).State().Priority; got != torrent.PiecePriorityNow {
+		t.Fatalf("the raised piece: %v", got)
+	}
+
+	if err := m.SetFilePriorities(hash, []int{1}, PrioSkip); err != nil {
+		t.Fatal(err)
+	}
+	if got := tor.Piece(inB).State().Priority; got != torrent.PiecePriorityNone {
+		t.Fatalf("a piece of the skipped file must not be downloaded any more, its priority is %v", got)
+	}
+	if got := tor.Piece(a.BeginPieceIndex()).State().Priority; got == torrent.PiecePriorityNone {
+		t.Fatal("a piece of the wanted file must keep being downloaded")
+	}
+
+	// wanted again: the file is downloaded as usual
+	if err := m.SetFilePriorities(hash, []int{1}, PrioNormal); err != nil {
+		t.Fatal(err)
+	}
+	if got := tor.Piece(inB).State().Priority; got == torrent.PiecePriorityNone {
+		t.Fatal("a file wanted again must be downloaded")
 	}
 }
