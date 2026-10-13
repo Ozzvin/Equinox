@@ -2,8 +2,8 @@
   Собирает две версии Equinox, каждая в своём архиве:
   для ПК (окно и трей) и серверную (без окна).
 
-    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup-<версия>.exe (и его копия Equinox-Setup.exe
-                             для уже установленных программ, см. internal/update), архивы Equinox-pc-<версия>.zip и Equinox-server-<версия>.zip
+    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup-<версия>.exe,
+                             архивы Equinox-pc-<версия>.zip и Equinox-server-<версия>.zip
     .\build.ps1 -SkipTests   то же без запуска тестов (быстрее)
 
   Результат лежит в папке dist (она не входит в репозиторий).
@@ -109,16 +109,10 @@ function Pack($exe, $nameInZip, $readme, $zip) {
 Pack dist\Equinox.exe "Equinox $Version.exe" $pcReadme "dist\Equinox-pc-$Version.zip"
 Pack dist\Equinox-server.exe "Equinox-server $Version.exe" $serverReadme "dist\Equinox-server-$Version.zip"
 
-# The installer is also published under its old fixed name: programs installed before names carried the
-# version look for exactly that file when they update themselves (see internal/update).
-if (Test-Path "dist\Equinox-Setup-$Version.exe") {
-    Copy-Item "dist\Equinox-Setup-$Version.exe" dist\Equinox-Setup.exe
-}
-
 Step "контрольные суммы"
 $sums = Get-ChildItem dist -File | Where-Object { $_.Name -like 'Equinox*' -and $_.Extension -in ".exe", ".zip" } | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
 Set-Content -Encoding ASCII -Path dist\SHA256SUMS.txt -Value $sums
 
 Write-Host ""
 Get-ChildItem dist | Select-Object Name, @{n = 'МБ'; e = { [math]::Round($_.Length / 1MB, 1) }} | Format-Table -AutoSize
-Write-Host "Готово: dist\Equinox-Setup-$Version.exe (и Equinox-Setup.exe), Equinox-pc-$Version.zip, Equinox-server-$Version.zip" -ForegroundColor Green
+Write-Host "Готово: dist\Equinox-Setup-$Version.exe, Equinox-pc-$Version.zip, Equinox-server-$Version.zip" -ForegroundColor Green

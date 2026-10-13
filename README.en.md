@@ -62,8 +62,6 @@ Download the file you need from the [Releases](https://github.com/Ozzvin/equinox
 
 The installer can also be run "for all users" (a choice on its first page, or run it as administrator): the program is then placed in `Program Files`, and auto-update asks for confirmation in a Windows window (UAC).
 
-The release also contains `Equinox-Setup.exe`: the same installer under its former name, which already installed versions need in order to update themselves. You do not need to download it by hand.
-
 Requires Windows 10/11 and the Microsoft Edge WebView2 Runtime (it is part of Windows 11 and most Windows 10 installations; only the desktop version needs it).
 
 The data (settings, the list of torrents, copies of `.torrent` files, the log) is kept in the `data` folder next to the program (when installed in `Program Files`, in `%LOCALAPPDATA%\Equinox`). To move everything to another computer, copy the whole folder.
