@@ -119,16 +119,17 @@ jobs:
           curl -fsS -o /dev/null http://127.0.0.1:9091/
           sudo apt-get remove -y equinox-server
           ! systemctl is-active equinox-server
-      # The same for the amd64 .rpm, in a Fedora container booted with systemd as its init.
+      # The same for the amd64 .rpm, in a Fedora container booted with systemd as its init. The package goes to
+      # /root: systemd mounts an empty tmpfs over /tmp, which would hide a file copied there.
       - name: Check the .rpm (Fedora)
         run: |
           printf '%s\n' 'FROM fedora:latest' 'RUN dnf -y install systemd curl && dnf clean all' 'CMD ["/usr/sbin/init"]' |
             docker build -q -t fedora-systemd -
           docker run -d --name fedora --privileged fedora-systemd
-          docker cp dist/$(cd dist && ls equinox-server-*.x86_64.rpm) fedora:/tmp/equinox-server.rpm
+          docker cp dist/$(cd dist && ls equinox-server-*.x86_64.rpm) fedora:/root/equinox-server.rpm
           f() { docker exec fedora sh -c "$1"; }
           f 'systemctl is-system-running --wait || true'
-          f 'dnf -y install /tmp/equinox-server.rpm'
+          f 'dnf -y install /root/equinox-server.rpm'
           f 'id equinox && test -f /etc/default/equinox-server'
           f 'systemctl start equinox-server'
           f 'for i in $(seq 1 30); do test -s /var/lib/equinox/ui-url && break; sleep 1; done; systemctl is-active equinox-server'
