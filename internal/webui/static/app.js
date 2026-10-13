@@ -995,7 +995,7 @@
     if (!optDirty && !focused) {
       $("op-movedone-on").checked = !d.moveDoneOff; $("op-movedone").value = d.moveDone || ""; $("op-movedone").disabled = d.moveDoneOff;
       $("op-movedone-pick").disabled = d.moveDoneOff;
-      $("op-movedone").placeholder = settings && settings.moveCompletedDir ? `общая настройка: ${settings.moveCompletedDir}` : "папка для завершённых";
+      $("op-movedone").placeholder = doneHint(d.label);
     }
     if (document.activeElement !== $("op-seq")) $("op-seq").checked = !!d.sequential;
     if (document.activeElement !== $("op-edge")) $("op-edge").checked = !!d.edgePieces;
@@ -1008,8 +1008,37 @@
     $("op-path").title = d.savePath || "";
     $("op-move").disabled = !!t.moving;
   }
-  for (const id of ["op-movedone-on", "op-movedone"]) $(id).addEventListener("input", () => { optDirty = true; });
-  $("op-movedone-on").addEventListener("change", (e) => { $("op-movedone").disabled = !e.target.checked; $("op-movedone-pick").disabled = !e.target.checked; optDirty = true; });
+  // Where a finished torrent goes when its own field is empty: its label's folder when finished torrents are moved and
+  // the label has one, else the general folder for finished torrents.
+  function doneHint(label) {
+    const all = (settings && settings.moveCompletedDir) || "", lf = label && settings && settings.labelPaths ? settings.labelPaths[label] || "" : "";
+    return all && lf ? `папка метки: ${lf}` : all ? `общая настройка: ${all}` : "папка для завершённых";
+  }
+  // "Переместить завершённую раздачу в:" is saved as soon as it changes, as the rest of the tab: the box at once, the
+  // folder when it is picked, on Enter or when the field is left. Several torrents whose box is half ticked (they
+  // differ) are left alone until it is ticked or cleared; with their folders different and the field left empty, each
+  // keeps its own.
+  let moveDoneSent = "", opPathsMixed = false;
+  async function saveMoveDone() {
+    const on = $("op-movedone-on"), list = chosen();
+    if (on.indeterminate || !list.length) return;
+    const path = $("op-movedone").value.trim();
+    const own = new Map((optMulti.ds || []).map((d) => [d.hash, d.moveDone || ""]));
+    const keep = list.length > 1 && !path && opPathsMixed;
+    const key = list.map((t) => t.hash).sort().join(",") + "|" + on.checked + "|" + path + "|" + keep;
+    if (key === moveDoneSent) return;
+    moveDoneSent = key; optDirty = false; optMultiAt = 0;
+    await each(list, (t) => post(t, "move-done", { enabled: on.checked, path: keep ? own.get(t.hash) || "" : path }),
+      list.length > 1 ? `Применено к раздачам: ${list.length}` : "Параметры раздачи сохранены");
+    renderDetails();
+  }
+  $("op-movedone").addEventListener("input", () => { optDirty = true; moveDoneSent = ""; });
+  $("op-movedone").addEventListener("change", saveMoveDone);
+  $("op-movedone").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveMoveDone(); } });
+  $("op-movedone-on").addEventListener("change", (e) => {
+    $("op-movedone").disabled = !e.target.checked; $("op-movedone-pick").disabled = !e.target.checked;
+    moveDoneSent = ""; saveMoveDone();
+  });
   // The options act on every chosen torrent: one, or several at once (then the tab says so at the top).
   const optAll = (path, body) => {
     const list = chosen(); if (!list.length) return;
@@ -1020,14 +1049,6 @@
   $("op-edge").addEventListener("change", (e) => optAll("edge-pieces", { enabled: e.target.checked }));
   $("op-label").addEventListener("change", (e) => { if (e.target.value !== MIXED) optAll("label", { label: e.target.value }); });
   $("op-move").onclick = () => $("btn-move").click();
-  $("op-apply").onclick = async () => {
-    const list = chosen(); if (!list.length) return;
-    if ($("op-movedone-on").indeterminate) { toast("Отметьте или снимите галочку «Переместить завершённую раздачу в:»", true); return; }
-    const body = { enabled: $("op-movedone-on").checked, path: $("op-movedone").value.trim() };
-    optDirty = false; optMultiAt = 0;
-    await each(list, (t) => post(t, "move-done", body), list.length > 1 ? `Применено к раздачам: ${list.length}` : "Параметры раздачи сохранены");
-    renderDetails();
-  };
 
   // ---- several torrents chosen: the Options tab shows what they have in common and sets them all at once
   const MIXED = "\u0001mixed";
@@ -1064,7 +1085,9 @@
       const on = $("op-movedone-on"), ons = ds.map((d) => !d.moveDoneOff), paths = ds.map((d) => d.moveDone || "");
       setTri(on, ons);
       $("op-movedone").value = mixedOf(paths) ? "" : paths[0] || "";
-      $("op-movedone").placeholder = mixedOf(paths) ? "у раздач разные папки" : settings && settings.moveCompletedDir ? `общая настройка: ${settings.moveCompletedDir}` : "папка для завершённых";
+      const labels = list.map((t) => t.label || "");
+      opPathsMixed = mixedOf(paths);
+      $("op-movedone").placeholder = mixedOf(paths) ? "у раздач разные папки" : doneHint(mixedOf(labels) ? "" : labels[0]);
       $("op-movedone").disabled = $("op-movedone-pick").disabled = !on.checked && !on.indeterminate;
     }
     const sel = $("op-label");
@@ -2214,9 +2237,15 @@
     $(AO.skip).checked = o.skipCheck; $(AO.prealloc).checked = o.preallocate; $(AO.conns).value = o.maxConns;
     const d = optDefaults(); // something set under "Ещё" that differs from the defaults is not hidden
     if (o.skipCheck !== d.skipCheck || o.preallocate !== d.preallocate || Number(o.maxConns) !== 0) setAoMore(true, false);
-    const lf = addInfo && addInfo.labels && addInfo.labels[o.label.trim()];
-    $(AO.save).placeholder = lf ? `папка метки: ${lf}` : `по умолчанию: ${addInfo ? addInfo.dataDir : ""}`;
-    $(AO.move).placeholder = addInfo && addInfo.moveCompletedDir ? `общая настройка: ${addInfo.moveCompletedDir}` : "папка для завершённых";
+    aoHints(o);
+  }
+  // With finished torrents moved (a folder given here or the general one), the label's folder is where the torrent goes
+  // when it finishes and it is downloaded into the general folder; without, it is downloaded straight into the label's.
+  function aoHints(o) {
+    const lf = (addInfo && addInfo.labels && addInfo.labels[o.label.trim()]) || "", all = (addInfo && addInfo.moveCompletedDir) || "";
+    const moves = o.moveDoneOn && (o.moveDone.trim() || all);
+    $(AO.save).placeholder = lf && !moves ? `папка метки: ${lf}` : `по умолчанию: ${addInfo ? addInfo.dataDir : ""}`;
+    $(AO.move).placeholder = lf && all ? `папка метки: ${lf}` : all ? `общая настройка: ${all}` : "папка для завершённых";
   }
   function readOpts() {
     const e = adCur(); if (!e) return;
@@ -2225,8 +2254,7 @@
     o.paused = $(AO.paused).checked; o.edgePieces = $(AO.edges).checked; o.sequential = $(AO.seq).checked;
     o.skipCheck = $(AO.skip).checked; o.preallocate = $(AO.prealloc).checked; o.maxConns = Number($(AO.conns).value) || 0;
     $(AO.move).disabled = !o.moveDoneOn; document.querySelector('[data-pick="ao-movedone"]').disabled = !o.moveDoneOn;
-    const lf = addInfo && addInfo.labels && addInfo.labels[o.label.trim()];
-    $(AO.save).placeholder = lf ? `папка метки: ${lf}` : `по умолчанию: ${addInfo ? addInfo.dataDir : ""}`;
+    aoHints(o);
   }
 
   // "Ещё": the options people rarely change, folded under a link; the choice is remembered
@@ -3012,7 +3040,7 @@
       const input = $(b.dataset.pick);
       const any = b.hasAttribute("data-pick-any"); // this field takes a file as well as a folder
       const dir = await pickFolder(any ? "Выберите файл или папку" : "Выберите папку", input.value, any);
-      if (dir) { input.value = dir; input.dispatchEvent(new Event("input", { bubbles: true })); }
+      if (dir) { input.value = dir; input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true })); }
     });
   });
 
