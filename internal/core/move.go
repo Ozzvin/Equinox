@@ -258,6 +258,7 @@ func (m *Manager) dropForMove(hash string, t *torrent.Torrent) {
 	delete(m.seenDown, h)
 	delete(m.seenUp, h)
 	delete(m.perm, h)
+	delete(m.stalls, h)
 	delete(m.queued, h)
 	m.mu.Unlock()
 }
