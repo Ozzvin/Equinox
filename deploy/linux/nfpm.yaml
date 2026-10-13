@@ -1,6 +1,6 @@
 # .deb and .rpm of the server, built by the "linux" job of .github/workflows/build.yml:
 #   VERSION=1.1.0 ARCH=amd64 nfpm pkg -f deploy/linux/nfpm.yaml -p deb -t dist/
-# The binary is taken from the archive folder that job stages, stage/Equinox-server-linux-$ARCH-$VERSION/.
+# The binary is copied for it to stage/pkg/equinox-server (nfpm does not expand variables in file paths).
 name: equinox-server
 arch: ${ARCH}
 platform: linux
@@ -16,7 +16,7 @@ homepage: https://github.com/Ozzvin/equinox
 license: MIT
 
 contents:
-  - src: stage/Equinox-server-linux-${ARCH}-${VERSION}/equinox-server
+  - src: stage/pkg/equinox-server
     dst: /usr/bin/equinox-server
     file_info:
       mode: 0755
