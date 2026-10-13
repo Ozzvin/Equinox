@@ -65,9 +65,9 @@ type Info struct {
 	mirrorSumsURL  string
 }
 
-// legacySetupName is the installer's name in the releases before file names carried the version. Every
-// release still publishes the same installer under it, because the copies of the program that are already
-// installed look for exactly this name and would otherwise never find an update.
+// legacySetupName is the installer's name in the releases before file names carried the version. Releases up
+// to 1.0.45 also published the installer under it for the copies older than 1.0.17, which look for exactly this
+// name; later ones do not, and it is only a fallback here for a release or mirror that has no versioned one.
 const legacySetupName = "Equinox-Setup.exe"
 
 // versionedSetupName is the installer's name in a release: "Equinox-Setup-1.0.17.exe".
