@@ -1,3 +1,5 @@
+//go:build windows || linux
+
 package main
 
 import (
@@ -22,7 +24,7 @@ import (
 // isMagnet reports whether a command-line argument is a magnet link.
 func isMagnet(s string) bool { return strings.HasPrefix(strings.ToLower(s), "magnet:") }
 
-// addArgs queues magnet links and .torrent files given on the command line (this is how Windows
+// addArgs queues magnet links and .torrent files given on the command line (this is how the system
 // hands them over when the app is the registered handler) for the "Add torrents" dialog, instead
 // of adding them outright: the user still sees which files are chosen and can set the save path
 // before anything is downloaded.

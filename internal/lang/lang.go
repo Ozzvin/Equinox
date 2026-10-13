@@ -82,6 +82,10 @@ var english = map[string]string{
 	"Выбрать Equinox в «Приложения по умолчанию»": "Choose Equinox in “Default apps”",
 	"Выход": "Exit",
 	"Остановить все раздачи и выйти": "Stop all torrents and exit",
+	// the tray menu on Linux
+	"Добавить раздачу…":             "Add torrent…",
+	"Настройки":                     "Settings",
+	"Запускать при входе в систему": "Start when you sign in",
 	// the windows and messages
 	"Добавить раздачу":                                                      "Add torrent",
 	"Не удалось изменить автозапуск:":                                       "Could not change the autostart:",

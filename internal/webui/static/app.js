@@ -14,6 +14,8 @@
   let token = "";
   if (typeof window.__equinoxToken === "string") token = window.__equinoxToken;
   const fromLink = location.hash.match(/token=([0-9a-f]+)/i);
+  // the Linux program's tray asks for the settings with a link that also carries the key: "#token=...&settings"
+  const linkSettings = !!fromLink && /&settings$/.test(location.hash);
   if (!token && fromLink) token = fromLink[1];
   if (token) { try { localStorage.setItem("token", token); } catch (_) {} }
   else { try { token = localStorage.getItem("token") || ""; } catch (_) {} }
@@ -1967,7 +1969,7 @@
   // here instead of being added at once, so it shows up in the same dialog as anything dropped or
   // typed by hand.
   async function checkPendingAdd() {
-    if (!window.__equinoxDesktop) return;
+    if (!window.__equinoxDesktop && !window.__equinoxBrowserApp) return;
     let items;
     try { items = await api("GET", "/api/pending-add" + (ADD_WINDOW ? "?for=window" : "")); } catch (_) { return; }
     if (!items || !items.length) return;
@@ -2259,7 +2261,13 @@
   });
   $("dlg-add").addEventListener("cancel", (ev) => { if (adBusy) ev.preventDefault(); });
   $("dlg-add").addEventListener("close", () => { // in the window made for adding, closing the dialog is closing the window
-    if (ADD_WINDOW) setTimeout(() => { if (!$("dlg-add").open) { if (typeof window.closeAddWindow === "function") window.closeAddWindow(); else window.close(); } }, 500);
+    if (ADD_WINDOW) setTimeout(() => {
+      if ($("dlg-add").open) return;
+      if (typeof window.closeAddWindow === "function") return window.closeAddWindow();
+      window.close();
+      // a browser tab opened by the Linux program cannot close itself: it becomes the list of torrents
+      setTimeout(() => location.replace("/"), 300);
+    }, 500);
   });
   $("dlg-add").addEventListener("close", () => { // forget what was staged but not added
     for (const e of adItems) if (e.stage) api("DELETE", `/api/stage/${e.stage}`).catch(() => {});
@@ -3185,7 +3193,7 @@
   // The tray menu's "Настройки": the desktop program opens the settings of a window that exists (openSettingsNow), or
   // makes the window with #settings in its address.
   window.openSettingsNow = () => { if (!ADD_WINDOW) $("btn-settings").click(); };
-  if (location.hash === "#settings") {
+  if (location.hash === "#settings" || linkSettings) {
     history.replaceState(null, "", location.pathname + location.search);
     setTimeout(window.openSettingsNow, 600);
   }

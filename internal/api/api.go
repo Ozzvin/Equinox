@@ -44,6 +44,7 @@ type Server struct {
 
 	open       bool     // a proxy in front does the signing in: no personal key, more host names
 	extraHosts []string // host names allowed in open mode besides the usual ones
+	browserApp bool     // the desktop program whose window is the user's own browser (Linux)
 }
 
 // SetOpen puts the server in open mode, for running behind a proxy that signs the user in (Umbrel's app proxy
@@ -55,6 +56,10 @@ func (s *Server) SetOpen(extraHosts []string) {
 	s.token = OpenToken
 	s.extraHosts = extraHosts
 }
+
+// SetBrowserApp says the page is the window of the desktop program, shown in the user's own browser (Linux): it then
+// takes .torrent files and magnet links opened from outside, as the program's own window does on Windows.
+func (s *Server) SetBrowserApp() { s.browserApp = true }
 
 // LoadToken returns the persistent API token stored at path, creating it if needed.
 func LoadToken(path string) (string, error) {
@@ -91,6 +96,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if s.open {
 			_, _ = w.Write([]byte("window.__equinoxToken = \"" + OpenToken + "\";\n"))
+		}
+		if s.browserApp {
+			_, _ = w.Write([]byte("window.__equinoxBrowserApp = true;\n"))
 		}
 		return
 	}
