@@ -263,6 +263,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	m.cancel = cancel
 	go m.loop(ctx)
 	m.resumeChecks() // the rechecks the last run did not finish go on from where they were
+	m.recheckOldV2() // torrents with a v2 part that older versions may have written wrongly
 	return m, nil
 }
 
@@ -468,6 +469,7 @@ func (m *Manager) restore(r *record) error {
 
 // track registers a new torrent in the engine and persists its record.
 func (m *Manager) track(spec *torrent.TorrentSpec, rec *record) error {
+	rec.V2Layout = true // this version writes every torrent right
 	// The record goes first: the storage asks for the torrent's folder as soon as the
 	// engine knows the file list, which can happen inside AddTorrentSpec.
 	if err := m.state.with(func(s *state) { s.Torrents[rec.InfoHash] = rec }); err != nil {
@@ -749,7 +751,7 @@ func neededBytes(t *torrent.Torrent, base string, prios []int8) (need int64, job
 		return 0, nil, err
 	}
 	for i, f := range t.Files() {
-		if prioAt(prios, i) == PrioSkip {
+		if prioAt(prios, i) == PrioSkip || padFile(f) {
 			continue
 		}
 		var have int64
