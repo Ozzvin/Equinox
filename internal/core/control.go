@@ -779,6 +779,7 @@ func (m *Manager) enforce(ts []*torrent.Torrent) {
 			m.prioritise(t, true)
 		}
 		m.handleCompletion(t, hash, r)
+		m.nudgeStalled(t, r)
 		limit := r.RatioLimit
 		if limit == 0 {
 			limit = global

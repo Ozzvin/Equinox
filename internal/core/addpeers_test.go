@@ -123,7 +123,7 @@ func TestAddedPeerIsUsed(t *testing.T) {
 	}
 	// The engine drops an address it could not reach at the first try, which is why the program tries the saved
 	// peers again every few minutes; here that is done every second.
-	waitFor(t, func() bool {
+	waitForTransfer(t, a, hashA, b, hashB, func() bool {
 		s, ok := statusOf(b, hashB)
 		if ok && s.Progress < 1 && s.Peers == 0 {
 			_, _ = b.AddPeers(hashB, []string{addr})

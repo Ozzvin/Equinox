@@ -23,6 +23,8 @@ func (m *Manager) record(hash string) (rec record, ok bool) {
 
 // syncPerm recomputes what the torrent may do and applies any change to the engine.
 func (m *Manager) syncPerm(t *torrent.Torrent, hash string) {
+	m.permMu.Lock() // a nudge (stall.go) must not switch the engine back in the middle of this
+	defer m.permMu.Unlock()
 	rec, ok := m.record(hash)
 	if !ok {
 		return

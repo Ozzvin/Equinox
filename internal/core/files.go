@@ -185,6 +185,24 @@ func (m *Manager) refreshLow(ts []*torrent.Torrent) {
 	}
 }
 
+// wantedVerified tells whether every piece of the files that are not skipped has passed its hash check. The engine
+// counts a chunk as had from the moment it arrives, before it is written to the disk and checked (File.BytesCompleted,
+// and so selection), so done == size can come while the last piece is still on its way to the disk, or about to fail
+// its check: a torrent is finished, for its move and its notification, only once this holds too.
+func wantedVerified(t *torrent.Torrent, prios []int8) bool {
+	for i, f := range t.Files() {
+		if prioAt(prios, i) == PrioSkip || padFile(f) || f.Length() == 0 {
+			continue
+		}
+		for p := f.BeginPieceIndex(); p < f.EndPieceIndex(); p++ {
+			if !t.PieceState(p).Complete {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // selection returns the size and completed bytes of the files that are not skipped.
 func selection(t *torrent.Torrent, prios []int8) (size, done int64) {
 	for i, f := range t.Files() {

@@ -86,10 +86,12 @@ type Manager struct {
 	manualMu         sync.Mutex                  // leaf: guards manualIPs
 	manualIPs        map[string][]string         // IP addresses each saved manual peer stands for, by torrent and entry
 	perm             map[metainfo.Hash]permState // what the engine was last told each torrent may do
-	queued           map[metainfo.Hash]int       // waiting torrents: 1 = next in line
-	seedQueued       map[metainfo.Hash]int       // finished torrents waiting for a place to share: 1 = next in line
-	seedHeld         map[metainfo.Hash]bool      // finished torrents that have a place to share at the moment
-	schedIn          bool                        // last evaluation of the turtle schedule window
+	permMu           sync.Mutex                  // held while the engine's switches are being set (syncPerm, nudge)
+	stalls           map[metainfo.Hash]*stallWatch
+	queued           map[metainfo.Hash]int  // waiting torrents: 1 = next in line
+	seedQueued       map[metainfo.Hash]int  // finished torrents waiting for a place to share: 1 = next in line
+	seedHeld         map[metainfo.Hash]bool // finished torrents that have a place to share at the moment
+	schedIn          bool                   // last evaluation of the turtle schedule window
 	schedKnown       bool
 	moves            map[string]*moveJob      // storage moves in progress, queued or just failed, by hash
 	moveQueue        []string                 // moves waiting for a free slot (MaxConcurrentMoves); index 0 goes next
@@ -155,6 +157,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		seenDown:   map[metainfo.Hash]int64{},
 		seenUp:     map[metainfo.Hash]int64{},
 		perm:       map[metainfo.Hash]permState{},
+		stalls:     map[metainfo.Hash]*stallWatch{},
 		queued:     map[metainfo.Hash]int{},
 		seedQueued: map[metainfo.Hash]int{},
 		seedHeld:   map[metainfo.Hash]bool{},
@@ -215,13 +218,18 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	// The wanted port may be taken, or fall into a range Windows keeps for itself (Hyper-V,
 	// WSL); a random port may hit such a range too. Do not refuse to start over that.
 	m.wantedPort = s.ListenPort
-	ports := []int{s.ListenPort, 0, 0, 0}
-	if s.ListenPort != 0 && !portFree(s.ListenPort) {
+	var ports []int
+	switch {
+	case s.ListenPort == 0:
+	case portFree(s.ListenPort):
+		ports = []int{s.ListenPort}
+	default:
 		// The engine would happily share a port that another program holds (Windows lets
 		// listeners overlap), so look for a conflict ourselves.
 		fmt.Fprintf(os.Stderr, "port %d is in use or not allowed, choosing another one\n", s.ListenPort)
-		ports = []int{0, 0, 0, 0}
 	}
+	ports = append(ports, sparePorts(5)...)
+	ports = append(ports, 0) // the system's choice, if no random port would do
 	for _, p := range ports {
 		m.cl, err = torrent.NewClient(newConfig(p))
 		if err == nil {
@@ -662,6 +670,7 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	delete(m.seenDown, h)
 	delete(m.seenUp, h)
 	delete(m.perm, h)
+	delete(m.stalls, h)
 	delete(m.queued, h)
 	delete(m.seedQueued, h)
 	delete(m.seedHeld, h)
