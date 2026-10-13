@@ -18,6 +18,12 @@ import (
 // in v2 every file starts on a piece boundary, and the v1 part has padding files (BEP 47) to the same layout. The
 // files are written under dir/src/hybrid.
 func hybridTorrent(t *testing.T, dir string) (*metainfo.MetaInfo, map[string][]byte) {
+	return paddedTorrent(t, dir, true)
+}
+
+// paddedTorrent is hybridTorrent, or with v2 false a plain v1 torrent with the same padding files (as qBittorrent
+// makes with "align files to pieces").
+func paddedTorrent(t *testing.T, dir string, v2 bool) (*metainfo.MetaInfo, map[string][]byte) {
 	t.Helper()
 	const pieceLen = 16 << 10
 	root := filepath.Join(dir, "src", "hybrid")
@@ -67,6 +73,13 @@ func hybridTorrent(t *testing.T, dir string) (*metainfo.MetaInfo, map[string][]b
 		t.Fatalf("the test torrent is not a valid v2 one: %v", err)
 	}
 	// the file tree is put in by hand: inside Info (a value, not a pointer) the encoder does not use its own encoding
+	if !v2 {
+		ib, err := bencode.Marshal(metainfo.Info{Name: "hybrid", PieceLength: pieceLen, Pieces: pieces, Files: v1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &metainfo.MetaInfo{InfoBytes: ib}, content
+	}
 	v1b, err := bencode.Marshal(metainfo.Info{Name: "hybrid", PieceLength: pieceLen, Pieces: pieces, Files: v1, MetaVersion: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -128,5 +141,77 @@ func TestHybridTorrentFilesAreWrittenWhereTheyBelong(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dl, "hybrid", ".pad")); !os.IsNotExist(err) {
 		t.Fatalf("no padding files on the disk: %v", err)
+	}
+}
+
+// A torrent with a v2 part added by an older version is checked once at the start: the files it spoiled are found
+// (and downloaded again); a new torrent, or one checked once already, is not checked again.
+func TestOldV2TorrentIsCheckedOnce(t *testing.T) {
+	dir := t.TempDir()
+	mi, _ := hybridTorrent(t, dir)
+	m := newManager(t, dir, nil)
+	hash, err := m.AddMetaInfo(mi, WithSavePath(filepath.Join(dir, "src")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 && !s.Checking })
+	if !m.snapshotRecords()[hash].V2Layout {
+		t.Fatal("a torrent added by this version is known to be written right")
+	}
+
+	// as if an older version had written it: spoiled where the old layout put the bytes, and no mark
+	spoil(t, filepath.Join(dir, "src", "hybrid", "c.mkv"))
+	m.store.CloseFiles(metainfo.NewHashFromHex(hash), []string{filepath.Join(dir, "src", "hybrid", "c.mkv")})
+	if err := m.state.with(func(s *state) { s.Torrents[hash].V2Layout = false }); err != nil {
+		t.Fatal(err)
+	}
+	m.recheckOldV2()
+	waitFor(t, func() bool {
+		s, _ := statusOf(m, hash)
+		return m.snapshotRecords()[hash].V2Layout && !s.Checking && s.Progress < 1
+	})
+}
+
+// A v1 torrent with padding files (BEP 47) between its files: the padding is neither written to the disk nor shown,
+// and does not count in the size.
+func TestPaddingFilesAreNotOnTheDisk(t *testing.T) {
+	dirA, dirB := t.TempDir(), t.TempDir()
+	mi, content := paddedTorrent(t, dirA, false)
+	a := newManager(t, dirA, nil)
+	hashA, err := a.AddMetaInfo(mi, WithSavePath(filepath.Join(dirA, "src")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { s, ok := statusOf(a, hashA); return ok && s.Progress == 1 && !s.Checking })
+
+	b := newManager(t, dirB, nil)
+	dl := filepath.Join(dirB, "dl")
+	hashB, err := b.AddMetaInfo(mi, WithSavePath(dl))
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := "127.0.0.1:" + strconv.Itoa(a.Port())
+	waitFor(t, func() bool {
+		s, ok := statusOf(b, hashB)
+		if ok && s.Progress < 1 && s.Peers == 0 {
+			_, _ = b.AddPeers(hashB, []string{addr})
+		}
+		return ok && s.Progress == 1
+	})
+	for name, want := range content {
+		got, err := os.ReadFile(filepath.Join(dl, "hybrid", name))
+		if err != nil || !bytes.Equal(got, want) {
+			t.Fatalf("%s on the disk is not what was seeded (%d bytes, %v)", name, len(got), err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dl, "hybrid", ".pad")); !os.IsNotExist(err) {
+		t.Fatalf("padding files must not be on the disk: %v", err)
+	}
+	files, _ := b.Files(hashB)
+	if len(files) != 3 || files[2].Index != 4 {
+		t.Fatalf("only the three real files are shown, with their own indexes: %+v", files)
+	}
+	if s, _ := statusOf(b, hashB); s.TotalSize != 75<<10 || s.Size != 75<<10 {
+		t.Fatalf("the padding does not count in the size: total %d, selected %d", s.TotalSize, s.Size)
 	}
 }
