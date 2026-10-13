@@ -1,0 +1,23 @@
+[Unit]
+Description=Equinox torrent server
+Documentation=https://github.com/Ozzvin/equinox
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=equinox
+Group=equinox
+# Creates /var/lib/equinox owned by the user above. The link with the access key: /var/lib/equinox/ui-url
+StateDirectory=equinox
+StateDirectoryMode=0750
+UMask=0027
+EnvironmentFile=-/etc/default/equinox-server
+ExecStart=/usr/bin/equinox-server -no-browser -state /var/lib/equinox -downloads /var/lib/equinox/downloads $EQUINOX_OPTS
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
