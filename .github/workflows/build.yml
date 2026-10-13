@@ -105,7 +105,7 @@ jobs:
           done
           (cd dist && sha256sum *.tar.gz *.deb *.rpm > SHA256SUMS-linux.txt)
       # Installs the amd64 .deb on the runner: the service user, the unit and the default file must come out right,
-      # and the service must start and answer on its port. The .rpm shares the same files and scripts.
+      # and the service must start and answer on its port.
       - name: Check the .deb
         run: |
           sudo apt-get install -y ./dist/equinox-server_*_amd64.deb
@@ -118,6 +118,25 @@ jobs:
           curl -fsS -o /dev/null http://127.0.0.1:9091/
           sudo apt-get remove -y equinox-server
           ! systemctl is-active equinox-server
+      # The same for the amd64 .rpm, in a Fedora container booted with systemd as its init.
+      - name: Check the .rpm (Fedora)
+        run: |
+          printf 'FROM fedora:latest
+RUN dnf -y install systemd curl && dnf clean all
+CMD ["/usr/sbin/init"]
+' > stage/Dockerfile.fedora
+          docker build -q -t fedora-systemd -f stage/Dockerfile.fedora stage
+          docker run -d --name fedora --privileged fedora-systemd
+          docker cp dist/$(cd dist && ls equinox-server-*.x86_64.rpm) fedora:/tmp/equinox-server.rpm
+          f() { docker exec fedora sh -c "$1"; }
+          f 'systemctl is-system-running --wait || true'
+          f 'dnf -y install /tmp/equinox-server.rpm'
+          f 'id equinox && test -f /etc/default/equinox-server'
+          f 'systemctl start equinox-server'
+          f 'for i in $(seq 1 30); do test -s /var/lib/equinox/ui-url && break; sleep 1; done; systemctl is-active equinox-server'
+          f 'curl -fsS -o /dev/null http://127.0.0.1:9091/'
+          f 'dnf -y remove equinox-server'
+          f '! systemctl is-active equinox-server'
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
