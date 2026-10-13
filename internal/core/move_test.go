@@ -425,3 +425,49 @@ func TestListShowsTheTrackerWhileMoving(t *testing.T) {
 		t.Fatalf("the tracker must not be lost while a torrent is being moved: %+v", during)
 	}
 }
+
+// A label's folder is where its torrents end up: with finished torrents moved, a torrent with the label is downloaded
+// into the general folder and moved to the label's folder when it finishes (not to the general folder for finished
+// ones); a torrent with a folder of its own for finished torrents goes there.
+func TestLabelFolderIsWhereAFinishedTorrentGoes(t *testing.T) {
+	dir := t.TempDir()
+	done, films := filepath.Join(dir, "finished"), filepath.Join(dir, "films")
+	m := newManager(t, dir, func(s *config.Settings) {
+		s.MoveCompletedDir = done
+		s.LabelPaths = map[string]string{"Фильмы": films}
+	})
+	tp := makeTorrent(t, dir, "film.bin", 48<<10)
+	hash, err := m.AddFile(tp, WithLabel("Фильмы"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := statusOf(m, hash); s.SavePath != m.cfg.Get().DataDir {
+		t.Fatalf("with finished torrents moved, it is downloaded into the general folder, not %q", s.SavePath)
+	}
+	waitFor(t, func() bool { return m.snapshotRecords()[hash].WasIncomplete })
+	if err := os_copy(filepath.Join(dir, "src", "film.bin"), filepath.Join(m.cfg.Get().DataDir, "film.bin")); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	for _, tt := range m.torrents {
+		go tt.VerifyData()
+	}
+	m.mu.Unlock()
+	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.SavePath == films && s.Progress == 1 })
+	if exists(filepath.Join(done, "film.bin")) {
+		t.Fatal("a torrent with a label's folder must not go to the general folder for finished ones")
+	}
+
+	r := record{Label: "Фильмы", MoveDone: filepath.Join(dir, "mine")}
+	if got := doneDir(m.cfg.Get(), &r); got != r.MoveDone {
+		t.Fatalf("its own folder for finished torrents wins: %q", got)
+	}
+	r = record{Label: "Фильмы", MoveDoneOff: true}
+	if got := doneDir(m.cfg.Get(), &r); got != "" {
+		t.Fatalf("a torrent never moved stays: %q", got)
+	}
+	r = record{Label: "Без папки"}
+	if got := doneDir(m.cfg.Get(), &r); got != done {
+		t.Fatalf("a label without a folder: the general folder for finished ones, got %q", got)
+	}
+}
