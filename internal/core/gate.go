@@ -82,7 +82,7 @@ func (m *Manager) needsCheck(hash string, info *metainfo.Info) bool {
 		return true
 	}
 	for i, f := range info.UpvertedFiles() {
-		if f.Length == 0 {
+		if f.Length == 0 || store.IsPadding(f) {
 			continue
 		}
 		if fi, err := os.Stat(paths[i]); err == nil && fi.Size() > 0 {

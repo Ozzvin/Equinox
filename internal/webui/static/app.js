@@ -2192,6 +2192,7 @@
   function fileTree(e) {
     const root = { name: e.name, path: "", dirs: new Map(), files: [] };
     e.files.forEach((f, i) => {
+      if (f.pad) return; // zeros between files (BEP 47): kept for the indexes, never shown
       const parts = (f.path || e.name).split("/");
       let node = root;
       for (const p of parts.slice(0, -1)) {
@@ -2233,9 +2234,10 @@
         <input type="checkbox" data-file="${f.i}" ${e.sel[f.i] ? "checked" : ""} aria-label="${esc(f.name)}"><span class="nm" title="${esc(f.name)}">${esc(f.name)}</span><span class="sz">${bytes(f.size)}</span></div>`);
     };
     draw(root, 0);
-    const picked = e.sel.filter(Boolean).length, pickedSize = e.files.reduce((a, f, i) => a + (e.sel[i] ? f.size : 0), 0);
+    const shown = e.files.filter((f) => !f.pad).length;
+    const picked = e.sel.filter((s, i) => s && !e.files[i].pad).length, pickedSize = e.files.reduce((a, f, i) => a + (e.sel[i] && !f.pad ? f.size : 0), 0);
     box.innerHTML = `<div class="tree-tools"><button type="button" class="btn small" id="tr-all">Все</button><button type="button" class="btn small" id="tr-none">Ничего</button>
-      <span class="muted small">Выбрано ${picked} из ${e.files.length} · ${bytes(pickedSize)}</span></div><div class="tree">${rows.join("")}</div>`;
+      <span class="muted small">Выбрано ${picked} из ${shown} · ${bytes(pickedSize)}</span></div><div class="tree">${rows.join("")}</div>`;
     box.querySelectorAll("input[data-state=some]").forEach((c) => (c.indeterminate = true));
   }
 
@@ -2375,7 +2377,7 @@
     if (adBusy || !adItems.length) return;
     for (const [i, e] of adItems.entries()) {
       e.error = "";
-      if (e.kind === "file" && e.files.length && !e.sel.some(Boolean)) { adSel = i; adTab = "files"; e.error = "выберите хотя бы один файл"; renderAdd(); return; }
+      if (e.kind === "file" && e.files.length && !e.sel.some((s, i) => s && !e.files[i].pad)) { adSel = i; adTab = "files"; e.error = "выберите хотя бы один файл"; renderAdd(); return; }
     }
     const items = adItems.map((e) => {
       const o = e.opts;

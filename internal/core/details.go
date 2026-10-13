@@ -66,7 +66,7 @@ func (m *Manager) Details(hash string) (Details, error) {
 	src := m.sourceOf(hash, rec)
 
 	d := Details{
-		Hash: hash, Name: t.Name(), TotalSize: torrentLength(info), Files: len(t.Files()),
+		Hash: hash, Name: t.Name(), TotalSize: torrentLength(info), Files: countFiles(t),
 		Pieces: t.NumPieces(), PieceLength: info.PieceLength,
 		Private: info.Private != nil && *info.Private,
 		Comment: src.Comment, CreatedBy: src.CreatedBy, CreatedAt: src.createdTime(),
