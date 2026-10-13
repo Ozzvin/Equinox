@@ -73,7 +73,8 @@ jobs:
             dist/SHA256SUMS.txt
           retention-days: 30
 
-  # The server for Linux, as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml).
+  # Linux: the server as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml), and the
+  # desktop program (tray icon, the interface in the browser) as .deb/.rpm (deploy/linux/nfpm-desktop.yaml).
   # It is built apart from the Windows job: no installer, no Inno Setup.
   linux:
     needs: [test, test-linux]
@@ -91,7 +92,8 @@ jobs:
         run: |
           v='${{ inputs.version }}'
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
-          mkdir -p dist stage
+          mkdir -p dist stage/icons stage/pkg
+          go run ./cmd/mkicons stage/icons
           for arch in amd64 arm64; do
             name=Equinox-server-linux-$arch-$v
             mkdir -p stage/$name
@@ -99,9 +101,11 @@ jobs:
             cp LICENSE stage/$name/
             cp deploy/linux/README.txt stage/$name/
             tar -C stage -czf dist/$name.tar.gz $name
-            mkdir -p stage/pkg && cp stage/$name/equinox-server stage/pkg/
+            cp stage/$name/equinox-server stage/pkg/
+            GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o stage/pkg/equinox ./cmd/equinox
             for p in deb rpm; do
               VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/
+              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p $p -t dist/
             done
           done
           (cd dist && sha256sum *.tar.gz *.deb *.rpm > SHA256SUMS-linux.txt)
@@ -136,13 +140,36 @@ jobs:
           f 'curl -fsS -o /dev/null http://127.0.0.1:9091/'
           f 'dnf -y remove equinox-server'
           f '! systemctl is-active equinox-server'
+      # The desktop program's .deb: installs, starts in the tray (the runner has no session bus, so no icon: the program
+      # must run on without it), and a second start hands a magnet link to it. BROWSER=true stands in for the browser.
+      - name: Check the desktop .deb
+        env:
+          BROWSER: "true"
+        run: |
+          sudo apt-get install -y ./dist/equinox_*_amd64.deb
+          test -x /usr/bin/equinox
+          grep -q 'x-scheme-handler/magnet' /usr/share/applications/equinox.desktop
+          test -f /usr/share/icons/hicolor/256x256/apps/equinox.png
+          st=$(mktemp -d)
+          equinox -hidden -state "$st" &
+          pid=$!
+          for i in $(seq 1 30); do test -s "$st/ui-url" && break; sleep 1; done
+          url=$(cat "$st/ui-url"); base=${url%%/#token=*}; token=${url##*#token=}
+          curl -fsS "$base/session.js" | grep -q '__equinoxBrowserApp = true'
+          magnet='magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=check'
+          equinox -state "$st" "$magnet"
+          curl -fsS -H "Authorization: Bearer $token" "$base/api/pending-add?for=window" | grep -q 0123456789abcdef0123456789abcdef01234567
+          kill -TERM $pid
+          wait $pid
+          test ! -e "$st/ui-url"
+          sudo apt-get remove -y equinox
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
           name: equinox-linux-${{ inputs.version || github.sha }}
           path: |
             dist/Equinox-server-linux-*.tar.gz
-            dist/equinox-server*.deb
-            dist/equinox-server*.rpm
+            dist/equinox*.deb
+            dist/equinox*.rpm
             dist/SHA256SUMS-linux.txt
           retention-days: 30

@@ -46,6 +46,7 @@ type Server struct {
 	extraHosts []string // host names allowed in open mode besides the usual ones
 	fixedPort  int      // the torrent port given at start (-torrent-port), 0 = the setting rules
 	places     []Place  // the folders a container is given, by the names its system shows (-place); none = the whole disk
+	browserApp bool     // the desktop program whose window is the user's own browser (Linux)
 }
 
 // SetOpen puts the server in open mode, for running behind a proxy that signs the user in (Umbrel's app proxy
@@ -62,6 +63,10 @@ func (s *Server) SetOpen(extraHosts []string) {
 // Files: "Downloads" is /downloads in the container). The page then shows paths by those names, and the folder
 // picker offers just these folders and does not go above them.
 func (s *Server) SetPlaces(ps []Place) { s.places = ps }
+
+// SetBrowserApp says the page is the window of the desktop program, shown in the user's own browser (Linux): it then
+// takes .torrent files and magnet links opened from outside, as the program's own window does on Windows.
+func (s *Server) SetBrowserApp() { s.browserApp = true }
 
 // SetFixedPort says the torrent port was given at start and is not the page's to change: a container publishes just
 // that port, and a different one would get no incoming connections at all (found on Umbrel, where the button for a
@@ -105,6 +110,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("window.__equinoxToken = \"" + OpenToken + "\";\n"))
 			// on another machine (Umbrel): the page offers nothing that opens a file manager there
 			_, _ = w.Write([]byte("window.__equinoxRemote = true;\n"))
+		}
+		if s.browserApp {
+			_, _ = w.Write([]byte("window.__equinoxBrowserApp = true;\n"))
 		}
 		if len(s.places) > 0 { // before the page's first request: it shows every path by these names
 			b, _ := json.Marshal(s.places)
