@@ -99,6 +99,7 @@ jobs:
             cp LICENSE stage/$name/
             cp deploy/linux/README.txt stage/$name/
             tar -C stage -czf dist/$name.tar.gz $name
+            mkdir -p stage/pkg && cp stage/$name/equinox-server stage/pkg/
             for p in deb rpm; do
               VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/
             done
