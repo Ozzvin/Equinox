@@ -15,6 +15,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/Ozzvin/equinox/internal/config"
+	"github.com/Ozzvin/equinox/internal/store"
 )
 
 // Status is a point-in-time view of one torrent.
@@ -260,7 +261,7 @@ func (m *Manager) prioritise(t *torrent.Torrent, withWindow bool) {
 	wanted := activePieces(t, prios, lowOn) // never fetch pieces that only belong to skipped files (or low ones not yet due)
 
 	for fi, f := range t.Files() {
-		if !fileOn(prios, fi, lowOn) {
+		if !fileOn(prios, fi, lowOn) || padFile(f) {
 			continue
 		}
 		b, e := f.BeginPieceIndex(), f.EndPieceIndex() // [b, e)
@@ -325,13 +326,16 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 	prios := m.filePrios(hash)
 	checked := m.fileChecked(t, hash)
 	kept := m.store.InParts(t.InfoHash()) // skipped files that are not on the disk: their bytes are only in the part file
-	out := make([]FileStatus, len(fs))
+	out := make([]FileStatus, 0, len(fs))
 	// the engine reports the path inside the torrent; a torrent made from a folder keeps that folder as its root
 	root := ""
 	if info := t.Info(); info != nil && info.IsDir() {
 		root = t.Name() + "/"
 	}
 	for i, f := range fs {
+		if padFile(f) {
+			continue // zeros between files, not on the disk: not shown (the indexes of the others stay)
+		}
 		done := f.BytesCompleted()
 		if i < len(kept) && kept[i] {
 			done = 0
@@ -349,12 +353,13 @@ func (m *Manager) Files(hash string) ([]FileStatus, error) {
 		case PrioLow:
 			name = "low"
 		}
-		out[i] = FileStatus{Index: i, Path: root + f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
+		st := FileStatus{Index: i, Path: root + f.DisplayPath(), Size: f.Length(), Done: done, Progress: p, Priority: name}
 		if checked != nil && checked[i] >= 0 {
-			out[i].Checking, out[i].Check = true, checked[i]
+			st.Checking, st.Check = true, checked[i]
 		} else if checked != nil && checked[i] == -2 {
-			out[i].Waiting = true
+			st.Waiting = true
 		}
+		out = append(out, st)
 	}
 	return out, nil
 }
@@ -453,7 +458,13 @@ func torrentLength(info *metainfo.Info) int64 {
 	if info == nil {
 		return 0
 	}
-	return info.TotalLength()
+	var n int64
+	for _, f := range info.UpvertedFiles() {
+		if !store.IsPadding(f) {
+			n += f.Length
+		}
+	}
+	return n
 }
 
 // ratio divides what was uploaded by what this client holds of the torrent: the bytes downloaded here, or the bytes

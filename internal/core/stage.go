@@ -11,6 +11,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 
 	"github.com/Ozzvin/equinox/internal/config"
+	"github.com/Ozzvin/equinox/internal/store"
 )
 
 // The "Add torrents" dialog can hold several torrents at once, each with its own options.
@@ -34,6 +35,19 @@ type stagedEntry struct {
 type StagedFile struct {
 	Path string `json:"path"`
 	Size int64  `json:"size"`
+	Pad  bool   `json:"pad,omitempty"` // a padding file (BEP 47): kept for the indexes, not shown
+}
+
+// stagedFiles lists the files of a torrent for the add dialog, and their size without the padding.
+func stagedFiles(info *metainfo.Info) (files []StagedFile, size int64) {
+	for _, f := range info.UpvertedFiles() {
+		pad := store.IsPadding(f)
+		files = append(files, StagedFile{Path: strings.Join(f.BestPath(), "/"), Size: f.Length, Pad: pad})
+		if !pad {
+			size += f.Length
+		}
+	}
+	return files, size
 }
 
 // StagedTorrent describes a .torrent file that was put on the list.
@@ -63,9 +77,7 @@ func (m *Manager) Stage(mi *metainfo.MetaInfo, raw []byte) (StagedTorrent, error
 		Private: info.Private != nil && *info.Private, Comment: mi.Comment,
 		Trackers: len(mi.UpvertedAnnounceList().DistinctValues()), Exists: m.exists(hash),
 	}
-	for _, f := range info.UpvertedFiles() {
-		st.Files = append(st.Files, StagedFile{Path: strings.Join(f.BestPath(), "/"), Size: f.Length})
-	}
+	st.Files, st.Size = stagedFiles(&info)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -117,9 +129,7 @@ func (m *Manager) StagedInfo(id string) (StagedTorrent, bool) {
 		Private: info.Private != nil && *info.Private, Comment: e.mi.Comment,
 		Trackers: len(e.mi.UpvertedAnnounceList().DistinctValues()), Exists: m.exists(hash),
 	}
-	for _, f := range info.UpvertedFiles() {
-		st.Files = append(st.Files, StagedFile{Path: strings.Join(f.BestPath(), "/"), Size: f.Length})
-	}
+	st.Files, st.Size = stagedFiles(&info)
 	return st, true
 }
 

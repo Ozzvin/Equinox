@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/anacrolix/torrent"
+
+	"github.com/Ozzvin/equinox/internal/store"
 )
 
 // File priorities. The zero value is "normal" so records written before this feature
@@ -65,6 +67,10 @@ func (m *Manager) applyFiles(t *torrent.Torrent, hash string) {
 	m.lowOn[t.InfoHash()] = lowOn
 	m.lowMu.Unlock()
 	for i, f := range t.Files() {
+		if padFile(f) {
+			f.SetPriority(torrent.PiecePriorityNone) // its zeros come with the pieces of the files around it
+			continue
+		}
 		switch prioAt(prios, i) {
 		case PrioSkip:
 			f.SetPriority(torrent.PiecePriorityNone)
@@ -95,6 +101,19 @@ func (m *Manager) applyFiles(t *torrent.Torrent, hash string) {
 	}
 }
 
+// countFiles is the number of files of t, without the padding ones.
+func countFiles(t *torrent.Torrent) (n int) {
+	for _, f := range t.Files() {
+		if !padFile(f) {
+			n++
+		}
+	}
+	return n
+}
+
+// padFile tells whether f is a padding file (BEP 47): zeros between files, not on the disk and not shown.
+func padFile(f *torrent.File) bool { return store.IsPadding(f.FileInfo()) }
+
 // fileOn tells whether file i is to be downloaded now: not skipped, and a low one only once the others are done.
 func fileOn(prios []int8, i int, lowOn bool) bool {
 	switch prioAt(prios, i) {
@@ -110,7 +129,7 @@ func fileOn(prios []int8, i int, lowOn bool) bool {
 func activePieces(t *torrent.Torrent, prios []int8, lowOn bool) []bool {
 	w := make([]bool, t.NumPieces())
 	for i, f := range t.Files() {
-		if !fileOn(prios, i, lowOn) {
+		if !fileOn(prios, i, lowOn) || padFile(f) {
 			continue
 		}
 		for p := f.BeginPieceIndex(); p < f.EndPieceIndex() && p < len(w); p++ {
@@ -130,7 +149,7 @@ func (m *Manager) lowIsOn(t *torrent.Torrent) bool {
 // othersDone reports whether every normal and high file is complete: then the low ones may start.
 func othersDone(t *torrent.Torrent, prios []int8) bool {
 	for i, f := range t.Files() {
-		if p := prioAt(prios, i); (p == PrioNormal || p == PrioHigh) && f.BytesCompleted() < f.Length() {
+		if p := prioAt(prios, i); (p == PrioNormal || p == PrioHigh) && !padFile(f) && f.BytesCompleted() < f.Length() {
 			return false
 		}
 	}
@@ -169,7 +188,7 @@ func (m *Manager) refreshLow(ts []*torrent.Torrent) {
 // selection returns the size and completed bytes of the files that are not skipped.
 func selection(t *torrent.Torrent, prios []int8) (size, done int64) {
 	for i, f := range t.Files() {
-		if prioAt(prios, i) == PrioSkip {
+		if prioAt(prios, i) == PrioSkip || padFile(f) {
 			continue
 		}
 		size += f.Length()
