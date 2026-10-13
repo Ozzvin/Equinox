@@ -14,7 +14,7 @@ permissions:
   - STORAGE_DOWNLOADS
 category: files
 name: Equinox
-version: "1.1.0-rc12"
+version: "1.1.0-rc13"
 tagline: A fast, tidy BitTorrent client
 icon: https://cdn.jsdelivr.net/gh/Ozzvin/umbrel-community-app-store@main/ozzvin-equinox/icon.svg
 description: >-
