@@ -2040,6 +2040,23 @@
     if (files && files.length) await stageFiles(files);
   }
 
+  // The Linux program shows its window in the user's own browser, where nothing is bound to the page: the system section
+  // of the settings asks the program over the API instead (see api.Desktop). The texts there speak of Windows; here
+  // they speak of the desktop, and the window's own settings (closing, size) are not shown, as there is no window.
+  const BROWSER_APP = !window.__equinoxDesktop && !!window.__equinoxBrowserApp;
+  const SYSTEM_SECTION = !!window.__equinoxDesktop || BROWSER_APP;
+  if (BROWSER_APP) {
+    const tryApi = async (method, path, body) => { try { await api(method, path, body); return ""; } catch (x) { return x.message; } };
+    window.getAutostart = async () => !!(await api("GET", "/api/desktop/autostart")).on;
+    window.setAutostart = (on) => tryApi("PUT", "/api/desktop/autostart", { on });
+    window.registerHandlers = () => tryApi("POST", "/api/desktop/default-app");
+    $("st-autostart-t").textContent = "Запускать при входе в систему";
+    $("st-starthidden-h").textContent = "Тихий запуск: браузер не открывается, раздачи работают. Действует на запуск при входе в систему";
+    $("fs-window").hidden = true;
+    $("st-notify-t").textContent = "Показывать уведомление, когда загрузка завершена или раздача остановлена лимитом";
+    $("st-assoc-h").textContent = "Чтобы файлы .torrent и magnet-ссылки (в том числе из браузера) сразу открывались в Equinox, сделайте его программой по умолчанию.";
+  }
+
   // A magnet link or .torrent file opened from outside the app (Explorer, a second launch) lands
   // here instead of being added at once, so it shows up in the same dialog as anything dropped or
   // typed by hand.
@@ -2600,7 +2617,7 @@
     system(s, isReset) {
       $("st-starthidden").checked = s.startHidden !== false; $("st-closetray").checked = s.closeToTray !== false; $("st-mintray").checked = !!s.minimizeToTray;
       $("st-remwin").checked = !!s.rememberWindow; $("st-notify").checked = s.notifyOnComplete !== false;
-      if (isReset && window.__equinoxDesktop) $("st-autostart").checked = false;
+      if (isReset && SYSTEM_SECTION) $("st-autostart").checked = false;
     },
   };
   // "Сбросить раздел к умолчаниям": the fields get the defaults, nothing is saved until "Сохранить"
@@ -2617,9 +2634,9 @@
     for (const r of document.querySelectorAll('input[name="lg"]')) r.checked = r.value === window.__langPref;
     for (const id of Object.keys(FILL)) FILL[id](settings);
     $("st-autoupdate").checked = settings.autoUpdateCheck !== false;
-    $("sn-system").hidden = !window.__equinoxDesktop;
+    $("sn-system").hidden = !SYSTEM_SECTION;
     $("st-wizard").title = window.__equinoxDesktop ? "Пошаговая помощь: папки, скорость, порт, запуск с Windows" : "Пошаговая помощь: папки, скорость, порт";
-    if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
+    if (SYSTEM_SECTION && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
     openLabelRows();
     setSearch.value = ""; applySearch();
     openSection();
@@ -2697,7 +2714,7 @@
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"), routerAddress: $("st-router").value.trim(),
         ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
-      if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
+      if (SYSTEM_SECTION && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);
         if (err) { toast("Не удалось изменить автозапуск: " + err, true); }
       }
@@ -2716,6 +2733,7 @@
     if (typeof window.registerHandlers !== "function") return;
     const err = await window.registerHandlers();
     if (err) toast("Не удалось зарегистрировать приложение: " + err, true);
+    else if (BROWSER_APP) toast("Equinox открывает файлы .torrent и magnet-ссылки");
   };
 
   const EN_NAMES = { "Переносить завершённые загрузки в": "Move finished downloads to", "Папка автодобавления": "Watch folder", "Сохранять копии .torrent файлов в": "Keep copies of .torrent files in" };

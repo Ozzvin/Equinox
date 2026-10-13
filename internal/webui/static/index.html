@@ -605,10 +605,10 @@
         <h3 class="pane-title">Системные</h3>
         <fieldset>
           <legend>Запуск</legend>
-          <div class="srow one"><label class="check"><input type="checkbox" id="st-autostart"><span>Запускать вместе с Windows<br><span class="muted small">Программа стартует при входе в систему</span></span></label></div>
-          <div class="srow one"><label class="check"><input type="checkbox" id="st-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small">Тихий запуск: окно не открывается, раздачи работают. Действует на запуск вместе с Windows</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-autostart"><span><span id="st-autostart-t">Запускать вместе с Windows</span><br><span class="muted small">Программа стартует при входе в систему</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small" id="st-starthidden-h">Тихий запуск: окно не открывается, раздачи работают. Действует на запуск вместе с Windows</span></span></label></div>
         </fieldset>
-        <fieldset>
+        <fieldset id="fs-window">
           <legend>Окно</legend>
           <div class="srow one"><label class="check"><input type="checkbox" id="st-closetray"><span>Прятать в трей при закрытии окна<br><span class="muted small">Если выключить, закрытие окна завершит программу и остановит раздачи</span></span></label></div>
           <div class="srow one"><label class="check"><input type="checkbox" id="st-mintray"><span>Прятать в трей при сворачивании</span></label></div>
@@ -617,12 +617,12 @@
         </fieldset>
         <fieldset id="fs-notify">
           <legend>Уведомления</legend>
-          <div class="srow one"><label class="check"><input type="checkbox" id="st-notify"><span>Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-notify"><span id="st-notify-t">Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label></div>
         </fieldset>
         <fieldset>
           <legend>Программа по умолчанию</legend>
           <div class="srow one">
-            <p class="muted small">Equinox уже можно выбрать для файлов .torrent и magnet-ссылок в «Открыть с помощью». Чтобы он открывал их сам, без выбора каждый раз, сделайте его программой по умолчанию — Windows потребует подтвердить это в своих настройках.</p>
+            <p class="muted small" id="st-assoc-h">Equinox уже можно выбрать для файлов .torrent и magnet-ссылок в «Открыть с помощью». Чтобы он открывал их сам, без выбора каждый раз, сделайте его программой по умолчанию — Windows потребует подтвердить это в своих настройках.</p>
             <button type="button" class="btn small" id="st-assoc">Сделать Equinox торрент-клиентом по умолчанию</button>
           </div>
         </fieldset>

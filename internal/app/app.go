@@ -50,8 +50,8 @@ type Options struct {
 	TorrentPort int
 	// Places are the folders the server is given, by the names the system around it shows (see api.Server.SetPlaces).
 	Places []api.Place
-	// BrowserApp is the desktop program whose window is the user's own browser (Linux, see api.Server.SetBrowserApp).
-	BrowserApp bool
+	// Desktop is set by the desktop program whose window is the user's own browser (Linux, see api.Server.SetBrowserApp).
+	Desktop api.Desktop
 }
 
 // Start brings everything up. listen is the preferred HTTP address; if it is taken, a
@@ -121,8 +121,8 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 	}
 	handler := api.New(m, cfg, token, webui.Handler())
 	handler.SetFixedPort(opts.TorrentPort)
-	if opts.BrowserApp {
-		handler.SetBrowserApp()
+	if opts.Desktop != nil {
+		handler.SetBrowserApp(opts.Desktop)
 	}
 	if len(opts.Places) > 0 { // a container: the folders the user mounted into it count as places too
 		handler.SetPlaces(placesFor(stateDir, opts.Places))

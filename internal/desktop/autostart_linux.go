@@ -55,7 +55,7 @@ func SetAutostart(on, hidden bool) error {
 		}
 		return nil
 	}
-	exe, err := os.Executable()
+	exe, err := LauncherPath()
 	if err != nil {
 		return err
 	}
