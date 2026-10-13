@@ -44,6 +44,9 @@ type record struct {
 	SeedTimeLimit int     `json:"seedTimeLimit,omitempty"` // minutes of seeding after which it stops, 0 = the global default
 	SeedSeconds   int64   `json:"seedSeconds,omitempty"`   // time spent seeding, adds up across restarts
 	ActiveSeconds int64   `json:"activeSeconds,omitempty"` // time the torrent has been running (not paused), adds up across restarts
+	// Its storage is known to be right for a torrent with a v2 part: added by a version that puts each file on a piece
+	// boundary, or checked once since (see recheckOldV2).
+	V2Layout bool `json:"v2Layout,omitempty"`
 
 	// Per-file priority (see PrioSkip/PrioLow/PrioNormal/PrioHigh); missing entries mean normal.
 	FilePrios []int8 `json:"filePrios,omitempty"`
