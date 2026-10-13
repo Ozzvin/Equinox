@@ -1,0 +1,38 @@
+# .deb and .rpm of the server, built by the "linux" job of .github/workflows/build.yml:
+#   VERSION=1.1.0 ARCH=amd64 nfpm pkg -f deploy/linux/nfpm.yaml -p deb -t dist/
+# The binary is taken from the archive folder that job stages, stage/Equinox-server-linux-$ARCH-$VERSION/.
+name: equinox-server
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: net
+priority: optional
+maintainer: Ozzvin <https://github.com/Ozzvin>
+description: |
+  Equinox torrent client, server version.
+  The torrent engine with a web interface, run as a systemd service.
+vendor: Ozzvin
+homepage: https://github.com/Ozzvin/equinox
+license: MIT
+
+contents:
+  - src: stage/Equinox-server-linux-${ARCH}-${VERSION}/equinox-server
+    dst: /usr/bin/equinox-server
+    file_info:
+      mode: 0755
+  - src: deploy/linux/pkg/equinox-server.service
+    dst: /usr/lib/systemd/system/equinox-server.service
+  - src: deploy/linux/pkg/sysusers.conf
+    dst: /usr/lib/sysusers.d/equinox-server.conf
+  - src: deploy/linux/pkg/equinox-server.default
+    dst: /etc/default/equinox-server
+    type: config|noreplace
+  - src: LICENSE
+    dst: /usr/share/doc/equinox-server/LICENSE
+  - src: deploy/linux/README.txt
+    dst: /usr/share/doc/equinox-server/README.txt
+
+scripts:
+  postinstall: deploy/linux/pkg/postinstall.sh
+  preremove: deploy/linux/pkg/preremove.sh
+  postremove: deploy/linux/pkg/postremove.sh

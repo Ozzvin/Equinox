@@ -73,7 +73,8 @@ jobs:
             dist/SHA256SUMS.txt
           retention-days: 30
 
-  # The server for Linux, as archives. It is built apart from the Windows job: no installer, no Inno Setup.
+  # The server for Linux, as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml).
+  # It is built apart from the Windows job: no installer, no Inno Setup.
   linux:
     needs: [test, test-linux]
     runs-on: ubuntu-latest
@@ -84,7 +85,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build the archives
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+      - name: Build the archives and packages
         run: |
           v='${{ inputs.version }}'
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
@@ -96,13 +99,32 @@ jobs:
             cp LICENSE stage/$name/
             cp deploy/linux/README.txt stage/$name/
             tar -C stage -czf dist/$name.tar.gz $name
+            for p in deb rpm; do
+              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/
+            done
           done
-          (cd dist && sha256sum *.tar.gz > SHA256SUMS-linux.txt)
+          (cd dist && sha256sum *.tar.gz *.deb *.rpm > SHA256SUMS-linux.txt)
+      # Installs the amd64 .deb on the runner: the service user, the unit and the default file must come out right,
+      # and the service must start and answer on its port. The .rpm shares the same files and scripts.
+      - name: Check the .deb
+        run: |
+          sudo apt-get install -y ./dist/equinox-server_*_amd64.deb
+          id equinox
+          systemctl cat equinox-server >/dev/null
+          test -f /etc/default/equinox-server
+          sudo systemctl start equinox-server
+          for i in $(seq 1 30); do sudo test -s /var/lib/equinox/ui-url && break; sleep 1; done
+          sudo systemctl is-active equinox-server
+          curl -fsS -o /dev/null http://127.0.0.1:9091/
+          sudo apt-get remove -y equinox-server
+          ! systemctl is-active equinox-server
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
           name: equinox-linux-${{ inputs.version || github.sha }}
           path: |
             dist/Equinox-server-linux-*.tar.gz
+            dist/equinox-server*.deb
+            dist/equinox-server*.rpm
             dist/SHA256SUMS-linux.txt
           retention-days: 30
