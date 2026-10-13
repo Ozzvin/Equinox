@@ -130,7 +130,6 @@
         <legend>Раздача</legend>
         <label>Метка<select id="op-label"></select></label>
         <div class="op-path"><span class="muted small">Папка загрузки</span><div class="pick"><span id="op-path" class="op-pathval"></span><button type="button" class="btn small" id="op-move">Переместить…</button></div></div>
-        <div class="row-end"><button type="button" class="btn primary small" id="op-apply">Применить</button></div>
       </fieldset>
     </div>
   </div>
@@ -454,7 +453,7 @@
         <h3 class="pane-title">Метки</h3>
         <fieldset>
           <legend>Метки</legend>
-          <p class="muted small">Метка собирает раздачи в группу в левом меню. Для метки можно задать папку: новые раздачи с этой меткой сохраняются туда (без папки — в общую папку загрузок). Уже добавленные раздачи остаются в своих папках.</p>
+          <p class="muted small">Метка собирает раздачи в группу в левом меню. Для метки можно задать папку — там раздачи с этой меткой окажутся в итоге: если завершённые раздачи переносятся, они качаются в общую папку загрузок и по завершении переезжают в папку метки, иначе качаются сразу в неё. Без папки — как остальные раздачи. Уже скачанные раздачи остаются на месте.</p>
           <div id="lb-rows" class="lb-rows"></div>
           <div class="lb-add">
             <input id="lb-new" placeholder="Название новой метки" maxlength="40" autocomplete="off" aria-label="Название новой метки">
