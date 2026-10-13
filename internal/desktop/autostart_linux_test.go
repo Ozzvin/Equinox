@@ -61,3 +61,36 @@ func TestQuoteExec(t *testing.T) {
 		}
 	}
 }
+
+func TestAppImageIsStartedByItsOwnFile(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPIMAGE", "/home/me/Apps/Equinox-x86_64.AppImage")
+	if err := SetAutostart(true, false); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := autostartFile()
+	raw, _ := os.ReadFile(p)
+	if !strings.Contains(string(raw), "\nExec=/home/me/Apps/Equinox-x86_64.AppImage\n") {
+		t.Errorf("the autostart must start the AppImage, not the file inside its mount:\n%s", raw)
+	}
+}
+
+func TestUserMenuEntryOpensTorrentsAndMagnets(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	if err := writeUserEntry("/home/me/Apps/Equinox.AppImage", "equinox.desktop"); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(data, "applications", "equinox.desktop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"\nExec=/home/me/Apps/Equinox.AppImage %U\n", "x-scheme-handler/magnet", "application/x-bittorrent"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("the menu entry lacks %q:\n%s", want, raw)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(data, "icons", "hicolor", "256x256", "apps", "equinox.png")); err != nil {
+		t.Errorf("the icon was not written: %v", err)
+	}
+}

@@ -68,7 +68,7 @@ func main() {
 		log.Println("cannot open the log file:", err)
 	}
 	log.Println("starting engine")
-	a, err := app.StartWith(*stateDir, *listen, app.Options{BrowserApp: true})
+	a, err := app.StartWith(*stateDir, *listen, app.Options{Desktop: desktopHooks{}})
 	if err != nil {
 		fatal(err)
 	}
@@ -190,7 +190,7 @@ func (d *desktopApp) onTrayReady() {
 	})
 	auto.Click(func() {
 		want := !auto.Checked()
-		if err := desktop.SetAutostart(want, true); err != nil {
+		if err := desktop.SetAutostart(want, d.app.Settings.Get().StartHidden); err != nil {
 			log.Println("autostart:", err)
 			return
 		}
@@ -232,6 +232,13 @@ func (d *desktopApp) onTrayReady() {
 		}
 	}()
 }
+
+// desktopHooks answer the system section of the settings (see api.Desktop).
+type desktopHooks struct{}
+
+func (desktopHooks) AutostartEnabled() bool             { return desktop.AutostartEnabled() }
+func (desktopHooks) SetAutostart(on, hidden bool) error { return desktop.SetAutostart(on, hidden) }
+func (desktopHooks) MakeDefault() error                 { return desktop.MakeDefault() }
 
 // notify turns what the engine reports into a desktop notification.
 func (d *desktopApp) notify(e core.Event) {

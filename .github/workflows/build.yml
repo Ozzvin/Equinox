@@ -74,7 +74,8 @@ jobs:
           retention-days: 30
 
   # Linux: the server as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml), and the
-  # desktop program (tray icon, the interface in the browser) as .deb/.rpm (deploy/linux/nfpm-desktop.yaml).
+  # desktop program (tray icon, the interface in the browser) as .deb/.rpm (deploy/linux/nfpm-desktop.yaml) and as an
+  # AppImage for the other distributions.
   # It is built apart from the Windows job: no installer, no Inno Setup.
   linux:
     needs: [test, test-linux]
@@ -88,6 +89,15 @@ jobs:
           go-version-file: go.mod
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+      # appimagetool and the AppImage runtimes, pinned by version and checksum
+      - name: Get appimagetool
+        run: |
+          mkdir -p tools
+          get() { curl -fsSL -o "tools/$1" "$2" && echo "$3  tools/$1" | sha256sum -c -; }
+          get appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          get runtime-x86_64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+          get runtime-aarch64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-aarch64 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
+          chmod +x tools/appimagetool
       - name: Build the archives and packages
         run: |
           v='${{ inputs.version }}'
@@ -107,8 +117,18 @@ jobs:
               VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/
               VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p $p -t dist/
             done
+            # AppImage: the program, its menu entry and icon in an AppDir, packed with the runtime of the architecture
+            case $arch in amd64) ai=x86_64 ;; arm64) ai=aarch64 ;; esac
+            app=stage/AppDir-$arch
+            mkdir -p $app/usr/bin $app/usr/share/icons/hicolor/256x256/apps
+            cp stage/pkg/equinox $app/usr/bin/
+            ln -sf usr/bin/equinox $app/AppRun
+            cp deploy/linux/desktop/equinox.desktop $app/
+            cp stage/icons/icon256.png $app/equinox.png
+            cp stage/icons/icon256.png $app/usr/share/icons/hicolor/256x256/apps/equinox.png
+            APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ai tools/appimagetool --no-appstream --runtime-file tools/runtime-$ai $app dist/Equinox-$v-$ai.AppImage
           done
-          (cd dist && sha256sum *.tar.gz *.deb *.rpm > SHA256SUMS-linux.txt)
+          (cd dist && sha256sum *.tar.gz *.deb *.rpm *.AppImage > SHA256SUMS-linux.txt)
       # Installs the amd64 .deb on the runner: the service user, the unit and the default file must come out right,
       # and the service must start and answer on its port.
       - name: Check the .deb
@@ -157,12 +177,33 @@ jobs:
           url=$(cat "$st/ui-url"); base=${url%%/#token=*}; token=${url##*#token=}
           curl -fsS "$base/session.js" | grep -q '__equinoxBrowserApp = true'
           magnet='magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=check'
+          curl -fsS -X PUT -H "Authorization: Bearer $token" -d '{"on":true}' "$base/api/desktop/autostart"
+          grep -q '^Exec=/usr/bin/equinox -hidden$' ~/.config/autostart/equinox.desktop
+          curl -fsS -X PUT -H "Authorization: Bearer $token" -d '{"on":false}' "$base/api/desktop/autostart"
+          test ! -e ~/.config/autostart/equinox.desktop
           equinox -state "$st" "$magnet"
           curl -fsS -H "Authorization: Bearer $token" "$base/api/pending-add?for=window" | grep -q 0123456789abcdef0123456789abcdef01234567
           kill -TERM $pid
           wait $pid
           test ! -e "$st/ui-url"
           sudo apt-get remove -y equinox
+      # The x86_64 AppImage, unpacked (the runner has no FUSE): the program inside starts and answers.
+      - name: Check the AppImage
+        env:
+          BROWSER: "true"
+        run: |
+          img=$(ls dist/Equinox-*-x86_64.AppImage)
+          chmod +x "$img"
+          (cd stage && "../$img" --appimage-extract >/dev/null)
+          test -x stage/squashfs-root/AppRun
+          st=$(mktemp -d)
+          APPIMAGE="$PWD/$img" stage/squashfs-root/AppRun -hidden -state "$st" &
+          pid=$!
+          for i in $(seq 1 30); do test -s "$st/ui-url" && break; sleep 1; done
+          url=$(cat "$st/ui-url"); base=${url%%/#token=*}
+          curl -fsS "$base/session.js" | grep -q '__equinoxBrowserApp = true'
+          kill -TERM $pid
+          wait $pid
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
@@ -171,5 +212,6 @@ jobs:
             dist/Equinox-server-linux-*.tar.gz
             dist/equinox*.deb
             dist/equinox*.rpm
+            dist/Equinox-*.AppImage
             dist/SHA256SUMS-linux.txt
           retention-days: 30

@@ -281,6 +281,12 @@ window.__i18nEn = [
   ["Если выключить, закрытие окна завершит программу и остановит раздачи", "If off, closing the window quits the program and stops the torrents"],
   ["Прятать в трей при сворачивании", "Hide to the tray when minimized"],
   ["Программа по умолчанию", "Default program"],
+  // the same section in the Linux program, whose window is the browser
+  ["Запускать при входе в систему", "Start when you sign in"],
+  ["Тихий запуск: браузер не открывается, раздачи работают. Действует на запуск при входе в систему", "Quiet start: the browser does not open, torrents work. Applies to the start when you sign in"],
+  ["Показывать уведомление, когда загрузка завершена или раздача остановлена лимитом", "Show a notification when a download is finished or seeding is stopped by a limit"],
+  ["Чтобы файлы .torrent и magnet-ссылки (в том числе из браузера) сразу открывались в Equinox, сделайте его программой по умолчанию.", "To have .torrent files and magnet links (from the browser too) open in Equinox right away, make it the default program."],
+  ["Equinox открывает файлы .torrent и magnet-ссылки", "Equinox opens .torrent files and magnet links"],
   ["Equinox уже можно выбрать для файлов .torrent и magnet-ссылок в «Открыть с помощью». Чтобы он открывал их сам, без выбора каждый раз, сделайте его программой по умолчанию — Windows потребует подтвердить это в своих настройках.", "Equinox can already be chosen for .torrent files and magnet links in “Open with”. To make it open them by itself, without choosing each time, make it the default program — Windows will ask you to confirm this in its settings."],
   ["Сделать Equinox торрент-клиентом по умолчанию", "Make Equinox the default torrent client"],
   ["Уведомления", "Notifications"],

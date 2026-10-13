@@ -42,8 +42,8 @@ type Options struct {
 	AllowedHosts []string
 	// Downloads is where a first start saves torrents, instead of the user's Downloads folder.
 	Downloads string
-	// BrowserApp is the desktop program whose window is the user's own browser (Linux, see api.Server.SetBrowserApp).
-	BrowserApp bool
+	// Desktop is set by the desktop program whose window is the user's own browser (Linux, see api.Server.SetBrowserApp).
+	Desktop api.Desktop
 }
 
 // Start brings everything up. listen is the preferred HTTP address; if it is taken, a
@@ -101,8 +101,8 @@ func StartWith(stateDir, listen string, opts Options) (*App, error) {
 		return nil, err
 	}
 	handler := api.New(m, cfg, token, webui.Handler())
-	if opts.BrowserApp {
-		handler.SetBrowserApp()
+	if opts.Desktop != nil {
+		handler.SetBrowserApp(opts.Desktop)
 	}
 	url := fmt.Sprintf("http://%s/#token=%s", ln.Addr(), token)
 	if opts.Open {
