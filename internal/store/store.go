@@ -139,7 +139,12 @@ type fileSpan struct {
 	offset int64 // offset of the file inside the torrent (in v2 and hybrid torrents every file starts on a piece boundary)
 	length int64
 	size   int64 // at open time: size on disk, 0 if the file does not exist
+	pad    bool  // a padding file (BEP 47): all zeros, never on the disk
 }
+
+// IsPadding tells whether a file of a torrent is a padding file (BEP 47, the "p" attribute): zeros that only align the
+// next file to a piece. It is not written to the disk and not shown.
+func IsPadding(f metainfo.FileInfo) bool { return strings.Contains(f.Attr, "p") }
 
 func (s *Storage) OpenTorrent(_ context.Context, info *metainfo.Info, ih metainfo.Hash) (storage.TorrentImpl, error) {
 	paths, err := Paths(s.baseFor(ih), info)
@@ -159,8 +164,8 @@ func (s *Storage) OpenTorrent(_ context.Context, info *metainfo.Info, ih metainf
 		if fi, err := os.Stat(paths[i]); err == nil {
 			size = fi.Size()
 		}
-		t.files = append(t.files, fileSpan{path: paths[i], offset: f.TorrentOffset, length: f.Length, size: size})
-		if f.Length == 0 { // the engine never writes these
+		t.files = append(t.files, fileSpan{path: paths[i], offset: f.TorrentOffset, length: f.Length, size: size, pad: IsPadding(f)})
+		if f.Length == 0 && !IsPadding(f) { // the engine never writes these
 			if err := os.MkdirAll(filepath.Dir(paths[i]), 0o755); err != nil {
 				return storage.TorrentImpl{}, err
 			}
@@ -371,6 +376,14 @@ func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 		if rem := end - off; chunk > rem {
 			chunk = rem
 		}
+		if f.pad { // padding: dropped when written, zeros when read
+			if !write {
+				clear(b[:chunk])
+			}
+			n += int(chunk)
+			b, off = b[chunk:], off+chunk
+			continue
+		}
 		if t.parts != nil {
 			if handled, m, err := t.partsIO(i, f, b[:chunk], off, write); handled {
 				n += m
@@ -460,7 +473,7 @@ func (t *torrentStore) healStaleCompletion(info *metainfo.Info) {
 // completely fresh destination with nothing to verify.
 func filesAbsent(files []fileSpan) bool {
 	for _, f := range files {
-		if f.length > 0 && f.size > 0 {
+		if f.length > 0 && f.size > 0 && !f.pad {
 			return false
 		}
 	}
@@ -494,7 +507,7 @@ func (t *torrentStore) fullyPresent(off, n int64) bool {
 	unlock := t.lockParts()
 	defer unlock()
 	for i, f := range t.files {
-		if f.length == 0 || off >= f.offset+f.length || off+n <= f.offset {
+		if f.length == 0 || f.pad || off >= f.offset+f.length || off+n <= f.offset {
 			continue
 		}
 		if t.keptInParts(i) {
@@ -517,7 +530,7 @@ func (t *torrentStore) present(off, n int64) bool {
 	unlock := t.lockParts()
 	defer unlock()
 	for i, f := range t.files {
-		if f.length == 0 || off >= f.offset+f.length || off+n <= f.offset {
+		if f.length == 0 || f.pad || off >= f.offset+f.length || off+n <= f.offset {
 			continue
 		}
 		if t.keptInParts(i) { // its bytes of a piece are there when the piece has a slot
