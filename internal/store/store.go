@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -120,14 +121,20 @@ func Paths(base string, info *metainfo.Info) ([]string, error) {
 	}
 	files := info.UpvertedFiles()
 	out := make([]string, len(files))
+	name := RootName(info)
+	inside := func(p string) bool { return strings.HasPrefix(p, root+string(filepath.Separator)) }
 	for i, f := range files {
-		parts := []string{root}
-		if info.BestName() != metainfo.NoName {
-			parts = append(parts, info.BestName())
+		raw, parts := []string{root}, []string{root}
+		if name != "" {
+			raw, parts = append(raw, info.BestName()), append(parts, name)
 		}
-		p := filepath.Join(append(parts, f.BestPath()...)...)
-		if !strings.HasPrefix(p, root+string(filepath.Separator)) {
-			return nil, fmt.Errorf("unsafe path in torrent: %q", p)
+		for _, c := range f.BestPath() {
+			raw, parts = append(raw, c), append(parts, safeName(c))
+		}
+		// the path as the torrent gives it must stay inside too: a ".." mended into "_" is still a torrent that tries
+		p := filepath.Join(parts...)
+		if !inside(filepath.Join(raw...)) || !inside(p) {
+			return nil, fmt.Errorf("unsafe path in torrent: %q", filepath.Join(raw...))
 		}
 		out[i] = p
 	}
@@ -344,6 +351,12 @@ func (t *torrentStore) close() error {
 	return errors.Join(errs...)
 }
 
+// firstFile is the index of the first file that ends past byte off. The files are in the order of their offsets, so a
+// torrent of tens of thousands of files is not walked from its first file for every block read or written.
+func (t *torrentStore) firstFile(off int64) int {
+	return sort.Search(len(t.files), func(i int) bool { return t.files[i].offset+t.files[i].length > off })
+}
+
 // io walks the files overlapping [off, off+len(b)) of the torrent.
 func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 	if write {
@@ -352,7 +365,8 @@ func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 	} else {
 		t.owner.disk.waitForWrites()
 	}
-	for i, f := range t.files {
+	for i := t.firstFile(off); i < len(t.files); i++ {
+		f := t.files[i]
 		if len(b) == 0 {
 			break
 		}
@@ -506,8 +520,12 @@ func (t *torrentStore) trustPresent(info *metainfo.Info) {
 func (t *torrentStore) fullyPresent(off, n int64) bool {
 	unlock := t.lockParts()
 	defer unlock()
-	for i, f := range t.files {
-		if f.length == 0 || f.pad || off >= f.offset+f.length || off+n <= f.offset {
+	for i := t.firstFile(off); i < len(t.files); i++ {
+		f := t.files[i]
+		if off+n <= f.offset {
+			break // this one and all after it begin past the range
+		}
+		if f.length == 0 || f.pad || off >= f.offset+f.length {
 			continue
 		}
 		if t.keptInParts(i) {
@@ -529,8 +547,12 @@ func (t *torrentStore) fullyPresent(off, n int64) bool {
 func (t *torrentStore) present(off, n int64) bool {
 	unlock := t.lockParts()
 	defer unlock()
-	for i, f := range t.files {
-		if f.length == 0 || f.pad || off >= f.offset+f.length || off+n <= f.offset {
+	for i := t.firstFile(off); i < len(t.files); i++ {
+		f := t.files[i]
+		if off+n <= f.offset {
+			break // this one and all after it begin past the range
+		}
+		if f.length == 0 || f.pad || off >= f.offset+f.length {
 			continue
 		}
 		if t.keptInParts(i) { // its bytes of a piece are there when the piece has a slot

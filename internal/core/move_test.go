@@ -1,8 +1,11 @@
 package core
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -276,7 +279,7 @@ func TestCopyTreeCountsBytes(t *testing.T) {
 	}
 	var done atomic.Int64
 	dst := filepath.Join(dir, "b")
-	if err := copyTree(src, dst, &done); err != nil {
+	if err := copyTree(context.Background(), src, dst, &done); err != nil {
 		t.Fatal(err)
 	}
 	if done.Load() != 8000 {
@@ -286,6 +289,19 @@ func TestCopyTreeCountsBytes(t *testing.T) {
 		if !exists(filepath.Join(dst, p)) {
 			t.Fatalf("%s was not copied", p)
 		}
+	}
+}
+
+// Close cancels a copy under way: it stops instead of running to the end.
+func TestCopyTreeStopsWhenCancelled(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "a")
+	writeTree(t, src, "x.bin", "sub/y.bin")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var done atomic.Int64
+	if err := copyTree(ctx, src, filepath.Join(dir, "b"), &done); !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled copy went on: %v", err)
 	}
 }
 
@@ -317,7 +333,7 @@ func TestMoveTreeAcrossDrives(t *testing.T) {
 
 	m := &Manager{}
 	job := &moveJob{running: true}
-	moveErr, leftover := m.moveTree(root, dst, job)
+	moveErr, leftover := m.moveTree(context.Background(), root, dst, job, nil)
 	if moveErr != nil || leftover != nil {
 		t.Fatalf("move failed: %v / %v", moveErr, leftover)
 	}
@@ -469,5 +485,20 @@ func TestLabelFolderIsWhereAFinishedTorrentGoes(t *testing.T) {
 	r = record{Label: "Без папки"}
 	if got := doneDir(m.cfg.Get(), &r); got != done {
 		t.Fatalf("a label without a folder: the general folder for finished ones, got %q", got)
+	}
+}
+
+// Windows ignores the case of letters in paths, Linux (Umbrel, the server) does not: /data/Movies and /data/movies are
+// two folders there, and a move from one to the other has to happen.
+func TestPathCaseOnlyCountsOffWindows(t *testing.T) {
+	a, b := filepath.Join("data", "Movies"), filepath.Join("data", "movies")
+	same := samePath(a, b)
+	inside := isInside(filepath.Join(a, "x"), b)
+	if runtime.GOOS == "windows" {
+		if !same || !inside {
+			t.Fatalf("on Windows the case does not count: same %v, inside %v", same, inside)
+		}
+	} else if same || inside {
+		t.Fatalf("off Windows the case counts: same %v, inside %v", same, inside)
 	}
 }

@@ -100,6 +100,41 @@ func TestRecoverMovesAdoptsTheFinishedMove(t *testing.T) {
 	}
 }
 
+// The copy was whole and the source was being deleted when the process ended: the copy is the data now, and what is
+// left of the source goes.
+func TestRecoverMovesFinishesDeletingTheSource(t *testing.T) {
+	dir := t.TempDir()
+	old, target := filepath.Join(dir, "old"), filepath.Join(dir, "new")
+	src, dst := filepath.Join(old, "Show"), filepath.Join(target, "Show")
+	writeTree(t, dst, "a.mkv", "b.mkv")
+	writeTree(t, src, "b.mkv") // a.mkv had already been deleted
+
+	m := newStateOnlyManager(t, dir)
+	err := m.state.with(func(s *state) {
+		s.Torrents["h"] = &record{InfoHash: "h", SavePath: old, MoveFrom: src, MoveTo: dst, MoveDir: target, MoveCopied: true}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.recoverMoves()
+
+	for _, n := range []string{"a.mkv", "b.mkv"} {
+		if _, err := os.Stat(filepath.Join(dst, n)); err != nil {
+			t.Errorf("the copy lost %s: %v", n, err)
+		}
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Error("what was left of the source was not deleted")
+	}
+	r := recordOf(t, m, "h")
+	if r.SavePath != target {
+		t.Errorf("the copy was not adopted: got %q, want %q", r.SavePath, target)
+	}
+	if r.MoveTo != "" || r.MoveCopied {
+		t.Errorf("the move trail was not cleared: %+v", r)
+	}
+}
+
 // Nothing had been downloaded yet: only the folder was going to change.
 func TestRecoverMovesWithNothingOnDisk(t *testing.T) {
 	dir := t.TempDir()

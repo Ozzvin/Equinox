@@ -191,6 +191,7 @@ func (m *Manager) resumeChecks() {
 			continue
 		}
 		go func(t *torrent.Torrent, hash string, pl checkPlace) {
+			defer survive("resuming a check")
 			select {
 			case <-t.GotInfo():
 			case <-m.done:

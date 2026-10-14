@@ -115,6 +115,7 @@ type Manager struct {
 	evMu             sync.Mutex
 	onEvent          func(Event)
 
+	ctx    context.Context // cancelled by Close: a copy under way stops there (see moveTree)
 	cancel context.CancelFunc
 	done   chan struct{}
 }
@@ -268,7 +269,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	m.cancel = cancel
+	m.ctx, m.cancel = ctx, cancel
 	go m.loop(ctx)
 	m.resumeChecks() // the rechecks the last run did not finish go on from where they were
 	m.recheckOldV2() // torrents with a v2 part that older versions may have written wrongly
@@ -279,6 +280,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 func (m *Manager) Close() {
 	m.cancel()
 	<-m.done
+	m.waitForMoves(20 * time.Second)
 	m.syncCounters()
 	if err := m.state.flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "saving state on shutdown: %v\n", err)
@@ -477,7 +479,7 @@ func (m *Manager) restore(r *record) error {
 
 // track registers a new torrent in the engine and persists its record.
 func (m *Manager) track(spec *torrent.TorrentSpec, rec *record) error {
-	rec.V2Layout = true // this version writes every torrent right
+	rec.V2Checked = true // this version writes every torrent right
 	// The record goes first: the storage asks for the torrent's folder as soon as the
 	// engine knows the file list, which can happen inside AddTorrentSpec.
 	if err := m.state.with(func(s *state) { s.Torrents[rec.InfoHash] = rec }); err != nil {
@@ -516,6 +518,7 @@ func (m *Manager) register(t *torrent.Torrent) {
 // onMetadata runs once the torrent's info is known: it saves the .torrent copy for
 // magnets, preallocates disk space and only then starts the download.
 func (m *Manager) onMetadata(t *torrent.Torrent, hash string) {
+	defer survive("taking the metadata of a torrent")
 	select {
 	case <-t.GotInfo():
 	case <-m.done:
@@ -656,9 +659,9 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	}
 
 	// Collect everything we need before the engine forgets the torrent.
-	var dataPaths []string
+	var data *torrentData
 	if deleteData && t.Info() != nil {
-		dataPaths = m.dataPaths(t)
+		data = m.dataOf(t)
 	}
 	down, up := m.finalCounters(t, hash)
 
@@ -698,16 +701,15 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 		errs = append(errs, fmt.Errorf("saving removal to state: %w", err))
 	}
 
-	if deleteData {
-		for _, p := range dataPaths {
-			if err := removeAll(p); err != nil {
-				errs = append(errs, err)
-			}
+	if data != nil {
+		if err := data.remove(); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	_ = os.Remove(m.metaPath(hash)) // the internal copy has no use once the torrent is gone
 	m.clearError(hash)
 	m.forgetChecks(hash)
+	m.saveCheckPlace(hash, -1, nil) // a check that waited its turn must not come back at the next start
 	policy := m.cfg.Get().CopyRemovePolicy
 	if copyPath != "" && (policy == config.CopyRemoveAlways ||
 		(policy == config.CopyRemoveWithData && deleteData)) {
@@ -718,18 +720,53 @@ func (m *Manager) Remove(hash string, deleteData bool) error {
 	return errors.Join(errs...)
 }
 
-// dataPaths returns the on-disk root of the torrent's data, refusing anything that is
-// not strictly inside the download directory.
-func (m *Manager) dataPaths(t *torrent.Torrent) []string {
+// torrentData is what deleting a torrent with its files takes away: the torrent's own files and then the folders they
+// leave empty, up to the torrent's root. Whatever else lies in those folders stays where it is: a folder the torrent was
+// added to with other things in it, subtitles put next to a film, another torrent of the same name.
+type torrentData struct {
+	files []string // every file of the torrent, skipped ones and padding too: whichever of them is on the disk goes
+	root  string   // <save folder>/<name>; the save folder itself for a torrent without a folder of its own (NoName)
+	base  string   // the save folder: never removed
+}
+
+// dataOf finds the torrent's files on the disk, refusing anything that is not inside its save folder.
+func (m *Manager) dataOf(t *torrent.Torrent) *torrentData {
 	base, err := filepath.Abs(m.saveDir(t.InfoHash().HexString()))
 	if err != nil {
 		return nil
 	}
-	root, err := filepath.Abs(filepath.Join(base, filepath.FromSlash(t.Info().BestName())))
-	if err != nil || !strings.HasPrefix(root, base+string(filepath.Separator)) {
+	files, err := store.Paths(base, t.Info()) // refuses a file outside the save folder
+	if err != nil {
 		return nil
 	}
-	return []string{root}
+	root := base
+	if name := store.RootName(t.Info()); name != "" {
+		root = filepath.Join(base, name)
+		if root != base && !strings.HasPrefix(root, base+string(filepath.Separator)) {
+			return nil
+		}
+	}
+	return &torrentData{files: files, root: root, base: base}
+}
+
+// remove deletes the files, then the folders below the root that are left empty, the deepest first, then the root.
+// A root with something else in it is kept, and the error says so.
+func (d *torrentData) remove() error {
+	var errs []error
+	for _, p := range d.files {
+		if err := removeFile(p); err != nil { // a file that is not there is fine
+			errs = append(errs, deleteError(p, err))
+		}
+	}
+	pruneEmptyDirs(d.files, d.root)
+	if d.root != d.base {
+		if err := os.Remove(d.root); err != nil && !errors.Is(err, os.ErrNotExist) && len(errs) == 0 {
+			name := filepath.Base(d.root)
+			errs = append(errs, &CodedError{Code: "remove.kept_folder", Args: []string{name},
+				Msg: fmt.Sprintf("папка «%s» оставлена: в ней есть файлы не из этой раздачи", name)})
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // removeAll deletes path, retrying briefly: on Windows the engine may still hold the

@@ -1,17 +1,21 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/anacrolix/torrent"
+
+	"github.com/Ozzvin/equinox/internal/store"
 )
 
 // ErrBusy is returned for a torrent whose files are being moved.
@@ -61,14 +65,21 @@ func (m *Manager) activeMovesLocked() int {
 	return n
 }
 
-func samePath(a, b string) bool {
-	a, b = filepath.Clean(a), filepath.Clean(b)
-	return strings.EqualFold(a, b)
+// pathKey is a path as the file system tells paths apart: Windows ignores the case of letters, Linux does not
+// (/data/Movies and /data/movies are two folders there).
+func pathKey(p string) string {
+	p = filepath.Clean(p)
+	if runtime.GOOS == "windows" {
+		p = strings.ToLower(p)
+	}
+	return p
 }
+
+func samePath(a, b string) bool { return pathKey(a) == pathKey(b) }
 
 // isInside reports whether child is the same as or below parent.
 func isInside(child, parent string) bool {
-	child, parent = strings.ToLower(filepath.Clean(child)), strings.ToLower(filepath.Clean(parent))
+	child, parent = pathKey(child), pathKey(parent)
 	return child == parent || strings.HasPrefix(child, parent+string(filepath.Separator))
 }
 
@@ -92,7 +103,22 @@ func (m *Manager) resolveMove(hash, dir string) (t *torrent.Torrent, src, dst, t
 		same = true
 		return
 	}
-	name := t.Info().BestName()
+	name := store.RootName(t.Info())
+	if name == "" { // no folder of its own: its files go one by one, from one save folder to the other (moveFiles)
+		files, ferr := filesToMove(t.Info(), cur, target)
+		if ferr != nil {
+			err = fmt.Errorf("%w: %v", ErrInvalidInput, ferr)
+			return
+		}
+		for _, f := range files {
+			if _, e := os.Lstat(f.to); e == nil {
+				err = fmt.Errorf("%w: %q already exists in the target folder", ErrInvalidInput, f.to)
+				return
+			}
+		}
+		src, dst = cur, target
+		return
+	}
 	src, dst = filepath.Join(cur, name), filepath.Join(target, name)
 	if isInside(dst, src) || isInside(src, dst) {
 		err = fmt.Errorf("%w: the folders overlap", ErrInvalidInput)
@@ -149,9 +175,10 @@ func (m *Manager) beginMove(hash string, t *torrent.Torrent, src, dst, target, c
 	// Write the trail before the first file is touched: if the process dies during the copy,
 	// recoverMoves finds the half-written destination on the next start (see runMove, which
 	// clears it, and recoverMoves, which cleans up after it).
+	files := t.Info() != nil && store.RootName(t.Info()) == ""
 	if err := m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
-			r.MoveFrom, r.MoveTo, r.MoveDir = src, dst, target
+			r.MoveFrom, r.MoveTo, r.MoveDir, r.MoveFiles = src, dst, target, files
 		}
 	}); err != nil {
 		m.mu.Lock()
@@ -168,6 +195,9 @@ func (m *Manager) beginMove(hash string, t *torrent.Torrent, src, dst, target, c
 // tick from the main loop, and right after a move finishes so a freed slot is used at once.
 func (m *Manager) runMoveQueue() {
 	for {
+		if m.ctx.Err() != nil { // closing: the queued moves wait for the next start
+			return
+		}
 		m.mu.Lock()
 		if len(m.moveQueue) == 0 || !m.moveSlotFreeLocked() {
 			m.mu.Unlock()
@@ -208,13 +238,41 @@ func (m *Manager) runMoveQueue() {
 }
 
 func (m *Manager) runMove(hash string, t *torrent.Torrent, src, dst, target, old string, job *moveJob) {
+	defer func() {
+		if r := recover(); r != nil { // the trail is still there: the next start finishes or undoes the move (recoverMoves)
+			survivePanic("moving "+hash, r)
+			m.mu.Lock()
+			job.running = false
+			job.err = fmt.Sprintf("the move broke off (%v): restart the program, it finishes the move or undoes it", r)
+			job.updatedAt = time.Now()
+			m.moves[hash] = job
+			m.mu.Unlock()
+		}
+	}()
 	m.syncCounters() // fold traffic counters into the record before the engine forgets them
 	m.dropForMove(hash, t)
 
 	newDir := target
 	var moveErr, leftover error
 	if _, err := os.Lstat(src); err == nil {
-		moveErr, leftover = m.moveTree(src, dst, job)
+		// Once the copy is whole the trail says so: a source half deleted when the process ends is then not taken
+		// for an intact one, with the copy thrown away as unfinished (see recoverMoves).
+		copied := func() error {
+			return m.state.with(func(s *state) {
+				if r := s.Torrents[hash]; r != nil {
+					r.MoveCopied = true
+				}
+			})
+		}
+		if store.RootName(t.Info()) == "" { // no folder of its own: src and dst are the save folders (see resolveMove)
+			if files, err := filesToMove(t.Info(), src, dst); err != nil {
+				moveErr = err
+			} else {
+				moveErr, leftover = m.moveFiles(m.ctx, files, src, dst, job, copied)
+			}
+		} else {
+			moveErr, leftover = m.moveTree(m.ctx, src, dst, job, copied)
+		}
 	} // else nothing was downloaded yet: only the folder changes
 	if moveErr != nil {
 		newDir = old // data is still (or again) in the old folder
@@ -223,7 +281,7 @@ func (m *Manager) runMove(hash string, t *torrent.Torrent, src, dst, target, old
 	if err := m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
 			r.SavePath = newDir
-			r.MoveFrom, r.MoveTo, r.MoveDir = "", "", "" // the move is over, one way or the other
+			r.MoveFrom, r.MoveTo, r.MoveDir, r.MoveCopied, r.MoveFiles = "", "", "", false, false // the move is over, one way or the other
 		}
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "saving the result of moving %s: %v\n", hash, err)
@@ -275,7 +333,11 @@ func (m *Manager) restoreByHash(hash string) error {
 // is impossible the tree is copied and the source removed afterwards. It returns the
 // error of the move itself and, separately, a failure to delete the source after a
 // successful copy (the data is then safe in the new place).
-func (m *Manager) moveTree(src, dst string, job *moveJob) (moveErr, leftover error) {
+//
+// A copy stops when ctx is cancelled, and what it wrote is removed. Once it is whole and on
+// the disk, copied (if given) records that before the source is touched; if it cannot, the
+// copy is given up the same way.
+func (m *Manager) moveTree(ctx context.Context, src, dst string, job *moveJob, copied func() error) (moveErr, leftover error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err, nil
 	}
@@ -303,11 +365,36 @@ func (m *Manager) moveTree(src, dst string, job *moveJob) (moveErr, leftover err
 	job.copySize = need
 	m.mu.Unlock()
 
-	if err := copyTree(src, dst, &job.done); err != nil {
+	if err := copyTree(ctx, src, dst, &job.done); err != nil {
 		_ = removeAll(dst) // never leave half a copy behind
 		return fmt.Errorf("copy failed (%v after rename failed: %v)", err, renameErr), nil
 	}
+	if copied != nil {
+		if err := copied(); err != nil {
+			_ = removeAll(dst)
+			return fmt.Errorf("saving that the copy is done: %w", err), nil
+		}
+	}
 	return nil, removeAll(src)
+}
+
+// waitForMoves gives the moves under way up to d to end. A copy stops as soon as Close cancels it, but a source being
+// deleted after its copy is let through: interrupted, it is finished on the next start (see recoverMoves).
+func (m *Manager) waitForMoves(d time.Duration) {
+	end := time.Now().Add(d)
+	for {
+		m.mu.Lock()
+		n := m.activeMovesLocked()
+		m.mu.Unlock()
+		if n == 0 {
+			return
+		}
+		if time.Now().After(end) {
+			fmt.Fprintln(os.Stderr, "closing with a move still under way: it is finished on the next start")
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func treeSize(root string) (int64, error) {
@@ -328,9 +415,12 @@ func treeSize(root string) (int64, error) {
 	return n, err
 }
 
-func copyTree(src, dst string, done *atomic.Int64) error {
+func copyTree(ctx context.Context, src, dst string, done *atomic.Int64) error {
 	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		rel, err := filepath.Rel(src, p)
@@ -341,11 +431,13 @@ func copyTree(src, dst string, done *atomic.Int64) error {
 		if d.IsDir() {
 			return os.MkdirAll(out, 0o755)
 		}
-		return copyFile(p, out, done)
+		return copyFile(ctx, p, out, done)
 	})
 }
 
-func copyFile(src, dst string, done *atomic.Int64) error {
+// copyFile copies one file and makes sure it is on the disk: the source is deleted once the copy is done, and a power
+// cut must not find the new copy shorter than the old one was.
+func copyFile(ctx context.Context, src, dst string, done *atomic.Int64) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -357,6 +449,10 @@ func copyFile(src, dst string, done *atomic.Int64) error {
 	}
 	buf := make([]byte, 1<<20)
 	for {
+		if err := ctx.Err(); err != nil {
+			out.Close()
+			return err
+		}
 		n, rerr := in.Read(buf)
 		if n > 0 {
 			if _, werr := out.Write(buf[:n]); werr != nil {
@@ -373,6 +469,10 @@ func copyFile(src, dst string, done *atomic.Int64) error {
 			return rerr
 		}
 	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return err
+	}
 	return out.Close()
 }
 
@@ -382,6 +482,8 @@ func copyFile(src, dst string, done *atomic.Int64) error {
 // moveTree either renames (atomic: the tree is wholly at one end or the other) or copies and
 // then deletes the source, so at the moment of the interruption exactly one of these holds:
 //
+//   - the copy was whole (the trail says so, MoveCopied) and the destination is there: the
+//     source was being deleted — adopt the destination and delete what is left of the source;
 //   - the source is still there: the copy had not finished, and whatever reached the
 //     destination is a partial tree nobody will ever complete — delete it and stay put;
 //   - the source is gone and the destination exists: the rename went through, or the copy
@@ -389,20 +491,32 @@ func copyFile(src, dst string, done *atomic.Int64) error {
 //     adopt the destination;
 //   - neither exists: nothing had been downloaded yet, so only the folder changes.
 func (m *Manager) recoverMoves() {
-	type fix struct{ hash, from, to, dir string }
+	type fix struct {
+		hash, from, to, dir string
+		copied, files       bool
+	}
 	var todo []fix
 	m.state.view(func(s *state) {
 		for h, r := range s.Torrents {
 			if r.MoveTo != "" {
-				todo = append(todo, fix{h, r.MoveFrom, r.MoveTo, r.MoveDir})
+				todo = append(todo, fix{h, r.MoveFrom, r.MoveTo, r.MoveDir, r.MoveCopied, r.MoveFiles})
 			}
 		}
 	})
 	for _, f := range todo {
 		_, srcErr := os.Lstat(f.from)
 		_, dstErr := os.Lstat(f.to)
-		adopt := srcErr != nil && dstErr == nil
+		adopt := dstErr == nil && (srcErr != nil || f.copied)
 		switch {
+		case f.files: // a torrent without a folder of its own: file by file
+			adopt = m.recoverFileMove(f.hash, f.from, f.to, f.copied)
+		case f.copied && dstErr == nil:
+			fmt.Fprintf(os.Stderr, "move of %s had copied everything, adopting %s\n", f.hash, f.dir)
+			if srcErr == nil {
+				if err := removeAll(f.from); err != nil {
+					fmt.Fprintf(os.Stderr, "cannot remove what is left at %s: %v\n", f.from, err)
+				}
+			}
 		case srcErr == nil && dstErr == nil:
 			fmt.Fprintf(os.Stderr, "move of %s was interrupted, removing the partial copy at %s\n", f.hash, f.to)
 			if err := removeAll(f.to); err != nil {
@@ -419,7 +533,7 @@ func (m *Manager) recoverMoves() {
 			if adopt && f.dir != "" {
 				r.SavePath = f.dir
 			}
-			r.MoveFrom, r.MoveTo, r.MoveDir = "", "", ""
+			r.MoveFrom, r.MoveTo, r.MoveDir, r.MoveCopied, r.MoveFiles = "", "", "", false, false
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "clearing the recovered move trail for %s: %v\n", f.hash, err)
 		}

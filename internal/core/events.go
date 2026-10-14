@@ -25,6 +25,9 @@ func (m *Manager) emit(e Event) {
 	fn := m.onEvent
 	m.evMu.Unlock()
 	if fn != nil {
-		go fn(e)
+		go func() {
+			defer survive("an event handler")
+			fn(e)
+		}()
 	}
 }

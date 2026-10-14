@@ -115,6 +115,7 @@ func (m *Manager) reverifyFiles(hash string, indexes []int) {
 	}
 	files := t.Files()
 	go func() {
+		defer survive("a check of deleted files")
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go func() {
