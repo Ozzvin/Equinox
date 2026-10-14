@@ -1,0 +1,65 @@
+name: Flaky tests
+
+# Temporary, on the flaky-tests branch only: runs the chosen tests of internal/core many times over, to see how often
+# they fail on the runners and why. Every push to the branch starts it (a workflow_dispatch one would have to be on
+# main first); the tests, the count and -race are set below. Each job runs them COUNT times; the summary of the run
+# counts passes and fails, the log of each job is kept as an artifact.
+on:
+  push:
+    branches: [flaky-tests]
+
+env:
+  RUN: "TestAddedPeerIsUsed|TestTrackAvailabilityRemembersASeedThatWasSeen|TestSkippedFileStaysOffTheDisk"
+  COUNT: "25"
+  RACE: "-race"
+
+jobs:
+  stress:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run
+        shell: bash
+        run: |
+          set +e
+          go test $RACE -v -count=$COUNT -timeout 120m -run "$RUN" ./internal/core > log.txt 2>&1
+          code=$?
+          set -e
+          echo "### ${{ matrix.os }} #${{ matrix.shard }}" >> $GITHUB_STEP_SUMMARY
+          for name in $(grep -oE -- '--- (PASS|FAIL): [A-Za-z0-9_]+' log.txt | awk '{print $3}' | sort -u); do
+            p=$(grep -cE -- "--- PASS: $name " log.txt || true); f=$(grep -cE -- "--- FAIL: $name " log.txt || true)
+            echo "- $name: pass $p, fail $f" >> $GITHUB_STEP_SUMMARY
+          done
+          # the failures with their messages, and how long the passing runs took
+          grep -E -A4 -- '--- FAIL' log.txt || true
+          grep -E -- '--- PASS' log.txt | sed -E 's/.*--- PASS: ([A-Za-z0-9_]+) \(([0-9.]+)s\)/\1 \2/' | awk '{n[$1]++; s[$1]+=$2; if ($2>m[$1]) m[$1]=$2} END {for (k in n) printf "%s: %d passes, avg %.1fs, max %.1fs\n", k, n[k], s[k]/n[k], m[k]}'
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: log-${{ matrix.os }}-${{ matrix.shard }}
+          path: log.txt
+          retention-days: 7
+
+  # every test once, as CI runs them: a change made for the flaky ones must not break the others
+  full:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
