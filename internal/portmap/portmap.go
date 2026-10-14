@@ -100,10 +100,13 @@ func (m *Manager) Start() {
 	go m.run(ctx)
 }
 
-// Stop ends the loop and removes the mapping from the router.
+// Stop ends the loop and removes the mapping from the router. It never waits long: closing the program waits for it.
 func (m *Manager) Stop() {
 	m.cancel()
-	<-m.done
+	select { // a request under way stops with the loop's context; a mapper that does not listen to it is not waited for
+	case <-m.done:
+	case <-time.After(10 * time.Second):
+	}
 	m.mu.Lock()
 	a := m.active
 	m.mu.Unlock()
