@@ -105,7 +105,7 @@ func runTrayMenu(stateDir string) error {
 	if _, err := windows.CreateMutex(nil, false, lock); err == windows.ERROR_ALREADY_EXISTS {
 		return nil // one is running already
 	}
-	base, token, err := uiAddress(stateDir, 20*time.Second)
+	base, token, err := waitForUI(stateDir, 20*time.Second)
 	if err != nil {
 		return err
 	}
