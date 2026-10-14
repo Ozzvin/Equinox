@@ -43,4 +43,10 @@ func TestSettingsChangeOnlyWhatIsSent(t *testing.T) {
 	if got := get().DownLimitKBps; got != 100 {
 		t.Fatalf("a refused request changed the limit to %d", got)
 	}
+	if c := put(`{"downLimitKBps":7,"routerAddress":"not an address"}`); c != 400 {
+		t.Fatalf("a bad router address: %d", c)
+	}
+	if got := get().DownLimitKBps; got != 100 {
+		t.Fatalf("a refused request changed the limit to %d", got)
+	}
 }

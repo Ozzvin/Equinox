@@ -2300,6 +2300,24 @@
   $("btn-add").onclick = () => openAdd();
   $("addw-list").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { adSel = Number(r.dataset.i); renderAdd(); } });
   $("addw-file").onclick = () => $("addw-fileinput").click();
+  // A server on another machine (Umbrel): a .torrent may lie there, in Downloads or a folder added to the app, rather
+  // than on the computer the page is open on. The picker shows the server's folders; the file is read there.
+  let serverTorrentDir = "";
+  $("addw-server").hidden = !REMOTE;
+  $("addw-server").onclick = async () => {
+    const path = await pickFolder("Файл .torrent на сервере", serverTorrentDir, "torrent");
+    if (!path) return;
+    serverTorrentDir = path.replace(/[\\/][^\\/]*$/, ""); // the next time the picker opens where this one was
+    try {
+      const st = await api("POST", "/api/stage-path", { path });
+      if (!adItems.some((x) => x.hash === st.hash)) {
+        adItems.push({ kind: "file", name: st.name, size: st.size, hash: st.hash, exists: st.exists, stage: st.id, files: st.files || [],
+          sel: (st.files || []).map(() => true), open: null, opts: optDefaults(), error: "" });
+      }
+      adSel = adItems.findIndex((x) => x.hash === st.hash);
+      renderAdd();
+    } catch (x) { toast(x.message, true); }
+  };
   $("addw-fileinput").addEventListener("change", async (e) => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) await stageFiles(fl); });
   $("addw-remove").onclick = () => {
     const e = adCur(); if (!e) return;

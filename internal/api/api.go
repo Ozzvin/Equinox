@@ -211,6 +211,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/fs/mkdir", s.fsMkdir)
 	s.mux.HandleFunc("POST /api/stage", s.stage)
 	s.mux.HandleFunc("POST /api/stage-url", s.stageURL)
+	s.mux.HandleFunc("POST /api/stage-path", s.stagePath)
 	s.mux.HandleFunc("GET /api/changelog", s.changelog)
 	s.mux.HandleFunc("GET /api/tracker-icon", s.trackerIcon)
 	s.mux.HandleFunc("GET /api/stage/{id}", s.stagedInfo)
@@ -1016,6 +1017,19 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			colors[l] = id
 		}
 	}
+	var router string
+	if b.RouterAddress != nil {
+		router = strings.TrimSpace(*b.RouterAddress)
+		if ip := net.ParseIP(router); router != "" && (ip == nil || ip.To4() == nil) {
+			fail(w, &core.CodedError{Code: "port.router", Args: []string{router}, Msg: "адрес роутера должен быть IPv4-адресом, например 192.168.1.1: " + router, Err: core.ErrInvalidInput})
+			return
+		}
+	}
+	if b.ListenPort != nil && s.fixedPort > 0 && *b.ListenPort != s.fixedPort {
+		fail(w, &core.CodedError{Code: "port.fixed", Msg: "порт задан при запуске сервера, здесь его не поменять", Err: core.ErrInvalidInput})
+		return
+	}
+
 	if b.DownLimitKBps != nil || b.UpLimitKBps != nil || b.AltDownLimitKBps != nil || b.AltUpLimitKBps != nil {
 		cur := s.cfg.Get()
 		pick := func(v *int, now int) int {
@@ -1061,19 +1075,10 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if b.RouterAddress != nil {
-		a := strings.TrimSpace(*b.RouterAddress)
-		if ip := net.ParseIP(a); a != "" && (ip == nil || ip.To4() == nil) {
-			fail(w, &core.CodedError{Code: "port.router", Args: []string{a}, Msg: "адрес роутера должен быть IPv4-адресом, например 192.168.1.1: " + a, Err: core.ErrInvalidInput})
-			return
-		}
-		if err := s.m.SetRouterAddress(a); err != nil {
+		if err := s.m.SetRouterAddress(router); err != nil {
 			fail(w, err)
 			return
 		}
-	}
-	if b.ListenPort != nil && s.fixedPort > 0 && *b.ListenPort != s.fixedPort {
-		fail(w, &core.CodedError{Code: "port.fixed", Msg: "порт задан при запуске сервера, здесь его не поменять", Err: core.ErrInvalidInput})
-		return
 	}
 	if b.ListenPort != nil {
 		if err := s.m.SetListenPort(*b.ListenPort); err != nil {
