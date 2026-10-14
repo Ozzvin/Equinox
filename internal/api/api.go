@@ -839,7 +839,33 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer st.Close()
+	st.SetContext(r.Context()) // a player gone (a seek drops the old request) stops waiting for a piece nobody has
+	// A file of the torrent is served from the program's own address, with the key in the link: an .html or .svg
+	// (or a "film" with a page inside, where the system knows no video types) must not run there as a page. Its type
+	// comes from our list, not from the system or a look at the content, and the browser keeps it in a sandbox.
+	h := w.Header()
+	h.Set("Content-Type", mediaType(st.Name))
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "sandbox")
 	http.ServeContent(w, r, st.Name, time.Time{}, st)
+}
+
+// mediaTypes are the types a player link is served with; anything else goes as application/octet-stream.
+var mediaTypes = map[string]string{
+	".mp4": "video/mp4", ".m4v": "video/mp4", ".mkv": "video/x-matroska", ".webm": "video/webm",
+	".avi": "video/x-msvideo", ".mov": "video/quicktime", ".wmv": "video/x-ms-wmv", ".flv": "video/x-flv",
+	".mpg": "video/mpeg", ".mpeg": "video/mpeg", ".ts": "video/mp2t", ".m2ts": "video/mp2t", ".mts": "video/mp2t",
+	".ogv": "video/ogg", ".3gp": "video/3gpp",
+	".mp3": "audio/mpeg", ".flac": "audio/flac", ".m4a": "audio/mp4", ".m4b": "audio/mp4", ".aac": "audio/aac",
+	".ogg": "audio/ogg", ".oga": "audio/ogg", ".opus": "audio/ogg", ".wav": "audio/wav", ".wma": "audio/x-ms-wma",
+	".srt": "application/x-subrip", ".vtt": "text/vtt", ".ass": "text/x-ssa", ".ssa": "text/x-ssa",
+}
+
+func mediaType(name string) string {
+	if t, ok := mediaTypes[strings.ToLower(filepath.Ext(name))]; ok {
+		return t
+	}
+	return "application/octet-stream"
 }
 
 // ---------------------------------------------------------------- settings & status
@@ -856,15 +882,17 @@ func (s *Server) getSettingsDefaults(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
-// putSettings updates the limits, which take effect immediately. Paths and the listen
-// port need a restart and are intentionally not changeable here yet.
+// putSettings changes the settings; most take effect at once.
+//
+// Every field is optional: one left out keeps what it is, so a window that shows only some settings sends only those
+// and cannot undo what another window changed meanwhile. All of the request is checked before anything is changed.
 func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	var b struct {
-		DownLimitKBps    int                 `json:"downLimitKBps"`
-		UpLimitKBps      int                 `json:"upLimitKBps"`
-		AltDownLimitKBps int                 `json:"altDownLimitKBps"`
-		AltUpLimitKBps   int                 `json:"altUpLimitKBps"`
-		RatioLimit       float64             `json:"ratioLimit"`
+		DownLimitKBps    *int                `json:"downLimitKBps"`
+		UpLimitKBps      *int                `json:"upLimitKBps"`
+		AltDownLimitKBps *int                `json:"altDownLimitKBps"`
+		AltUpLimitKBps   *int                `json:"altUpLimitKBps"`
+		RatioLimit       *float64            `json:"ratioLimit"`
 		SeedTimeLimit    *int                `json:"seedTimeLimitMinutes"` // optional: omitted = unchanged
 		NotifyOnComplete *bool               `json:"notifyOnComplete"`     // optional
 		AutoUpdateCheck  *bool               `json:"autoUpdateCheck"`      // optional
@@ -882,23 +910,24 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		SpeedUnit        *string             `json:"speedUnit"`            // optional: bytes | bits
 		LimitUnits       *map[string]string  `json:"limitUnits"`           // optional: omitted = unchanged
 		Language         *string             `json:"language"`             // optional: "" (as in the system) | ru | en
-		MaxActive        int                 `json:"maxActiveDownloads"`
+		MaxActive        *int                `json:"maxActiveDownloads"`
 		MaxSeeds         *int                `json:"maxActiveSeeds"` // optional: omitted = unchanged
 		AltSchedule      *config.AltSchedule `json:"altSchedule"`    // optional: omitted = unchanged
 		// Folders and port: all optional, omitted = unchanged.
-		DataDir          *string                 `json:"dataDir"`
-		TorrentCopyDir   *string                 `json:"torrentCopyDir"`
-		LabelPaths       *map[string]string      `json:"labelPaths"`
-		LabelColors      *map[string]string      `json:"labelColors"` // optional: omitted = unchanged
-		MoveCompleted    *string                 `json:"moveCompletedDir"`
-		WatchDir         *string                 `json:"watchDir"`
-		ListenPort       *int                    `json:"listenPort"`
-		Network          *config.Network         `json:"network"`
-		Preallocate      *bool                   `json:"preallocate"`
-		CopyRemovePolicy config.CopyRemovePolicy `json:"copyRemovePolicy"`
+		DataDir          *string                  `json:"dataDir"`
+		TorrentCopyDir   *string                  `json:"torrentCopyDir"`
+		LabelPaths       *map[string]string       `json:"labelPaths"`
+		LabelColors      *map[string]string       `json:"labelColors"` // optional: omitted = unchanged
+		MoveCompleted    *string                  `json:"moveCompletedDir"`
+		WatchDir         *string                  `json:"watchDir"`
+		ListenPort       *int                     `json:"listenPort"`
+		Network          *config.Network          `json:"network"`
+		Preallocate      *bool                    `json:"preallocate"`
+		CopyRemovePolicy *config.CopyRemovePolicy `json:"copyRemovePolicy"`
 	}
-	if err := decode(r, &b); err != nil || b.DownLimitKBps < 0 || b.UpLimitKBps < 0 ||
-		b.AltDownLimitKBps < 0 || b.AltUpLimitKBps < 0 || b.RatioLimit < 0 || b.MaxActive < 0 ||
+	negative := func(v *int) bool { return v != nil && *v < 0 }
+	if err := decode(r, &b); err != nil || negative(b.DownLimitKBps) || negative(b.UpLimitKBps) ||
+		negative(b.AltDownLimitKBps) || negative(b.AltUpLimitKBps) || (b.RatioLimit != nil && *b.RatioLimit < 0) || negative(b.MaxActive) ||
 		(b.SeedTimeLimit != nil && (*b.SeedTimeLimit < 0 || *b.SeedTimeLimit > 60*24*3650)) ||
 		(b.MaxChecks != nil && (*b.MaxChecks < 0 || *b.MaxChecks > 64)) ||
 		(b.MaxMoves != nil && (*b.MaxMoves < 0 || *b.MaxMoves > 64)) ||
@@ -908,11 +937,13 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		fail(w, core.ErrInvalidInput)
 		return
 	}
-	switch b.CopyRemovePolicy {
-	case config.CopyRemoveWithData, config.CopyRemoveAlways, config.CopyRemoveNever:
-	default:
-		fail(w, core.ErrInvalidInput)
-		return
+	if b.CopyRemovePolicy != nil {
+		switch *b.CopyRemovePolicy {
+		case config.CopyRemoveWithData, config.CopyRemoveAlways, config.CopyRemoveNever:
+		default:
+			fail(w, core.ErrInvalidInput)
+			return
+		}
 	}
 	var limitUnits map[string]string
 	if b.LimitUnits != nil {
@@ -927,9 +958,34 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if err := s.m.SetLimits(b.DownLimitKBps, b.UpLimitKBps, b.AltDownLimitKBps, b.AltUpLimitKBps); err != nil {
-		fail(w, err)
-		return
+	var colors map[string]string
+	if b.LabelColors != nil {
+		colors = map[string]string{}
+		for l, id := range *b.LabelColors {
+			l = strings.TrimSpace(l)
+			if l == "" || id == "" {
+				continue
+			}
+			if !config.ValidLabelColor(id) {
+				fail(w, badInputCode("label.color_unknown", "Неизвестный цвет метки: "+id, id))
+				return
+			}
+			colors[l] = id
+		}
+	}
+	if b.DownLimitKBps != nil || b.UpLimitKBps != nil || b.AltDownLimitKBps != nil || b.AltUpLimitKBps != nil {
+		cur := s.cfg.Get()
+		pick := func(v *int, now int) int {
+			if v != nil {
+				return *v
+			}
+			return now
+		}
+		if err := s.m.SetLimits(pick(b.DownLimitKBps, cur.DownLimitKBps), pick(b.UpLimitKBps, cur.UpLimitKBps),
+			pick(b.AltDownLimitKBps, cur.AltDownLimitKBps), pick(b.AltUpLimitKBps, cur.AltUpLimitKBps)); err != nil {
+			fail(w, err)
+			return
+		}
 	}
 	if b.DataDir != nil || b.TorrentCopyDir != nil || b.LabelPaths != nil || b.MoveCompleted != nil || b.WatchDir != nil {
 		cur := s.cfg.Get()
@@ -956,18 +1012,6 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if b.LabelColors != nil {
-		colors := map[string]string{}
-		for l, id := range *b.LabelColors {
-			l = strings.TrimSpace(l)
-			if l == "" || id == "" {
-				continue
-			}
-			if !config.ValidLabelColor(id) {
-				fail(w, badInputCode("label.color_unknown", "Неизвестный цвет метки: "+id, id))
-				return
-			}
-			colors[l] = id
-		}
 		if err := s.cfg.Update(func(c *config.Settings) { c.LabelColors = colors }); err != nil {
 			fail(w, err)
 			return
@@ -997,9 +1041,11 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.m.SetMaxActiveDownloads(b.MaxActive); err != nil {
-		fail(w, err)
-		return
+	if b.MaxActive != nil {
+		if err := s.m.SetMaxActiveDownloads(*b.MaxActive); err != nil {
+			fail(w, err)
+			return
+		}
 	}
 	if b.MaxSeeds != nil {
 		if err := s.m.SetMaxActiveSeeds(*b.MaxSeeds); err != nil {
@@ -1008,7 +1054,12 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := s.cfg.Update(func(c *config.Settings) {
-		c.RatioLimit, c.CopyRemovePolicy = b.RatioLimit, b.CopyRemovePolicy
+		if b.RatioLimit != nil {
+			c.RatioLimit = *b.RatioLimit
+		}
+		if b.CopyRemovePolicy != nil {
+			c.CopyRemovePolicy = *b.CopyRemovePolicy
+		}
 		if b.SeedTimeLimit != nil {
 			c.SeedTimeLimitMinutes = *b.SeedTimeLimit
 		}
