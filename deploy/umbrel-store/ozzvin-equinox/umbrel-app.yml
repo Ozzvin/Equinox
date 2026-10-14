@@ -41,12 +41,13 @@ website: https://github.com/Ozzvin/equinox
 dependencies: []
 repo: https://github.com/Ozzvin/equinox
 support: https://github.com/Ozzvin/equinox/issues
-port: 8091
+port: 9095
 gallery: []
 path: ""
 defaultUsername: ""
 defaultPassword: ""
 releaseNotes: >-
+  The app now opens at port 9095 instead of 8091 (8091 belongs to code-server): update your bookmarks.
   Unreleased in this store yet: see https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md
 submitter: Ozzvin
 submission: ""
