@@ -40,7 +40,7 @@
 
   // ---------- copying ----------
   // The browser lends its clipboard to a page only over HTTPS or from localhost: on Umbrel the page comes by plain
-  // http://umbrel.local:8091, navigator.clipboard is missing there and every "copy" failed. The old way, a selected
+  // http://umbrel.local:9095, navigator.clipboard is missing there and every "copy" failed. The old way, a selected
   // text field and execCommand("copy"), still works there while the click that asked for it is fresh.
   async function copyText(text) {
     if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
@@ -192,6 +192,21 @@
   const limitReadPlain = (id, bits) => limitRead(id, limitDefault(bits));
   function limitRefitPlain(ids, oldBits, newBits) { for (const id of ids) limitFillPlain(id, limitReadPlain(id, oldBits), newBits); }
   const limitFieldsDirty = (ids) => { for (const id of ids) $(id).addEventListener("input", () => { $(id).dataset.dirty = "1"; }); };
+  // "Без ограничения": a box under a speed limit (id + "-nl") instead of "0 — no limit". Ticked, the field rests,
+  // empty; cleared, it wants a limit above zero and gets back the number it had. The settings keep 0 for no limit.
+  function nolimApply(id, focus) {
+    const off = $(id + "-nl").checked, el = $(id), u = $(id + "-u");
+    el.disabled = off; if (u) u.disabled = off;
+    if (off) { if (Number(el.value) > 0) el.dataset.keep = el.value; el.value = ""; return; }
+    if (!el.value && el.dataset.keep) { el.value = el.dataset.keep; el.dataset.dirty = "1"; }
+    if (focus) el.focus();
+  }
+  // after a field was filled with a stored limit: the box is ticked for 0
+  function nolimSet(id, kib) { delete $(id).dataset.keep; $(id + "-nl").checked = !kib; nolimApply(id, false); }
+  for (const id of ["lp-down", "lp-up", "lp-adown", "lp-aup", "wz-down", "wz-up"]) $(id + "-nl").addEventListener("change", () => nolimApply(id, true));
+  // the limit to save: 0 for a ticked box, null for a cleared one with no limit above zero in the field
+  function nolimRead(id, read) { if ($(id + "-nl").checked) return 0; const v = read(); return v > 0 ? v : null; }
+  const NOLIM_ASK = () => L("Укажите ограничение больше нуля или отметьте «Без ограничения»", "Enter a limit above zero or tick “No limit”");
 
 
 
@@ -2242,7 +2257,7 @@
   }
 
   // -- options tab
-  const AO = { save: "ao-save", moveOn: "ao-movedone-on", move: "ao-movedone", label: "ao-label", paused: "ao-paused", edges: "ao-edges", seq: "ao-seq", skip: "ao-skip", prealloc: "ao-prealloc", conns: "ao-conns" };
+  const AO = { save: "ao-save", moveOn: "ao-movedone-on", move: "ao-movedone", label: "ao-label", paused: "ao-paused", edges: "ao-edges", seq: "ao-seq", skip: "ao-skip", prealloc: "ao-prealloc", conns: "ao-conns", connsDef: "ao-conns-def" };
   function fillOpts() {
     const e = adCur(), on = !!e;
     for (const id of Object.values(AO)) $(id).disabled = !on;
@@ -2253,7 +2268,11 @@
     $(AO.save).value = o.savePath; $(AO.moveOn).checked = o.moveDoneOn; $(AO.move).value = o.moveDone; $(AO.move).disabled = !o.moveDoneOn;
     document.querySelector('[data-pick="ao-movedone"]').disabled = !o.moveDoneOn;
     $(AO.label).value = o.label; $(AO.paused).checked = o.paused; $(AO.edges).checked = o.edgePieces; $(AO.seq).checked = o.sequential;
-    $(AO.skip).checked = o.skipCheck; $(AO.prealloc).checked = o.preallocate; $(AO.conns).value = o.maxConns;
+    $(AO.skip).checked = o.skipCheck; $(AO.prealloc).checked = o.preallocate;
+    // "Как в настройках программы" instead of "0 — as in the settings": ticked, the field shows the program's number, greyed
+    const ownConns = Number(o.maxConns) > 0;
+    $(AO.connsDef).checked = !ownConns; $(AO.conns).disabled = !ownConns;
+    $(AO.conns).value = ownConns ? o.maxConns : programConns();
     const d = optDefaults(); // something set under "Ещё" that differs from the defaults is not hidden
     if (o.skipCheck !== d.skipCheck || o.preallocate !== d.preallocate || Number(o.maxConns) !== 0) setAoMore(true, false);
     aoHints(o);
@@ -2266,12 +2285,17 @@
     $(AO.save).placeholder = lf && !moves ? `папка метки: ${lf}` : `по умолчанию: ${addInfo ? addInfo.dataDir : ""}`;
     $(AO.move).placeholder = lf && all ? `папка метки: ${lf}` : all ? `общая настройка: ${all}` : "папка для завершённых";
   }
+  const programConns = () => (addInfo && addInfo.maxConnsPerTorrent) || "";
   function readOpts() {
     const e = adCur(); if (!e) return;
     const o = e.opts;
     o.savePath = $(AO.save).value; o.moveDoneOn = $(AO.moveOn).checked; o.moveDone = $(AO.move).value; o.label = $(AO.label).value;
     o.paused = $(AO.paused).checked; o.edgePieces = $(AO.edges).checked; o.sequential = $(AO.seq).checked;
-    o.skipCheck = $(AO.skip).checked; o.preallocate = $(AO.prealloc).checked; o.maxConns = Number($(AO.conns).value) || 0;
+    o.skipCheck = $(AO.skip).checked; o.preallocate = $(AO.prealloc).checked;
+    const ownConns = !$(AO.connsDef).checked, typed = Math.floor(Number($(AO.conns).value));
+    $(AO.conns).disabled = !ownConns;
+    if (!ownConns) $(AO.conns).value = programConns();
+    o.maxConns = !ownConns ? 0 : typed >= 1 ? typed : programConns() || 1; // a limit of its own is at least 1
     $(AO.move).disabled = !o.moveDoneOn; document.querySelector('[data-pick="ao-movedone"]').disabled = !o.moveDoneOn;
     aoHints(o);
   }
@@ -2292,6 +2316,24 @@
   $("btn-add").onclick = () => openAdd();
   $("addw-list").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { adSel = Number(r.dataset.i); renderAdd(); } });
   $("addw-file").onclick = () => $("addw-fileinput").click();
+  // A server on another machine (Umbrel): a .torrent may lie there, in Downloads or a folder added to the app, rather
+  // than on the computer the page is open on. The picker shows the server's folders; the file is read there.
+  let serverTorrentDir = "";
+  $("addw-server").hidden = !REMOTE;
+  $("addw-server").onclick = async () => {
+    const path = await pickFolder("Файл .torrent на сервере", serverTorrentDir, "torrent");
+    if (!path) return;
+    serverTorrentDir = path.replace(/[\\/][^\\/]*$/, ""); // the next time the picker opens where this one was
+    try {
+      const st = await api("POST", "/api/stage-path", { path });
+      if (!adItems.some((x) => x.hash === st.hash)) {
+        adItems.push({ kind: "file", name: st.name, size: st.size, hash: st.hash, exists: st.exists, stage: st.id, files: st.files || [],
+          sel: (st.files || []).map(() => true), open: null, opts: optDefaults(), error: "" });
+      }
+      adSel = adItems.findIndex((x) => x.hash === st.hash);
+      renderAdd();
+    } catch (x) { toast(x.message, true); }
+  };
   $("addw-fileinput").addEventListener("change", async (e) => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) await stageFiles(fl); });
   $("addw-remove").onclick = () => {
     const e = adCur(); if (!e) return;
@@ -2442,7 +2484,7 @@
   function showLimits() {
     if (!settings) return;
     limitFillAll(LP_IDS, bitsMode());
-
+    LIMIT_KEYS.forEach((key, i) => nolimSet(LP_IDS[i], settings[LIMIT_CFG[key]]));
     $("lp-on").checked = !!(stats && stats.altSpeed); $("lp-err").hidden = true;
     limitsPop.hidden = false;
     $("s-turtle").classList.add("tip-off"); // the tooltip would cover the window
@@ -2459,11 +2501,14 @@
     e.preventDefault();
     const n = (id) => Math.max(0, Math.floor(Number($(id).value) || 0));
     try {
-      // the settings call takes the whole set of these values, so the ones that were not touched are sent back as they are
-      settings = await api("PUT", "/api/settings", {
-        ...limitReadAll(LP_IDS), limitUnits: limitUnitsOf(LP_IDS),
-        ratioLimit: settings.ratioLimit || 0, maxActiveDownloads: settings.maxActiveDownloads || 0, copyRemovePolicy: settings.copyRemovePolicy,
-      });
+      // only the limits: what this window does not show is left as it is (another window may have just changed it)
+      const lim = {};
+      for (const [i, key] of LIMIT_KEYS.entries()) {
+        const id = LP_IDS[i], v = nolimRead(id, () => limitRead(id, $(id + "-u").value));
+        if (v === null) { $("lp-err").textContent = NOLIM_ASK(); $("lp-err").hidden = false; $(id).focus(); return; }
+        lim[LIMIT_CFG[key]] = v;
+      }
+      settings = await api("PUT", "/api/settings", { ...lim, limitUnits: limitUnitsOf(LP_IDS) });
       if (!!$("lp-on").checked !== !!(stats && stats.altSpeed)) await api("POST", "/api/altspeed", { enabled: $("lp-on").checked });
       hideLimits(); toast("Ограничения сохранены"); refresh();
     } catch (x) { $("lp-err").textContent = x.message; $("lp-err").hidden = false; }
@@ -2961,12 +3006,17 @@
   $("st-port-num").addEventListener("input", () => { $("st-port-note").hidden = !(port && Number($("st-port-num").value) !== port.port); });
 
   // ---------- folder picker (our own window, the same in the browser and in the app) ----------
-  const pk = { resolve: null, data: null, sel: "", seq: 0, any: false }; // any: a file can be chosen as well as a folder
+  // any: a file can be chosen as well as a folder; torrents: only a .torrent file can be chosen (any = "torrent")
+  const pk = { resolve: null, data: null, sel: "", seq: 0, any: false, torrents: false };
   const pkFinish = (v) => { const r = pk.resolve; pk.resolve = null; if (r) r(v); };
+  const isTorrentName = (n) => /\.torrent$/i.test(n);
+  const pkCanChoose = (v) => !!v && (!pk.torrents || isTorrentName(v));
   function pickFolder(title, initial, any) {
     return new Promise((resolve) => {
       if ($("dlg-picker").open) return resolve("");
-      pk.resolve = resolve; pk.sel = ""; pk.any = !!any;
+      pk.resolve = resolve; pk.sel = ""; pk.torrents = any === "torrent"; pk.any = any === true;
+      $("pk-path-l").textContent = pk.torrents ? "Выбранный файл" : "Выбранная папка";
+      $("pk-newbtn").hidden = pk.torrents;
       $("pk-title").textContent = title || "Выбор папки";
       $("pk-newrow").hidden = true; $("pk-err").hidden = true; $("pk-path").value = initial || "";
       $("dlg-picker").showModal();
@@ -2983,7 +3033,7 @@
     if (!d) { $("pk-err").textContent = "Сервер не вернул список папок."; $("pk-err").hidden = false; return; }
     pk.data = d; pk.sel = "";
     $("pk-err").hidden = true;
-    $("pk-path").value = d.path;
+    $("pk-path").value = pk.torrents ? "" : d.path; // choosing a .torrent: a folder is only the way to it
     renderPicker();
   }
   const pkDate = (s) => { const t = Date.parse(s); return t > 31536000000 ? new Date(t).toLocaleDateString(LOCALE) + " " + new Date(t).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) : ""; };
@@ -3005,19 +3055,19 @@
     }).join("");
     const rows = d.entries.map((e, i) => e.dir ?
       `<div class="pk-row dir" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-folder"/></svg><span>${esc(e.name)}</span></span><span class="r dt"></span><span class="dt">${pkDate(e.modified)}</span></div>` :
-      pk.any ? `<div class="pk-row file pick" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-newfile"/></svg><span>${esc(e.name)}</span></span><span class="r dt">${bytes(e.size)}</span><span class="dt">${pkDate(e.modified)}</span></div>` :
+      pk.any || (pk.torrents && isTorrentName(e.name)) ? `<div class="pk-row file pick" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-newfile"/></svg><span>${esc(e.name)}</span></span><span class="r dt">${bytes(e.size)}</span><span class="dt">${pkDate(e.modified)}</span></div>` :
       `<div class="pk-row file" aria-disabled="true"><span class="nm"><svg class="i"><use href="#i-newfile"/></svg><span>${esc(e.name)}</span></span><span class="r dt">${bytes(e.size)}</span><span class="dt">${pkDate(e.modified)}</span></div>`);
     $("pk-list").innerHTML = (d.error ? `<div class="pk-msg">${esc(window.__trCode(d.errorCode, null, d.error))}</div>` : "") + rows.join("") +
-      (!d.error && d.entries.length === 0 ? '<div class="pk-msg">Здесь пусто. Можно выбрать эту папку или создать в ней новую.</div>' : "") +
+      (!d.error && d.entries.length === 0 ? `<div class="pk-msg">${pk.torrents ? "Здесь пусто." : "Здесь пусто. Можно выбрать эту папку или создать в ней новую."}</div>` : "") +
       (d.truncated ? '<div class="pk-msg">Показаны первые записи, остальные скрыты.</div>' : "");
-    $("pk-ok").disabled = !$("pk-path").value.trim();
+    $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
   }
   const PK_ROWS = ".pk-row.dir, .pk-row.file.pick";
   function pkSelect(path) {
     pk.sel = path;
     for (const r of $("pk-list").querySelectorAll(PK_ROWS)) { const on = r.dataset.path === path; r.classList.toggle("sel", on); r.setAttribute("aria-selected", on); if (on) r.scrollIntoView({ block: "nearest" }); }
-    $("pk-path").value = path || (pk.data && pk.data.path) || "";
-    $("pk-ok").disabled = !$("pk-path").value.trim();
+    $("pk-path").value = path || (pk.data && !pk.torrents && pk.data.path) || "";
+    $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
   }
   $("pk-list").addEventListener("click", (e) => { const r = e.target.closest(PK_ROWS); if (r) pkSelect(r.dataset.path); });
   $("pk-list").addEventListener("dblclick", (e) => {
@@ -3038,9 +3088,13 @@
   });
   for (const id of ["pk-crumbs", "pk-places"]) $(id).addEventListener("click", (e) => { const b = e.target.closest("[data-go]"); if (b) pkGo(b.dataset.go); });
   $("pk-up").onclick = () => { if (pk.data && pk.data.parent !== null) pkGo(pk.data.parent); };
-  $("pk-path").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); const v = $("pk-path").value.trim(); if (v) pkGo(v); } });
-  $("pk-path").addEventListener("input", () => { $("pk-ok").disabled = !$("pk-path").value.trim(); });
-  $("pk-ok").onclick = () => { const v = $("pk-path").value.trim(); if (!v) return; pkFinish(v); $("dlg-picker").close(); };
+  $("pk-path").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault(); const v = $("pk-path").value.trim();
+    if (pk.torrents && isTorrentName(v)) { pkFinish(v); $("dlg-picker").close(); } else if (v) pkGo(v);
+  });
+  $("pk-path").addEventListener("input", () => { $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim()); });
+  $("pk-ok").onclick = () => { const v = $("pk-path").value.trim(); if (!pkCanChoose(v)) return; pkFinish(v); $("dlg-picker").close(); };
   // new folder
   $("pk-newbtn").onclick = () => { $("pk-newrow").hidden = !$("pk-newrow").hidden; if (!$("pk-newrow").hidden) { $("pk-newname").value = ""; $("pk-newname").focus(); } };
   $("pk-newcancel").onclick = () => { $("pk-newrow").hidden = true; };
@@ -3133,7 +3187,7 @@
   const wzUnit = () => $("wz-unit-bits").checked;
   function wzSummary() {
     const bits = wzUnit(), li = [];
-    const lim = (id) => (limitReadPlain(id, bits) ? `${$(id).value} ${limitUnit(bits)}` : "без ограничения");
+    const lim = (id) => (nolimRead(id, () => limitReadPlain(id, bits)) ? `${$(id).value} ${limitUnit(bits)}` : "без ограничения");
     li.push(`Папка загрузок: ${$("wz-data").value.trim() || "—"}`);
     li.push($("wz-done").value.trim() ? `Готовые перемещаются в: ${$("wz-done").value.trim()}` : "Готовые остаются там, где скачались");
     li.push($("wz-watch").value.trim() ? `Папка автодобавления: ${$("wz-watch").value.trim()}` : "Папка автодобавления: выключена");
@@ -3151,7 +3205,8 @@
     $("wz-data").value = s.dataDir || ""; $("wz-done").value = s.moveCompletedDir || ""; $("wz-watch").value = s.watchDir || ""; $("wz-copydir").value = s.torrentCopyDir || ""; $("wz-paused").checked = !!(s.add && s.add.paused);
     $("wz-unit-bits").checked = bits; $("wz-unit-bytes").checked = !bits;
     limitFillPlain("wz-down", s.downLimitKBps, bits); limitFillPlain("wz-up", s.upLimitKBps, bits);
-    $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
+    nolimSet("wz-down", s.downLimitKBps); nolimSet("wz-up", s.upLimitKBps);
+    $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)}`;
     $("wz-port").value = s.listenPort; $("wz-mapping").checked = !!wz.port.enabled; $("wz-port-note").hidden = true;
     $("wz-port").readOnly = !!s.portFixed; $("wz-port-rnd").hidden = !!s.portFixed; $("wz-port-fixed").hidden = !s.portFixed;
     $("wz-starthidden").checked = s.startHidden !== false; $("wz-closetray").checked = s.closeToTray !== false; $("wz-notify").checked = s.notifyOnComplete !== false;
@@ -3168,7 +3223,8 @@
     const bits = wzUnit();
     if (bits === wz.bits) return;
     limitRefitPlain(["wz-down", "wz-up"], wz.bits, bits); wz.bits = bits;
-    $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)} (0 — без ограничения)`;
+    for (const id of ["wz-down", "wz-up"]) if ($(id + "-nl").checked) $(id).value = ""; // refitted to "0": it stays empty
+    $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)}`;
   });
   // a random port from the range the system keeps for private use, away from well-known services
   const randomPort = () => 49152 + Math.floor(Math.random() * (65535 - 49152 + 1));
@@ -3181,11 +3237,8 @@
     const err = await window.registerHandlers();
     if (err) { $("wz-err").textContent = "Не удалось зарегистрировать приложение: " + err; $("wz-err").hidden = false; }
   };
-  // The fields that are not optional in the settings request keep what they are now.
-  const wzBase = (s) => ({ downLimitKBps: s.downLimitKBps, upLimitKBps: s.upLimitKBps, altDownLimitKBps: s.altDownLimitKBps, altUpLimitKBps: s.altUpLimitKBps,
-    ratioLimit: s.ratioLimit, maxActiveDownloads: s.maxActiveDownloads, copyRemovePolicy: s.copyRemovePolicy });
   async function wzSkip() { // leave the defaults, but do not ask again
-    try { settings = await api("PUT", "/api/settings", { ...wzBase(wz.cur), setupDone: true }); } catch (_) {}
+    try { settings = await api("PUT", "/api/settings", { setupDone: true }); } catch (_) {}
     if ($("dlg-wizard").open) $("dlg-wizard").close();
   }
   async function wzFinish() {
@@ -3193,9 +3246,12 @@
     const port = n("wz-port");
     if (!$("wz-data").value.trim()) { $("wz-err").textContent = "Укажите папку для загрузок."; $("wz-err").hidden = false; return; }
     if (port < 1 || port > 65535) { $("wz-err").textContent = "Порт должен быть от 1 до 65535."; $("wz-err").hidden = false; return; }
-    const body = { ...wzBase(wz.cur), setupDone: true,
+    const body = { setupDone: true,
       dataDir: $("wz-data").value.trim(), moveCompletedDir: $("wz-done").value.trim(), watchDir: $("wz-watch").value.trim(), torrentCopyDir: $("wz-copydir").value.trim(), addPaused: $("wz-paused").checked,
-      speedUnit: bits ? "bits" : "bytes", downLimitKBps: limitReadPlain("wz-down", bits), upLimitKBps: limitReadPlain("wz-up", bits), listenPort: port };
+      speedUnit: bits ? "bits" : "bytes", listenPort: port };
+    if (!wzSpeedOK()) { wz.i = wz.steps.findIndex((x) => x.dataset.wz === "speed"); wzShow(); wzSpeedOK(); return; }
+    body.downLimitKBps = nolimRead("wz-down", () => limitReadPlain("wz-down", bits));
+    body.upLimitKBps = nolimRead("wz-up", () => limitReadPlain("wz-up", bits));
     if (wzDesktop()) Object.assign(body, { startHidden: $("wz-starthidden").checked, closeToTray: $("wz-closetray").checked, notifyOnComplete: $("wz-notify").checked });
     $("wz-next").disabled = true;
     try {
@@ -3209,7 +3265,17 @@
     } catch (x) { $("wz-err").textContent = x.message; $("wz-err").hidden = false; }
     finally { $("wz-next").disabled = false; }
   }
-  $("wz-next").onclick = () => { if (wz.i < wz.steps.length - 1) { wz.i++; wzShow(); } else wzFinish(); };
+  // a speed step left with a cleared "Без ограничения" box and no limit in its field: the step says so and stays
+  function wzSpeedOK() {
+    for (const id of ["wz-down", "wz-up"]) {
+      if (nolimRead(id, () => limitReadPlain(id, wzUnit())) === null) { $("wz-err").textContent = NOLIM_ASK(); $("wz-err").hidden = false; $(id).focus(); return false; }
+    }
+    return true;
+  }
+  $("wz-next").onclick = () => {
+    if (wz.steps[wz.i].dataset.wz === "speed" && !wzSpeedOK()) return;
+    if (wz.i < wz.steps.length - 1) { wz.i++; wzShow(); } else wzFinish();
+  };
   $("wz-back").onclick = () => { if (wz.i > 0) { wz.i--; wzShow(); } };
   $("wz-skip").onclick = wzSkip;
   $("dlg-wizard").addEventListener("cancel", (e) => { e.preventDefault(); wzSkip(); }); // Esc counts as "skip"
