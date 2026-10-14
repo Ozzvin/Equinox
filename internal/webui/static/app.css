@@ -468,6 +468,11 @@ table.mini.pt th.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
 .limf input { flex: 1 1 0; min-width: 0; margin: 0; }
 .limf select { flex: none; width: auto; max-width: 100px; margin: 0; padding: 0 6px; }
 .pop-grid .limf { margin-top: 0; }
+/* "Без ограничения" under a speed limit: ticked, the field rests and is empty */
+.limc { display: flex; flex-direction: column; min-width: 0; }
+label.check.nolim { display: flex; gap: 6px; align-items: center; margin: 4px 0 0; font-size: 12px; font-weight: 400; color: var(--muted); }
+label.check.nolim input { width: auto; height: auto; margin: 0; }
+.limc input:disabled:not([type=checkbox]), .limc select:disabled { opacity: .45; }
 .pop .check { margin: 4px 0 10px; }
 /* segmented switch, left / right like on iOS */
 .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 380px); margin: 6px 0 10px; padding: 3px; border-radius: 11px; background: var(--panel-2); border: 1px solid var(--line); }
@@ -889,6 +894,7 @@ html[data-density="compact"] .file, html[data-density="compact"] .fhead { grid-t
 .addw-side .ao-inline > span { flex: 1; }
 .addw-side .ao-inline #ao-label { width: 130px; }
 .addw-side .ao-inline #ao-conns { width: 70px; text-align: right; }
+.addw-side .ao-inline #ao-conns:disabled { opacity: .45; }
 .ao-more { display: flex; align-items: center; gap: 6px; width: max-content; margin-top: 2px; padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
 .ao-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .ao-extra { display: flex; flex-direction: column; gap: 5px; padding-top: 6px; border-top: 1px dashed var(--line); }

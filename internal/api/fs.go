@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -8,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/anacrolix/torrent/metainfo"
 
 	"github.com/Ozzvin/equinox/internal/core"
 )
@@ -305,6 +309,57 @@ func (s *Server) fsMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"path": full})
+}
+
+// stagePath puts a .torrent that lies on the server (on Umbrel: in Downloads or a folder added in the app's settings)
+// on the "Add torrents" list, like a file uploaded from the browser: {"path": "/downloads/x.torrent"}. With places
+// (see SetPlaces) the file must be inside one of them, as for a new folder.
+func (s *Server) stagePath(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Path string `json:"path"`
+	}
+	if err := decode(r, &b); err != nil {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	p := filepath.Clean(strings.TrimSpace(b.Path))
+	name := filepath.Base(p)
+	missing := badInputCode("stage.no_file", "Файл не найден: «"+name+"».", name)
+	if _, in := s.placeOf(p); !filepath.IsAbs(p) || (len(s.places) > 0 && !in) {
+		fail(w, missing)
+		return
+	}
+	if !strings.EqualFold(filepath.Ext(p), ".torrent") {
+		fail(w, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name))
+		return
+	}
+	st, err := os.Stat(p)
+	if err != nil || !st.Mode().IsRegular() {
+		fail(w, missing)
+		return
+	}
+	if st.Size() > maxTorrentFile {
+		mib := fmt.Sprint(maxTorrentFile >> 20)
+		fail(w, badInputCode("stage.too_large", "Файл больше "+mib+" МиБ: это не .torrent.", mib))
+		return
+	}
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		msg, code := friendlyFsError(err)
+		fail(w, badInputCode(code, msg))
+		return
+	}
+	mi, err := metainfo.Load(bytes.NewReader(raw))
+	if err != nil {
+		fail(w, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name))
+		return
+	}
+	staged, err := s.m.Stage(mi, raw)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, staged)
 }
 
 // inputError is an ErrInvalidInput with a message meant for the person using the page.

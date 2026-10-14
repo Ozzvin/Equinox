@@ -149,6 +149,10 @@ func TestStreamRangeAndRemoveWithData(t *testing.T) {
 	if res.StatusCode != http.StatusPartialContent || !bytes.Equal(b, payload[1000:2000]) {
 		t.Fatalf("range: status %d, %d bytes, match=%v", res.StatusCode, len(b), bytes.Equal(b, payload[1000:2000]))
 	}
+	if ct, h := res.Header.Get("Content-Type"), res.Header; ct != "video/x-matroska" ||
+		h.Get("X-Content-Type-Options") != "nosniff" || h.Get("Content-Security-Policy") != "sandbox" {
+		t.Fatalf("a file of a torrent must come with its own type, in a sandbox: %v", h)
+	}
 
 	// Token in the query works for players on the stream URL only.
 	req, _ := http.NewRequest("GET", e.srv.URL+"/api/torrents/"+hash+"/files/0/stream?token="+tok, nil)
@@ -544,5 +548,19 @@ func TestRememberWindowSetting(t *testing.T) {
 	put(`,"rememberWindow":true`)
 	if !get() {
 		t.Fatal("not switched on")
+	}
+}
+
+// A file of a torrent never comes as a page: only the media types of our list, the rest as plain bytes, whatever the
+// system or the content would say.
+func TestMediaType(t *testing.T) {
+	for name, want := range map[string]string{
+		"Film.MKV": "video/x-matroska", "a.mp4": "video/mp4", "s.srt": "application/x-subrip",
+		"x.html": "application/octet-stream", "x.svg": "application/octet-stream", "film.xyz": "application/octet-stream",
+		"noext": "application/octet-stream",
+	} {
+		if got := mediaType(name); got != want {
+			t.Errorf("%s: %s, want %s", name, got, want)
+		}
 	}
 }
