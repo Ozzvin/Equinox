@@ -40,13 +40,16 @@ type record struct {
 	MoveFrom      string  `json:"moveFrom,omitempty"`      // the data tree being moved away from
 	MoveTo        string  `json:"moveTo,omitempty"`        // where that tree is being copied to
 	MoveDir       string  `json:"moveDir,omitempty"`       // the save folder the torrent gets when it succeeds
+	MoveCopied    bool    `json:"moveCopied,omitempty"`    // the copy is whole and on the disk: only the source is left to delete
+	MoveFiles     bool    `json:"moveFiles,omitempty"`     // no folder of its own: its files, one by one, from the save folder MoveFrom to MoveTo
 	RatioLimit    float64 `json:"ratioLimit"`              // 0 = use the global default
 	SeedTimeLimit int     `json:"seedTimeLimit,omitempty"` // minutes of seeding after which it stops, 0 = the global default
 	SeedSeconds   int64   `json:"seedSeconds,omitempty"`   // time spent seeding, adds up across restarts
 	ActiveSeconds int64   `json:"activeSeconds,omitempty"` // time the torrent has been running (not paused), adds up across restarts
 	// Its storage is known to be right for a torrent with a v2 part: added by a version that puts each file on a piece
-	// boundary, or checked once since (see recheckOldV2).
-	V2Layout bool `json:"v2Layout,omitempty"`
+	// boundary, or wholly checked since (see recheckOldV2). 1.0.45 kept this as "v2Layout", set as soon as the check
+	// was asked for: a check that waited its turn when the program closed was lost, so that mark is not trusted.
+	V2Checked bool `json:"v2Checked,omitempty"`
 
 	// Per-file priority (see PrioSkip/PrioLow/PrioNormal/PrioHigh); missing entries mean normal.
 	FilePrios []int8 `json:"filePrios,omitempty"`
@@ -138,7 +141,7 @@ func (s *stateStore) view(fn func(*state)) {
 }
 
 func (s *stateStore) saveLocked() error {
-	b, err := json.MarshalIndent(&s.st, "", "  ")
+	b, err := json.Marshal(&s.st) // no indents: the file is written whole, often, and every file priority was a line of its own
 	if err != nil {
 		return err
 	}

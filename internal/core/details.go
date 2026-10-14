@@ -262,6 +262,7 @@ func (m *Manager) RecheckFiles(hash string, files []int) error {
 // While it runs the torrent does not download (see syncPerm): what it would fetch could be thrown away by the check.
 func (m *Manager) startRecheck(t *torrent.Torrent, hash string, files []int, start int) error {
 	go func() {
+		defer survive("a check of files")
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go func() { // stop waiting when the manager shuts down
@@ -275,6 +276,7 @@ func (m *Manager) startRecheck(t *torrent.Torrent, hash string, files []int, sta
 		m.mu.Lock()
 		m.checkSel[hash] = checkSel{files: files}
 		m.mu.Unlock()
+		m.saveCheckPlace(hash, start, files) // a check still waiting when the program closes goes on at the next start
 		release, ok := m.acquireRecheck(hash, ctx.Done())
 		if !ok {
 			m.mu.Lock()
@@ -300,7 +302,9 @@ func (m *Manager) startRecheck(t *torrent.Torrent, hash string, files []int, sta
 			release()
 			m.syncPerm(t, hash)
 		}()
-		_ = m.verifyFrom(ctx, t, hash, files, start)
+		if m.verifyFrom(ctx, t, hash, files, start) == nil && files == nil {
+			m.markV2Checked(hash) // whatever asked for it, the whole torrent has been checked with today's layout
+		}
 	}()
 	return nil
 }

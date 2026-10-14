@@ -195,6 +195,12 @@ func (m *Manager) runCreate(job *CreateJob, src string, req CreateRequest, track
 		job.Running, job.Error = false, err.Error()
 		m.mu.Unlock()
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			survivePanic("creating a torrent", r)
+			fail(fmt.Errorf("the creation broke off: %v", r))
+		}
+	}()
 
 	var size int64 // the whole walk is done here, not in the request
 	_ = filepath.WalkDir(src, func(_ string, d fs.DirEntry, err error) error {

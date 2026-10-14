@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/Ozzvin/equinox/internal/store"
 )
 
 // openInFileManager shows path in the system file manager. It is a variable so tests do
@@ -21,9 +23,11 @@ func (m *Manager) OpenFolder(hash string) error {
 	base := m.saveDir(hash)
 	target := base
 	if info := t.Info(); info != nil {
-		root := filepath.Join(base, info.BestName())
-		if _, err := os.Stat(root); err == nil {
-			target = root
+		if name := store.RootName(info); name != "" {
+			root := filepath.Join(base, name)
+			if _, err := os.Stat(root); err == nil {
+				target = root
+			}
 		}
 	}
 	if _, err := os.Stat(target); err != nil {

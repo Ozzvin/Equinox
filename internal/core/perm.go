@@ -35,9 +35,13 @@ func (m *Manager) syncPerm(t *torrent.Torrent, hash string) {
 	if !known {
 		prev = permState{true, true} // what a freshly added torrent may do
 	}
+	// Nothing goes either way while the files are checked: what would be fetched could be thrown away by the check, and
+	// a piece the check is about to find spoiled must not be sent (the engine does not hash what it sends, and a peer
+	// bans a sender of bad pieces). A torrent waiting for its turn to be checked goes on as usual.
+	held := m.checkHolds(hash)
 	want := permState{
-		down: !rec.Paused && m.queued[h] == 0 && !m.checkHolds(hash), // nothing is downloaded while the files are checked
-		up:   !rec.Paused && m.seedQueued[h] == 0,
+		down: !rec.Paused && m.queued[h] == 0 && !held,
+		up:   !rec.Paused && m.seedQueued[h] == 0 && !held,
 	}
 	m.perm[h] = want
 	m.mu.Unlock()
