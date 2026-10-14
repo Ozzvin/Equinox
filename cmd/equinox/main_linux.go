@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -62,6 +61,8 @@ func main() {
 		fatal(err)
 	}
 	defer lock.Close()
+	uiFile := filepath.Join(*stateDir, "ui-url")
+	_ = os.Remove(uiFile) // the last run's, if it did not end cleanly: see waitForUI
 
 	// A log file, as on Windows: started from the menu, the program has nobody reading its output.
 	if err := app.SetupLog(filepath.Join(*stateDir, "equinox.log"), 5<<20); err != nil {
@@ -75,7 +76,6 @@ func main() {
 	lang.SetPreference(func() string { return a.Settings.Get().Language })
 	base, _, _ := strings.Cut(a.URL, "/#token=")
 	log.Println("engine started, api at", base)
-	uiFile := filepath.Join(*stateDir, "ui-url")
 	_ = os.WriteFile(uiFile, []byte(a.URL), 0o600) // holds the key, like api-token
 	addArgs(a, args)
 
@@ -301,27 +301,6 @@ func lockInstance(stateDir string) (*os.File, error) {
 		return nil, err
 	}
 	return f, nil
-}
-
-// waitForUI returns the address and key of the running copy once its page answers: it may be starting still, and
-// ui-url may be one left by a copy that crashed.
-func waitForUI(stateDir string, wait time.Duration) (base, token string, err error) {
-	deadline := time.Now().Add(wait)
-	client := &http.Client{Timeout: 2 * time.Second}
-	for {
-		if raw, rerr := os.ReadFile(filepath.Join(stateDir, "ui-url")); rerr == nil {
-			if b, t, ok := strings.Cut(strings.TrimSpace(string(raw)), "/#token="); ok {
-				if res, gerr := client.Get(b + "/"); gerr == nil {
-					res.Body.Close()
-					return b, t, nil
-				}
-			}
-		}
-		if time.Now().After(deadline) {
-			return "", "", errors.New("the running Equinox does not answer")
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
 }
 
 // openBrowser opens a page of the program in the user's default browser.

@@ -140,6 +140,7 @@ func main() {
 	if err != nil {
 		fatalBox(err)
 	}
+	_ = os.Remove(filepath.Join(*stateDir, "ui-url")) // the last run's, if it did not end cleanly: see waitForUI
 	log.Println("starting engine")
 	a, err := app.Start(*stateDir, *listen)
 	if err != nil {

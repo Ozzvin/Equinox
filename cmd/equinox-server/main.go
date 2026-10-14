@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -47,14 +48,28 @@ func main() {
 		*stateDir = app.DefaultStateDir()
 	}
 
-	// Already running on this state directory: open its page instead of starting a second one.
-	if url, ok := runningURL(*stateDir); ok {
+	if err := os.MkdirAll(*stateDir, 0o755); err != nil {
+		fatal(err)
+	}
+	// One server per state directory: a second start opens the page of the one running instead.
+	lock, err := lockInstance(*stateDir)
+	if errors.Is(err, errRunning) {
+		url, ok := runningURL(*stateDir, 20*time.Second)
+		if !ok {
+			fatal(errors.New("another server runs on this state directory, but its page does not answer"))
+		}
 		fmt.Println("Already running:", withoutKey(url))
 		if !*noBrowser {
 			openBrowser(url)
 		}
 		return
 	}
+	if err != nil {
+		fatal(err)
+	}
+	defer lock.Close()
+	uiFile := filepath.Join(*stateDir, "ui-url")
+	_ = os.Remove(uiFile) // the last run's, if it did not end cleanly: its key must not go to whoever answers there now
 
 	var hosts []string
 	for _, h := range strings.Split(*allowHosts, ",") {
@@ -67,7 +82,6 @@ func main() {
 		fatal(err)
 	}
 	defer a.Close()
-	uiFile := filepath.Join(*stateDir, "ui-url")
 	_ = os.WriteFile(uiFile, []byte(a.URL), 0o600) // holds the key, like api-token
 	defer os.Remove(uiFile)
 
@@ -105,25 +119,30 @@ func main() {
 	<-sig
 }
 
-// runningURL returns the link of a server that already works on this state directory.
-func runningURL(stateDir string) (string, bool) {
-	raw, err := os.ReadFile(filepath.Join(stateDir, "ui-url"))
-	if err != nil {
-		return "", false
-	}
-	url := strings.TrimSpace(string(raw))
-	base, _, ok := strings.Cut(url, "/#token=")
-	if !ok {
-		return "", false
-	}
+// runningURL returns the link of the server that holds the lock on this state directory, once its page answers: it
+// may be starting still, and writes ui-url only once it is up (the one of a run before is gone by then).
+func runningURL(stateDir string, wait time.Duration) (string, bool) {
+	deadline := time.Now().Add(wait)
 	c := &http.Client{Timeout: 2 * time.Second}
-	res, err := c.Get(base + "/")
-	if err != nil {
-		return "", false // a stale file left by a server that did not exit cleanly
+	for {
+		if raw, err := os.ReadFile(filepath.Join(stateDir, "ui-url")); err == nil {
+			url := strings.TrimSpace(string(raw))
+			if base, _, ok := strings.Cut(url, "/#token="); ok {
+				if res, err := c.Get(base + "/"); err == nil {
+					res.Body.Close()
+					return url, true
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return "", false
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
-	res.Body.Close()
-	return url, true
 }
+
+// errRunning means another server holds the state directory.
+var errRunning = errors.New("another server runs on this state directory")
 
 func openBrowser(url string) {
 	var cmd *exec.Cmd

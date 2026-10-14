@@ -58,17 +58,35 @@ func addArgs(a *app.App, args []string) {
 // its files, about a hundred bytes each, so this leaves room for a torrent of some hundred thousand files.
 const maxForwardReply = 32 << 20
 
+// waitForUI returns the address and key of the running copy (ui-url next to the settings) once its page answers: it
+// may be starting still. A copy removes the ui-url of the last run as soon as it holds the one-copy lock, before its
+// engine starts, so a file found here is its own: the key is not handed to whatever now answers at an old address.
+func waitForUI(stateDir string, wait time.Duration) (base, token string, err error) {
+	deadline := time.Now().Add(wait)
+	client := &http.Client{Timeout: 2 * time.Second}
+	for {
+		if raw, rerr := os.ReadFile(filepath.Join(stateDir, "ui-url")); rerr == nil {
+			if b, t, ok := strings.Cut(strings.TrimSpace(string(raw)), "/#token="); ok {
+				if res, gerr := client.Get(b + "/"); gerr == nil {
+					res.Body.Close()
+					return b, t, nil
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return "", "", errors.New("the running Equinox does not answer")
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
 // forward hands command-line arguments to the already running instance through its local API, the
 // same way addArgs does within this process: they end up in the "Add torrents" dialog rather than
-// being added at once. The instance's address and access key are in ui-url next to the settings.
+// being added at once.
 func forward(stateDir string, args []string) error {
-	raw, err := os.ReadFile(filepath.Join(stateDir, "ui-url"))
+	base, token, err := waitForUI(stateDir, 20*time.Second)
 	if err != nil {
 		return err
-	}
-	base, token, ok := strings.Cut(strings.TrimSpace(string(raw)), "/#token=")
-	if !ok {
-		return errors.New("ui-url is malformed")
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	do := func(path string, body io.Reader, contentType string) ([]byte, error) {
