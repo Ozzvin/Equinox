@@ -315,8 +315,9 @@ func (i *Info) Install(ctx context.Context, dir string, relaunch bool) error {
 
 // fetchVerified downloads the installer into dir and checks it against the release's SHA256SUMS.txt. A file that
 // cannot be had from where the release was found (GitHub's downloads may be blocked while its API is not) is taken
-// from the mirror. The checksum always comes from the release's own list, so an installer from a mirror that is
-// behind (a different version) fails the check instead of being run.
+// from the mirror. The checksum comes from the release's own list when that can be had, so an installer from a mirror
+// that is behind (a different version) fails the check instead of being run; when the list cannot be had either, the
+// mirror's copy of it is taken, and then the site alone vouches for the installer: only a signed list would not trust it.
 func (i *Info) fetchVerified(ctx context.Context, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
