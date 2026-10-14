@@ -12,6 +12,8 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/merkle"
 	"github.com/anacrolix/torrent/metainfo"
+
+	"github.com/Ozzvin/equinox/internal/config"
 )
 
 // hybridTorrent makes a hybrid (v1 + v2, BEP 52) torrent of three files whose sizes are not multiples of the piece:
@@ -145,30 +147,44 @@ func TestHybridTorrentFilesAreWrittenWhereTheyBelong(t *testing.T) {
 }
 
 // A torrent with a v2 part added by an older version is checked once at the start: the files it spoiled are found
-// (and downloaded again); a new torrent, or one checked once already, is not checked again.
+// (and downloaded again); a new torrent, or one checked once already, is not checked again. The mark comes when the
+// check is over, not while it waits its turn, and the waiting check is already in checks.json for the next start.
 func TestOldV2TorrentIsCheckedOnce(t *testing.T) {
 	dir := t.TempDir()
 	mi, _ := hybridTorrent(t, dir)
-	m := newManager(t, dir, nil)
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
 	hash, err := m.AddMetaInfo(mi, WithSavePath(filepath.Join(dir, "src")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { s, ok := statusOf(m, hash); return ok && s.Progress == 1 && !s.Checking })
-	if !m.snapshotRecords()[hash].V2Layout {
+	if !m.snapshotRecords()[hash].V2Checked {
 		t.Fatal("a torrent added by this version is known to be written right")
 	}
 
 	// as if an older version had written it: spoiled where the old layout put the bytes, and no mark
 	spoil(t, filepath.Join(dir, "src", "hybrid", "c.mkv"))
 	m.store.CloseFiles(metainfo.NewHashFromHex(hash), []string{filepath.Join(dir, "src", "hybrid", "c.mkv")})
-	if err := m.state.with(func(s *state) { s.Torrents[hash].V2Layout = false }); err != nil {
+	if err := m.state.with(func(s *state) { s.Torrents[hash].V2Checked = false }); err != nil {
 		t.Fatal(err)
 	}
+	m.mu.Lock()
+	m.rechecking["other"] = true // the only check slot is taken
+	m.mu.Unlock()
 	m.recheckOldV2()
+	waitFor(t, func() bool { m.mu.Lock(); defer m.mu.Unlock(); return len(m.recheckQueue) == 1 })
+	if m.snapshotRecords()[hash].V2Checked {
+		t.Fatal("marked while the check only waits its turn")
+	}
+	if _, ok := m.loadCheckPlaces()[hash]; !ok {
+		t.Fatal("a waiting check must be in checks.json, or closing the program loses it")
+	}
+	m.mu.Lock()
+	delete(m.rechecking, "other")
+	m.mu.Unlock()
 	waitFor(t, func() bool {
 		s, _ := statusOf(m, hash)
-		return m.snapshotRecords()[hash].V2Layout && !s.Checking && s.Progress < 1
+		return m.snapshotRecords()[hash].V2Checked && !s.Checking && s.Progress < 1
 	})
 }
 

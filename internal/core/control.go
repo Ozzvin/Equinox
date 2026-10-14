@@ -167,14 +167,36 @@ func (m *Manager) SetAllPaused(paused bool) int {
 			recs[h] = r.Paused
 		}
 	})
-	n := 0
+	var change []string
 	for _, h := range hashes {
-		if was, ok := recs[h]; ok && was == paused {
+		if was, ok := recs[h]; ok && was != paused {
+			change = append(change, h)
+		}
+	}
+	if len(change) == 0 {
+		return 0
+	}
+	// One write of the state for all of them: with hundreds of torrents, one each took seconds of writing to the disk.
+	if err := m.state.with(func(s *state) {
+		for _, h := range change {
+			if r := s.Torrents[h]; r != nil {
+				r.Paused = paused
+			}
+		}
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "saving pause state: %v\n", err)
+	}
+	n := 0
+	for _, h := range change {
+		t, err := m.get(h)
+		if err != nil { // removed or being moved meanwhile
 			continue
 		}
-		if m.SetPaused(h, paused) == nil {
-			n++
+		if !paused {
+			m.clearError(h) // resuming is the user's retry: forget the old failure
 		}
+		m.applyPause(t, h, paused)
+		n++
 	}
 	return n
 }
@@ -634,15 +656,45 @@ func (m *Manager) List() []Status {
 // torrent ever added. Like the per-torrent ratio (see ratio above), each torrent counts in the
 // denominator with what was downloaded here or what is on disk, whichever is more, so data
 // acquired outside this client does not inflate the ratio or drag it down to zero.
+//
+// It counts the same torrents List shows, but without building their statuses: the page asks for both every second
+// and a half, and List is the costly one.
 func (m *Manager) GlobalRatio() (down, up int64, r float64) {
-	var removedDown, removedUp int64
-	m.state.view(func(s *state) { removedDown, removedUp = s.RemovedDownloaded, s.RemovedUploaded })
-	down, up = removedDown, removedUp
-	den := removedDown
-	for _, t := range m.List() {
-		down += t.Downloaded
-		up += t.Uploaded
-		den += max(t.Downloaded, t.Done)
+	m.syncCounters()
+	m.mu.Lock()
+	live := make(map[string]*torrent.Torrent, len(m.torrents))
+	for h, t := range m.torrents {
+		live[h.HexString()] = t
+	}
+	moving := map[string]int64{} // out of the engine while their files move: List shows them as done
+	for h, j := range m.moves {
+		if j.running {
+			moving[h] = j.selSize
+		}
+	}
+	m.mu.Unlock()
+	recs := map[string]record{}
+	m.state.view(func(s *state) {
+		down, up = s.RemovedDownloaded, s.RemovedUploaded
+		for h, r := range s.Torrents {
+			recs[h] = *r
+		}
+	})
+	den := down
+	for h, rec := range recs {
+		var done int64
+		if t, ok := live[h]; ok {
+			if t.Info() != nil {
+				_, done = selection(t, rec.FilePrios)
+			}
+		} else if sel, ok := moving[h]; ok {
+			done = sel
+		} else {
+			continue
+		}
+		down += rec.Downloaded
+		up += rec.Uploaded
+		den += max(rec.Downloaded, done)
 	}
 	if den > 0 {
 		r = float64(up) / float64(den)
@@ -654,6 +706,15 @@ func (m *Manager) GlobalRatio() (down, up int64, r float64) {
 
 func (m *Manager) loop(ctx context.Context) {
 	defer close(m.done)
+	// Going on after a panic here could find a lock still held and hang the program instead: the stack is written
+	// down, what the state has not saved yet is saved, and the program ends as it would have.
+	defer func() {
+		if r := recover(); r != nil {
+			survivePanic("the main loop", r)
+			_ = m.state.flush()
+			panic(r)
+		}
+	}()
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	lastDown, lastUp := map[metainfo.Hash]int64{}, map[metainfo.Hash]int64{}

@@ -113,6 +113,7 @@ func (m *Manager) TrackerIcon(ctx context.Context, site string) (data []byte, co
 // a later TrackerIcon call to pick up. It runs detached from any one request: ctx does not come from a caller, since
 // that would be cancelled the moment the caller's own HTTP response is sent.
 func (m *Manager) fetchIconInBackground(site, dir, file, miss string) {
+	defer survive("fetching a tracker's icon")
 	defer func() {
 		m.iconMu.Lock()
 		delete(m.iconFetching, site)

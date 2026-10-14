@@ -8,7 +8,7 @@ import (
 )
 
 // A recheck stopped half way keeps its place in checks.json; going on from that place finishes the check and
-// forgets the place. While a check runs, the torrent does not download.
+// forgets the place. While a check runs, the torrent neither downloads nor uploads.
 func TestRecheckKeepsItsPlaceAndHoldsTheDownload(t *testing.T) {
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
@@ -54,18 +54,18 @@ func TestRecheckKeepsItsPlaceAndHoldsTheDownload(t *testing.T) {
 	m.mu.Unlock()
 	m.syncPerm(tor, hash)
 	m.mu.Lock()
-	held := !m.perm[tor.InfoHash()].down
+	held := m.perm[tor.InfoHash()]
 	delete(m.checking, hash)
 	m.mu.Unlock()
-	if !held {
-		t.Fatal("no downloading while the files are checked")
+	if held.down || held.up {
+		t.Fatalf("no downloading nor uploading while the files are checked: %+v", held)
 	}
 	m.syncPerm(tor, hash)
 	m.mu.Lock()
-	back := m.perm[tor.InfoHash()].down
+	back := m.perm[tor.InfoHash()]
 	m.mu.Unlock()
-	if !back {
-		t.Fatal("downloading must go on once the check is over")
+	if !back.down || !back.up {
+		t.Fatalf("downloading and uploading must go on once the check is over: %+v", back)
 	}
 }
 

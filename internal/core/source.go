@@ -148,6 +148,16 @@ func (m *Manager) mergeSource(hash string, raw []byte, mi *metainfo.MetaInfo) {
 	if add.empty() {
 		return
 	}
+	var cur sourceMeta
+	m.state.view(func(st *state) {
+		if r := st.Torrents[hash]; r != nil && r.Source != nil {
+			cur = *r.Source
+		}
+	})
+	if !fills(cur.Comment, add.Comment) && !fills(cur.CreatedBy, add.CreatedBy) && !(cur.CreatedAt == 0 && add.CreatedAt != 0) &&
+		!fills(cur.Publisher, add.Publisher) && !fills(cur.PublisherURL, add.PublisherURL) && !fills(cur.Announce, add.Announce) {
+		return // nothing new (the same file again, as from the watch folder): the state is not rewritten
+	}
 	_ = m.state.with(func(st *state) {
 		r := st.Torrents[hash]
 		if r == nil {
@@ -177,6 +187,9 @@ func (m *Manager) mergeSource(hash string, raw []byte, mi *metainfo.MetaInfo) {
 		}
 	})
 }
+
+// fills tells whether add gives a field that is still empty.
+func fills(cur, add string) bool { return cur == "" && add != "" }
 
 // createdTime is the creation date as a time, zero if the torrent does not say.
 func (s sourceMeta) createdTime() time.Time {

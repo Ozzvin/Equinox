@@ -16,10 +16,12 @@ import (
 // downloaded again.
 
 // recheckOldV2 checks, once, the torrents added by an older version that have a v2 part, more than one file and some
-// data. Called once, after the torrents are back.
+// data. Called once, after the torrents are back. The mark is set when the check is over (see startRecheck), not when
+// it is asked for: one waiting its turn when the program closes goes on at the next start (see resumeChecks), and a
+// torrent 1.0.45 marked too early is checked again.
 func (m *Manager) recheckOldV2() {
 	for hash, r := range m.snapshotRecords() {
-		if r.V2Layout {
+		if r.V2Checked {
 			continue
 		}
 		t, err := m.get(hash)
@@ -31,6 +33,7 @@ func (m *Manager) recheckOldV2() {
 }
 
 func (m *Manager) recheckIfOldV2(t *torrent.Torrent, hash string) {
+	defer survive("the check of an old v2 torrent")
 	select {
 	case <-t.GotInfo():
 	case <-m.done:
@@ -41,16 +44,15 @@ func (m *Manager) recheckIfOldV2(t *torrent.Torrent, hash string) {
 		return
 	}
 	if !info.HasV2() || len(info.UpvertedFiles()) < 2 || t.BytesCompleted() == 0 {
-		m.markV2Layout(hash) // nothing that could have been written wrongly
+		m.markV2Checked(hash) // nothing that could have been written wrongly
 		return
 	}
 	for {
-		err := m.Recheck(hash)
-		if err == nil {
-			m.markV2Layout(hash)
+		if r, ok := m.record(hash); !ok || r.V2Checked { // removed, or a check resumed from the last run got through
 			return
 		}
-		if !errors.Is(err, ErrBusy) { // removed, or the like
+		err := m.Recheck(hash)
+		if !errors.Is(err, ErrBusy) { // asked for (it marks the torrent when it is over), or removed, or the like
 			return
 		}
 		select { // being checked or moved right now: try again a little later
@@ -61,12 +63,16 @@ func (m *Manager) recheckIfOldV2(t *torrent.Torrent, hash string) {
 	}
 }
 
-func (m *Manager) markV2Layout(hash string) {
+// markV2Checked notes that the torrent's storage is known to be right (see V2Checked).
+func (m *Manager) markV2Checked(hash string) {
+	if r, ok := m.record(hash); !ok || r.V2Checked {
+		return
+	}
 	if err := m.state.with(func(s *state) {
 		if r := s.Torrents[hash]; r != nil {
-			r.V2Layout = true
+			r.V2Checked = true
 		}
 	}); err != nil {
-		fmt.Fprintf(os.Stderr, "saving v2Layout for %s: %v\n", hash, err)
+		fmt.Fprintf(os.Stderr, "saving v2Checked for %s: %v\n", hash, err)
 	}
 }

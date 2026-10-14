@@ -148,6 +148,7 @@ func (m *Manager) livePeers(hash string, t *torrent.Torrent, entries []manualPee
 // tryManualPeers looks the entries up and hands them to the engine. It may take a while (names), so callers run
 // it apart from the control loop.
 func (m *Manager) tryManualPeers(t *torrent.Torrent, hash string, keys []string) {
+	defer survive("trying the peers added by hand")
 	ctx, cancel := context.WithTimeout(context.Background(), resolveDeadline)
 	defer cancel()
 	var infos []torrent.PeerInfo
