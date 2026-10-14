@@ -32,9 +32,12 @@ jobs:
           go-version-file: go.mod
       - name: Version
         id: v
+        env:
+          VERSION_IN: ${{ inputs.version }} # through the environment, never written into the script, and checked
         run: |
-          v='${{ inputs.version }}'
+          v="$VERSION_IN"
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$' || { echo "not a version: $v"; exit 1; }
           echo "version=$v" >> "$GITHUB_OUTPUT"
           # :latest only for a plain release number, not for a candidate such as 1.1.0-rc1
           if echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "latest=ghcr.io/ozzvin/equinox:latest" >> "$GITHUB_OUTPUT"; else echo "latest=" >> "$GITHUB_OUTPUT"; fi

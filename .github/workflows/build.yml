@@ -9,6 +9,12 @@ on:
         required: false
         type: string
 
+# Building needs nothing but reading the code: the release is published by hand afterwards.
+permissions:
+  contents: read
+
+# The version reaches the scripts through the environment, never written into their text, and must look like one:
+# a quote in the field would otherwise end the string and run whatever follows it.
 jobs:
   # The same tests test.yml runs on every push to main, run again here: that workflow is triggered by push, this
   # one by hand (at release time, see docs/architecture.md), so nothing otherwise makes sure this exact commit's
@@ -57,7 +63,11 @@ jobs:
       - name: Set version
         if: inputs.version != ''
         shell: pwsh
-        run: Set-Content -Path VERSION -Value '${{ inputs.version }}'
+        env:
+          VERSION_IN: ${{ inputs.version }}
+        run: |
+          if ($env:VERSION_IN -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$') { throw "not a version: $env:VERSION_IN" }
+          Set-Content -Path VERSION -Value $env:VERSION_IN
       - name: Build (gofmt, vet, tests, exe, installer, archives)
         shell: pwsh
         run: .\build.ps1
@@ -98,9 +108,12 @@ jobs:
           get runtime-aarch64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-aarch64 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
           chmod +x tools/appimagetool
       - name: Build the archives and packages
+        env:
+          VERSION_IN: ${{ inputs.version }}
         run: |
-          v='${{ inputs.version }}'
+          v="$VERSION_IN"
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$' || { echo "not a version: $v"; exit 1; }
           mkdir -p dist stage/icons stage/pkg
           go run ./cmd/mkicons stage/icons
           for arch in amd64 arm64; do
