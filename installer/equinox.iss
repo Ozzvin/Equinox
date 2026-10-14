@@ -31,6 +31,8 @@ UninstallDisplayIcon={app}\Equinox.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; .torrent and magnet: Explorer is told the associations changed (see the "assoc" tasks below)
+ChangesAssociations=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Язык установщика выбирается по языку Windows (русский, иначе английский); окно выбора языка показывается, только
@@ -54,12 +56,22 @@ english.TaskAutostart=Start with Windows (minimized to the tray)
 russian.TaskAutostart=Запускать вместе с Windows (сворачиваться в трей)
 english.TaskGroupStartup=Startup:
 russian.TaskGroupStartup=Запуск:
+english.TaskAssocTorrent=Open .torrent files in Equinox
+russian.TaskAssocTorrent=Открывать файлы .torrent в Equinox
+english.TaskAssocMagnet=Open magnet links in Equinox
+russian.TaskAssocMagnet=Открывать magnet-ссылки в Equinox
+english.TaskGroupAssoc=Associations:
+russian.TaskGroupAssoc=Связи:
 english.UninstallDataPrompt=Also delete the settings, the list of torrents and the downloaded files from the folder:%n%1%nIf you click "No", they are kept and will be found at the next install.
 russian.UninstallDataPrompt=Удалить также настройки, список раздач и скачанные файлы из папки:%n%1%nЕсли нажать «Нет», они сохранятся и будут найдены при следующей установке.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:TaskDesktopIcon}"; GroupDescription: "{cm:TaskGroupShortcuts}"; Flags: unchecked
 Name: "autostart"; Description: "{cm:TaskAutostart}"; GroupDescription: "{cm:TaskGroupStartup}"
+; As Deluge's installer does. Windows 10/11 keeps a choice the user made in "Open with" or "Default apps" (UserChoice):
+; there this only adds Equinox to the list and Windows asks once; where nothing was chosen yet, Equinox opens them.
+Name: "assoctorrent"; Description: "{cm:TaskAssocTorrent}"; GroupDescription: "{cm:TaskGroupAssoc}"
+Name: "assocmagnet"; Description: "{cm:TaskAssocMagnet}"; GroupDescription: "{cm:TaskGroupAssoc}"
 
 [Files]
 Source: "..\dist\Equinox.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -73,6 +85,32 @@ Name: "{autodesktop}\Equinox"; Filename: "{app}\Equinox.exe"; Tasks: desktopicon
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Equinox"; ValueData: """{app}\Equinox.exe"" -hidden"; Flags: uninsdeletevalue; Tasks: autostart
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Equinox"; Flags: uninsdeletevalue dontcreatekey
+
+; .torrent and magnet, for all users with a per-machine install (HKA: HKLM then, HKCU otherwise). The program's own ProgIDs
+; (Equinox.Torrent, Equinox.Magnet: the same names RegisterHandlers in internal/desktop uses). A silent update from the
+; program itself does not write them: what the user chose since stays as it is, and what the install wrote is still
+; there. The .torrent default and the magnet command may be another program's by the time Equinox is uninstalled: they
+; are removed in CurUninstallStepChanged only while they still lead to Equinox.
+Root: HKA; Subkey: "Software\Classes\Equinox.Torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey; Tasks: assoctorrent; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\Equinox.Torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\Equinox.exe,0"; Tasks: assoctorrent; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\Equinox.Torrent\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Equinox.exe"" ""%1"""; Tasks: assoctorrent; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: ""; ValueData: "Equinox.Torrent"; Tasks: assoctorrent; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: "Content Type"; ValueData: "application/x-bittorrent"; Tasks: assoctorrent; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueType: string; ValueName: "Equinox.Torrent"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assoctorrent; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\Equinox.Magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet link"; Flags: uninsdeletekey; Tasks: assocmagnet; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\Equinox.Magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: assocmagnet; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\Equinox.Magnet\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Equinox.exe"" ""%1"""; Tasks: assocmagnet; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet link"; Tasks: assocmagnet; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: assocmagnet; Check: not IsAutoUpdate
+Root: HKA; Subkey: "Software\Classes\magnet\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Equinox.exe"" ""%1"""; Tasks: assocmagnet; Check: not IsAutoUpdate
+
+; What the program registers itself at its first start (RegisterHandlers: "Open with" and "Default apps", for the
+; current user) goes with it too.
+Root: HKCU; Subkey: "Software\Classes\Equinox.Torrent"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\Equinox.Magnet"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\Applications\Equinox.exe"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Equinox"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueName: "Equinox"; Flags: uninsdeletevalue dontcreatekey
 
 [Run]
 ; The normal, interactive install: an unchecked-by-default box on the finish page. A silent
@@ -158,12 +196,38 @@ end;
 // доступа на запись, и она сама переходит на папку %LOCALAPPDATA%\Equinox (см. DefaultStateDir в
 // internal/app/app.go) — проверяем оба места. При удалении данные остаются, если пользователь не
 // попросит иначе: раздачи не должны пропадать из-за переустановки.
+// ForgetAssociations takes back the .torrent default and the magnet command, in both branches (a per-machine install
+// writes to HKLM, the program itself to HKCU), but only where they still lead to Equinox: another program may have
+// taken them since.
+procedure ForgetAssociations();
+var
+  Roots: array of Integer;
+  V, Exe: String;
+  I: Integer;
+begin
+  Exe := Lowercase(ExpandConstant('{app}\Equinox.exe'));
+  Roots := [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER];
+  for I := 0 to GetArrayLength(Roots) - 1 do
+  begin
+    if RegQueryStringValue(Roots[I], 'Software\Classes\.torrent', '', V) and (V = 'Equinox.Torrent') then
+      RegDeleteValue(Roots[I], 'Software\Classes\.torrent', '');
+    if RegQueryStringValue(Roots[I], 'Software\Classes\magnet\shell\open\command', '', V) and (Pos(Exe, Lowercase(V)) > 0) then
+    begin
+      RegDeleteKeyIncludingSubkeys(Roots[I], 'Software\Classes\magnet\shell');
+      RegDeleteValue(Roots[I], 'Software\Classes\magnet', '');
+      RegDeleteValue(Roots[I], 'Software\Classes\magnet', 'URL Protocol');
+      RegDeleteKeyIfEmpty(Roots[I], 'Software\Classes\magnet');
+    end;
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Candidates: TArrayOfString;
   Found: String;
   I: Integer;
 begin
+  if CurUninstallStep = usUninstall then ForgetAssociations();
   if CurUninstallStep <> usPostUninstall then Exit;
   Candidates := [ExpandConstant('{app}\data'), ExpandConstant('{localappdata}\Equinox')];
   Found := '';
