@@ -11,14 +11,16 @@ import (
 	"github.com/huin/goupnp/dcps/internetgateway2"
 )
 
-// igd is the subset of WANIPConnection/WANPPPConnection that we use.
+// igd is the subset of WANIPConnection/WANPPPConnection that we use. Only the ...Ctx calls: the others wait with no
+// time limit, so a router (or anything that answered the search) that takes the connection and stays silent would
+// hold the mapping loop for good, and with it turning the mapping off and closing the program.
 type igd interface {
-	AddPortMapping(remoteHost string, extPort uint16, proto string, intPort uint16,
+	AddPortMappingCtx(ctx context.Context, remoteHost string, extPort uint16, proto string, intPort uint16,
 		intClient string, enabled bool, desc string, lease uint32) error
-	GetExternalIPAddress() (string, error)
-	GetSpecificPortMappingEntry(remoteHost string, extPort uint16, proto string) (
+	GetExternalIPAddressCtx(ctx context.Context) (string, error)
+	GetSpecificPortMappingEntryCtx(ctx context.Context, remoteHost string, extPort uint16, proto string) (
 		intPort uint16, intClient string, enabled bool, desc string, lease uint32, err error)
-	DeletePortMapping(remoteHost string, extPort uint16, proto string) error
+	DeletePortMappingCtx(ctx context.Context, remoteHost string, extPort uint16, proto string) error
 }
 
 // UPnP implements Mapper on top of UPnP Internet Gateway Device.
@@ -34,16 +36,16 @@ func (u *UPnP) Name() string { return "UPnP" }
 
 // discover finds the router. The result is cached for a while, but dropped after any
 // error so a rebooted router with a new control URL is picked up again.
-func (u *UPnP) discover() (igd, error) {
+func (u *UPnP) discover(ctx context.Context) (igd, error) {
 	if u.dev != nil && time.Since(u.foundAt) < 10*time.Minute {
 		return u.dev, nil
 	}
 	u.dev = nil
-	if c, _, _ := internetgateway2.NewWANIPConnection2Clients(); len(c) > 0 {
+	if c, _, _ := internetgateway2.NewWANIPConnection2ClientsCtx(ctx); len(c) > 0 {
 		u.dev, u.host = c[0], c[0].Location.Host
-	} else if c, _, _ := internetgateway2.NewWANIPConnection1Clients(); len(c) > 0 {
+	} else if c, _, _ := internetgateway2.NewWANIPConnection1ClientsCtx(ctx); len(c) > 0 {
 		u.dev, u.host = c[0], c[0].Location.Host
-	} else if c, _, _ := internetgateway2.NewWANPPPConnection1Clients(); len(c) > 0 {
+	} else if c, _, _ := internetgateway2.NewWANPPPConnection1ClientsCtx(ctx); len(c) > 0 {
 		u.dev, u.host = c[0], c[0].Location.Host
 	}
 	if u.dev == nil {
@@ -54,7 +56,7 @@ func (u *UPnP) discover() (igd, error) {
 }
 
 func (u *UPnP) Map(ctx context.Context, proto string, port int, lease time.Duration) (string, error) {
-	d, err := u.discover()
+	d, err := u.discover(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -65,15 +67,15 @@ func (u *UPnP) Map(ctx context.Context, proto string, port int, lease time.Durat
 	}
 	desc := "equinox"
 	secs := uint32(lease / time.Second)
-	err = d.AddPortMapping("", uint16(port), proto, uint16(port), local, true, desc, secs)
+	err = d.AddPortMappingCtx(ctx, "", uint16(port), proto, uint16(port), local, true, desc, secs)
 	if err != nil && strings.Contains(err.Error(), "725") { // OnlyPermanentLeasesSupported
-		err = d.AddPortMapping("", uint16(port), proto, uint16(port), local, true, desc, 0)
+		err = d.AddPortMappingCtx(ctx, "", uint16(port), proto, uint16(port), local, true, desc, 0)
 	}
 	if err != nil {
 		u.dev = nil
 		return "", err
 	}
-	ip, err := d.GetExternalIPAddress()
+	ip, err := d.GetExternalIPAddressCtx(ctx)
 	if err != nil {
 		u.dev = nil
 		return "", err
@@ -82,11 +84,11 @@ func (u *UPnP) Map(ctx context.Context, proto string, port int, lease time.Durat
 }
 
 func (u *UPnP) Exists(ctx context.Context, proto string, port int) (bool, error) {
-	d, err := u.discover()
+	d, err := u.discover(ctx)
 	if err != nil {
 		return false, err
 	}
-	_, _, enabled, _, _, err := d.GetSpecificPortMappingEntry("", uint16(port), proto)
+	_, _, enabled, _, _, err := d.GetSpecificPortMappingEntryCtx(ctx, "", uint16(port), proto)
 	if err != nil {
 		return false, nil // 714 NoSuchEntryInArray etc.: treat as missing
 	}
@@ -94,11 +96,11 @@ func (u *UPnP) Exists(ctx context.Context, proto string, port int) (bool, error)
 }
 
 func (u *UPnP) Unmap(ctx context.Context, proto string, port int) error {
-	d, err := u.discover()
+	d, err := u.discover(ctx)
 	if err != nil {
 		return err
 	}
-	return d.DeletePortMapping("", uint16(port), proto)
+	return d.DeletePortMappingCtx(ctx, "", uint16(port), proto)
 }
 
 // localIPFor returns our address on the interface that routes to host (host:port).
