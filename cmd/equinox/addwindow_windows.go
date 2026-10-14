@@ -4,10 +4,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -168,27 +166,6 @@ func bringToFront(hwnd uintptr) {
 	pSetForeground.Call(hwnd)
 }
 
-// uiAddress reads where the running program's interface is and the key for it (ui-url in the data folder), waiting
-// for it to come up: a program that has just been started needs a moment.
-func uiAddress(stateDir string, wait time.Duration) (base, token string, err error) {
-	deadline := time.Now().Add(wait)
-	client := &http.Client{Timeout: 2 * time.Second}
-	for {
-		if raw, rerr := os.ReadFile(filepath.Join(stateDir, "ui-url")); rerr == nil {
-			if b, t, ok := strings.Cut(strings.TrimSpace(string(raw)), "/#token="); ok {
-				if res, gerr := client.Get(b + "/"); gerr == nil {
-					res.Body.Close()
-					return b, t, nil
-				}
-			}
-		}
-		if time.Now().After(deadline) {
-			return "", "", errors.New("the program's interface did not come up")
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
-}
-
 // bindExternal lets the page open a link in the user's own browser (only http and https are passed on).
 func bindExternal(w webview2.WebView) {
 	_ = w.Bind("openExternal", openInBrowser)
@@ -214,7 +191,7 @@ func runAddWindow(stateDir string) error {
 		return err
 	}
 
-	base, token, err := uiAddress(stateDir, 20*time.Second)
+	base, token, err := waitForUI(stateDir, 20*time.Second)
 	if err != nil {
 		return err
 	}
