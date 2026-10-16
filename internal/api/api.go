@@ -262,17 +262,27 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, core.ErrNoMetadata), errors.Is(err, core.ErrBusy):
 		code = http.StatusConflict
 	}
-	body := map[string]any{"error": err.Error()}
+	writeJSON(w, code, bodyOf(err))
+}
+
+// errorBody is how an error goes to the page: its text, and the code and the blanks of the text for a client that
+// words it itself (see core.Coder).
+type errorBody struct {
+	Error string   `json:"error"`
+	Code  string   `json:"code,omitempty"`
+	Args  []string `json:"args,omitempty"`
+}
+
+func bodyOf(err error) errorBody {
+	body := errorBody{Error: err.Error()}
 	var coded core.Coder
-	if errors.As(err, &coded) { // the code and the blanks of the text, for a client that words it itself
-		if c, args := coded.ErrCode(); c != "" {
-			body["code"] = c
-			if len(args) > 0 {
-				body["args"] = args
-			}
+	if errors.As(err, &coded) {
+		body.Code, body.Args = coded.ErrCode()
+		if body.Code == "" {
+			body.Args = nil
 		}
 	}
-	writeJSON(w, code, body)
+	return body
 }
 
 func decode(r *http.Request, v any) error {

@@ -48,3 +48,49 @@ func TestStageAFileOnTheServer(t *testing.T) {
 		}
 	}
 }
+
+// Several .torrent files chosen at once are staged each on its own: one outside the places, or not there, is listed
+// as failed with its code, and does not keep the others off the list.
+func TestStageSeveralFilesOnTheServer(t *testing.T) {
+	var dl, outside string
+	e := setup(t, func(s *Server) {
+		dl, outside = filepath.Join(t.TempDir(), "downloads"), t.TempDir()
+		s.SetPlaces([]Place{{Name: "Downloads", Path: dl}})
+	})
+	if err := os.MkdirAll(dl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := filepath.Join(dl, "a.torrent")
+	b := filepath.Join(dl, "b.torrent")
+	out := filepath.Join(outside, "c.torrent")
+	for p, data := range map[string][]byte{a: seededTorrent(t, e, make([]byte, 50<<10)), b: seededTorrent(t, e, make([]byte, 70<<10)), out: seededTorrent(t, e, make([]byte, 90<<10))} {
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body, _ := json.Marshal(map[string][]string{"paths": {a, out, b}})
+	r := e.do(t, "POST", "/api/stage-path", strings.NewReader(string(body)), nil)
+	defer r.Body.Close()
+	var v struct {
+		Staged []struct {
+			Size int64 `json:"size"`
+		} `json:"staged"`
+		Failed []struct {
+			Path string `json:"path"`
+			Code string `json:"code"`
+		} `json:"failed"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&v); err != nil || r.StatusCode != 200 {
+		t.Fatalf("%d %v", r.StatusCode, err)
+	}
+	if len(v.Staged) != 2 || v.Staged[0].Size != 50<<10 || v.Staged[1].Size != 70<<10 {
+		t.Fatalf("staged %+v, want a and b in their order", v.Staged)
+	}
+	if len(v.Failed) != 1 || v.Failed[0].Path != out || v.Failed[0].Code != "stage.no_file" {
+		t.Fatalf("failed %+v, want only the one outside the places", v.Failed)
+	}
+
+	if r := e.do(t, "POST", "/api/stage-path", strings.NewReader(`{"paths": []}`), nil); r.StatusCode != 400 {
+		t.Fatalf("an empty list: %d, want 400", r.StatusCode)
+	}
+}

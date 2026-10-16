@@ -2324,17 +2324,25 @@
   let serverTorrentDir = "";
   $("addw-server").hidden = !REMOTE;
   $("addw-server").onclick = async () => {
-    const path = await pickFolder("Файл .torrent на сервере", serverTorrentDir, "torrent");
-    if (!path) return;
-    serverTorrentDir = path.replace(/[\\/][^\\/]*$/, ""); // the next time the picker opens where this one was
+    const paths = await pickFolder("Файлы .torrent на сервере", serverTorrentDir, "torrent"); // several can be chosen
+    if (!paths || !paths.length) return;
+    serverTorrentDir = paths[0].replace(/[\\/][^\\/]*$/, ""); // the next time the picker opens where this one was
     try {
-      const st = await api("POST", "/api/stage-path", { path });
-      if (!adItems.some((x) => x.hash === st.hash)) {
-        adItems.push({ kind: "file", name: st.name, size: st.size, hash: st.hash, exists: st.exists, stage: st.id, files: st.files || [],
-          sel: (st.files || []).map(() => true), open: null, opts: optDefaults(), error: "" });
+      const r = await api("POST", "/api/stage-path", { paths });
+      let first = -1;
+      for (const st of r.staged) {
+        if (!adItems.some((x) => x.hash === st.hash)) {
+          adItems.push({ kind: "file", name: st.name, size: st.size, hash: st.hash, exists: st.exists, stage: st.id, files: st.files || [],
+            sel: (st.files || []).map(() => true), open: null, opts: optDefaults(), error: "" });
+        }
+        if (first < 0) first = adItems.findIndex((x) => x.hash === st.hash);
       }
-      adSel = adItems.findIndex((x) => x.hash === st.hash);
+      if (first >= 0) adSel = first;
       renderAdd();
+      // one that could not be added does not keep the others off the list; the person learns which it was
+      const why = r.failed.map((f) => window.__trCode(f.code, f.args, f.error));
+      if (why.length === 1) toast(why[0], true);
+      else if (why.length) toast(`Не добавлено файлов: ${why.length}. ${why.join(" ")}`, true);
     } catch (x) { toast(x.message, true); }
   };
   $("addw-fileinput").addEventListener("change", async (e) => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) await stageFiles(fl); });
@@ -3009,15 +3017,19 @@
   $("st-port-num").addEventListener("input", () => { $("st-port-note").hidden = !(port && Number($("st-port-num").value) !== port.port); });
 
   // ---------- folder picker (our own window, the same in the browser and in the app) ----------
-  // any: a file can be chosen as well as a folder; torrents: only a .torrent file can be chosen (any = "torrent")
-  const pk = { resolve: null, data: null, sel: "", seq: 0, any: false, torrents: false };
-  const pkFinish = (v) => { const r = pk.resolve; pk.resolve = null; if (r) r(v); };
+  // any: a file can be chosen as well as a folder; torrents: only .torrent files can be chosen (any = "torrent"), several
+  // at once (click, Ctrl+click, Shift+click for a run of them, Ctrl+A for all in the folder), and the answer is a list
+  const pk = { resolve: null, data: null, sel: "", seq: 0, any: false, torrents: false, picked: [], anchor: -1 };
+  const pkFinish = (v) => { const r = pk.resolve; pk.resolve = null; if (r) r(pk.torrents && v ? [].concat(v) : v); };
+  const PK_HINT = $("pk-path").getAttribute("placeholder");
   const isTorrentName = (n) => /\.torrent$/i.test(n);
   const pkCanChoose = (v) => !!v && (!pk.torrents || isTorrentName(v));
   function pickFolder(title, initial, any) {
     return new Promise((resolve) => {
       if ($("dlg-picker").open) return resolve("");
-      pk.resolve = resolve; pk.sel = ""; pk.torrents = any === "torrent"; pk.any = any === true;
+      pk.resolve = resolve; pk.sel = ""; pk.picked = []; pk.anchor = -1; pk.torrents = any === "torrent"; pk.any = any === true;
+      $("pk-path").placeholder = PK_HINT;
+      $("pk-list").setAttribute("aria-multiselectable", pk.torrents);
       $("pk-path-l").textContent = pk.torrents ? "Выбранный файл" : "Выбранная папка";
       $("pk-newbtn").hidden = pk.torrents;
       $("pk-title").textContent = title || "Выбор папки";
@@ -3034,7 +3046,8 @@
     catch (x) { $("pk-err").textContent = x.message; $("pk-err").hidden = false; return; }
     if (seq !== pk.seq) return; // a newer request is on its way
     if (!d) { $("pk-err").textContent = "Сервер не вернул список папок."; $("pk-err").hidden = false; return; }
-    pk.data = d; pk.sel = "";
+    pk.data = d; pk.sel = ""; pk.picked = []; pk.anchor = -1;
+    $("pk-path").placeholder = PK_HINT;
     $("pk-err").hidden = true;
     $("pk-path").value = pk.torrents ? "" : d.path; // choosing a .torrent: a folder is only the way to it
     renderPicker();
@@ -3066,13 +3079,40 @@
     $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
   }
   const PK_ROWS = ".pk-row.dir, .pk-row.file.pick";
-  function pkSelect(path) {
+  const pkFiles = () => [...$("pk-list").querySelectorAll(".pk-row.file.pick")].map((r) => r.dataset.path);
+  // e: the click or key that chose it; with .torrent files Ctrl adds or takes one away and Shift takes the run from the last one
+  function pkSelect(path, e) {
     pk.sel = path;
-    for (const r of $("pk-list").querySelectorAll(PK_ROWS)) { const on = r.dataset.path === path; r.classList.toggle("sel", on); r.setAttribute("aria-selected", on); if (on) r.scrollIntoView({ block: "nearest" }); }
-    $("pk-path").value = path || (pk.data && !pk.torrents && pk.data.path) || "";
-    $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
+    if (pk.torrents) {
+      const files = pkFiles(), i = files.indexOf(path);
+      if (i < 0) { pk.picked = []; pk.anchor = -1; } // a folder: only the way to the files
+      else if (e && e.shiftKey && pk.anchor >= 0) pk.picked = files.slice(Math.min(pk.anchor, i), Math.max(pk.anchor, i) + 1);
+      else if (e && (e.ctrlKey || e.metaKey)) { pk.picked = pk.picked.includes(path) ? pk.picked.filter((p) => p !== path) : [...pk.picked, path]; pk.anchor = i; }
+      else { pk.picked = [path]; pk.anchor = i; }
+    }
+    pkMark();
   }
-  $("pk-list").addEventListener("click", (e) => { const r = e.target.closest(PK_ROWS); if (r) pkSelect(r.dataset.path); });
+  // keep: the field holds what the person is typing, it is not to be replaced
+  function pkMark(keep) {
+    const path = pk.sel, set = new Set(pk.torrents ? pk.picked : [path]);
+    for (const r of $("pk-list").querySelectorAll(PK_ROWS)) {
+      const on = set.has(r.dataset.path) || (r.dataset.path === path && r.classList.contains("dir"));
+      r.classList.toggle("sel", on); r.setAttribute("aria-selected", on);
+      if (r.dataset.path === path) r.scrollIntoView({ block: "nearest" });
+    }
+    const many = pk.torrents && pk.picked.length > 1;
+    $("pk-path").placeholder = many ? `Выбрано файлов: ${pk.picked.length}` : PK_HINT;
+    if (!keep) $("pk-path").value = many ? "" : pk.torrents ? pk.picked[0] || path || "" : path || (pk.data && pk.data.path) || "";
+    $("pk-ok").disabled = !many && !pkCanChoose($("pk-path").value.trim());
+  }
+  // what "Выбрать" gives: the .torrent files picked, in the order of the folder, or what the field says
+  function pkChosen() {
+    if (pk.torrents && pk.picked.length > 1) { const order = pkFiles(); return [...pk.picked].sort((a, b) => order.indexOf(a) - order.indexOf(b)); }
+    const v = $("pk-path").value.trim();
+    return pkCanChoose(v) ? v : "";
+  }
+  $("pk-list").addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); }); // Shift+click picks files, not the text
+  $("pk-list").addEventListener("click", (e) => { const r = e.target.closest(PK_ROWS); if (r) pkSelect(r.dataset.path, e); });
   $("pk-list").addEventListener("dblclick", (e) => {
     const r = e.target.closest(PK_ROWS); if (!r) return;
     if (r.classList.contains("file")) { pkFinish(r.dataset.path); $("dlg-picker").close(); } // a file is chosen at once
@@ -3081,11 +3121,17 @@
   $("pk-list").addEventListener("keydown", (e) => {
     const rows = [...$("pk-list").querySelectorAll(PK_ROWS)]; if (!rows.length) return;
     const i = rows.findIndex((r) => r.dataset.path === pk.sel);
-    if (e.key === "ArrowDown") { e.preventDefault(); pkSelect(rows[Math.min(rows.length - 1, i + 1)].dataset.path); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); pkSelect(rows[Math.max(0, i - 1)].dataset.path); }
+    const how = { shiftKey: e.shiftKey }; // Shift+arrow takes a run of files, as in a file manager
+    if (e.key === "ArrowDown") { e.preventDefault(); pkSelect(rows[Math.min(rows.length - 1, i + 1)].dataset.path, how); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); pkSelect(rows[Math.max(0, i - 1)].dataset.path, how); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && pk.torrents) {
+      e.preventDefault();
+      const files = pkFiles(); if (!files.length) return;
+      pk.picked = files; pk.anchor = 0; pk.sel = files[0]; pkMark();
+    }
     else if (e.key === "Enter" && i >= 0) {
       e.preventDefault();
-      if (rows[i].classList.contains("file")) { pkFinish(pk.sel); $("dlg-picker").close(); } else pkGo(pk.sel);
+      if (rows[i].classList.contains("file")) { pkFinish(pkChosen() || pk.sel); $("dlg-picker").close(); } else pkGo(pk.sel);
     }
     else if (e.key === "Backspace" && pk.data && pk.data.parent !== null) { e.preventDefault(); pkGo(pk.data.parent); }
   });
@@ -3096,8 +3142,11 @@
     e.preventDefault(); const v = $("pk-path").value.trim();
     if (pk.torrents && isTorrentName(v)) { pkFinish(v); $("dlg-picker").close(); } else if (v) pkGo(v);
   });
-  $("pk-path").addEventListener("input", () => { $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim()); });
-  $("pk-ok").onclick = () => { const v = $("pk-path").value.trim(); if (!pkCanChoose(v)) return; pkFinish(v); $("dlg-picker").close(); };
+  $("pk-path").addEventListener("input", () => {
+    if (pk.picked.length > 1) { pk.picked = []; pk.anchor = -1; pkMark(true); } // typing a path drops the files picked in the list
+    $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
+  });
+  $("pk-ok").onclick = () => { const v = pkChosen(); if (!v) return; pkFinish(v); $("dlg-picker").close(); };
   // new folder
   $("pk-newbtn").onclick = () => { $("pk-newrow").hidden = !$("pk-newrow").hidden; if (!$("pk-newrow").hidden) { $("pk-newname").value = ""; $("pk-newname").focus(); } };
   $("pk-newcancel").onclick = () => { $("pk-newrow").hidden = true; };

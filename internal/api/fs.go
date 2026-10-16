@@ -314,52 +314,79 @@ func (s *Server) fsMkdir(w http.ResponseWriter, r *http.Request) {
 // stagePath puts a .torrent that lies on the server (on Umbrel: in Downloads or a folder added in the app's settings)
 // on the "Add torrents" list, like a file uploaded from the browser: {"path": "/downloads/x.torrent"}. With places
 // (see SetPlaces) the file must be inside one of them, as for a new folder.
+//
+// Several files chosen at once come as {"paths": [...]}: each is staged on its own, one that fails does not stop the
+// others, and the answer (200) lists both: {"staged": [...], "failed": [{"path", "error", "code", "args"}]}.
 func (s *Server) stagePath(w http.ResponseWriter, r *http.Request) {
 	var b struct {
-		Path string `json:"path"`
+		Path  string   `json:"path"`
+		Paths []string `json:"paths"`
 	}
-	if err := decode(r, &b); err != nil {
+	if err := decode(r, &b); err != nil || (b.Paths != nil && len(b.Paths) == 0) || len(b.Paths) > maxStagePaths {
 		fail(w, core.ErrInvalidInput)
 		return
 	}
-	p := filepath.Clean(strings.TrimSpace(b.Path))
+	if b.Paths == nil {
+		staged, err := s.stageOne(b.Path)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, staged)
+		return
+	}
+	type failure struct {
+		Path string `json:"path"`
+		errorBody
+	}
+	out := struct {
+		Staged []core.StagedTorrent `json:"staged"`
+		Failed []failure            `json:"failed"`
+	}{Staged: []core.StagedTorrent{}, Failed: []failure{}}
+	for _, p := range b.Paths {
+		staged, err := s.stageOne(p)
+		if err != nil {
+			out.Failed = append(out.Failed, failure{Path: p, errorBody: bodyOf(err)})
+			continue
+		}
+		out.Staged = append(out.Staged, staged)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// maxStagePaths is how many files one request may stage: a folder of .torrent files chosen whole is fine, a list
+// without end is not.
+const maxStagePaths = 1000
+
+// stageOne stages one .torrent on the server (see stagePath).
+func (s *Server) stageOne(path string) (core.StagedTorrent, error) {
+	p := filepath.Clean(strings.TrimSpace(path))
 	name := filepath.Base(p)
 	missing := badInputCode("stage.no_file", "Файл не найден: «"+name+"».", name)
 	if _, in := s.placeOf(p); !filepath.IsAbs(p) || (len(s.places) > 0 && !in) {
-		fail(w, missing)
-		return
+		return core.StagedTorrent{}, missing
 	}
 	if !strings.EqualFold(filepath.Ext(p), ".torrent") {
-		fail(w, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name))
-		return
+		return core.StagedTorrent{}, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name)
 	}
 	st, err := os.Stat(p)
 	if err != nil || !st.Mode().IsRegular() {
-		fail(w, missing)
-		return
+		return core.StagedTorrent{}, missing
 	}
 	if st.Size() > maxTorrentFile {
 		mib := fmt.Sprint(maxTorrentFile >> 20)
-		fail(w, badInputCode("stage.too_large", "Файл больше "+mib+" МиБ: это не .torrent.", mib))
-		return
+		return core.StagedTorrent{}, badInputCode("stage.too_large", "Файл больше "+mib+" МиБ: это не .torrent.", mib)
 	}
 	raw, err := os.ReadFile(p)
 	if err != nil {
 		msg, code := friendlyFsError(err)
-		fail(w, badInputCode(code, msg))
-		return
+		return core.StagedTorrent{}, badInputCode(code, msg)
 	}
 	mi, err := metainfo.Load(bytes.NewReader(raw))
 	if err != nil {
-		fail(w, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name))
-		return
+		return core.StagedTorrent{}, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name)
 	}
-	staged, err := s.m.Stage(mi, raw)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, staged)
+	return s.m.Stage(mi, raw)
 }
 
 // inputError is an ErrInvalidInput with a message meant for the person using the page.
