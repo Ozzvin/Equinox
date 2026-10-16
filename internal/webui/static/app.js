@@ -468,7 +468,8 @@
   }
 
   function stateOf(t) {
-    if (t.error) return { cls: "bad", title: t.error, text: t.errorKind === "disk_full" ? "Нет места на диске" : t.errorKind === "write" ? "Ошибка записи на диск" : "Ошибка" };
+    // files that were missing and came back are being checked: the check shows, not the error that is about to go
+    if (t.error && !(t.errorKind === "missing" && (t.checking || t.checkQueued))) return { cls: "bad", title: errText(t), text: t.errorKind === "disk_full" ? "Нет места на диске" : t.errorKind === "write" ? "Ошибка записи на диск" : t.errorKind === "missing" ? "Файлы не найдены" : "Ошибка" };
     if (t.checking) return { cls: "wait", text: t.checkProgress > 0 ? `Проверка файлов ${Math.floor(t.checkProgress * 100)}%` : "Проверка файлов…" };
     if (t.moving) return { cls: "wait", text: t.moving > 0 ? `Перемещение ${Math.round(t.moving * 100)}%` : t.moving === -2 ? "Ждёт переноса" : "Перемещение…", title: t.moving === -2 ? "Стоит в очереди на перенос: одновременно переносится не больше заданного числа раздач" : undefined };
     if (t.checkQueued > 0) return { cls: "wait", text: "Ждёт проверки", title: `Стоит в очереди на проверку локальных файлов: №${t.checkQueued}` };
@@ -967,7 +968,7 @@
     const eta = t.progress >= 1 || !t.hasMetadata ? "—" : fmtEta(etaOf(t));
     const totalDone = t.hasMetadata ? `${bytes(t.done)} из ${bytes(t.size)}` : "—";
     $("pane-status").innerHTML = `<div class="st-bar">${progressBar(t)}</div>
-      ${t.error ? `<p class="err" style="padding:0 16px">${esc(t.error)}</p>` : ""}
+      ${t.error ? `<p class="err" style="padding:0 16px">${esc(errText(t))}</p>` : ""}
       <div class="st-cols">
         <dl class="st-col">
           ${stRow("Скорость загрузки", speed(t.downRate))}
@@ -1751,11 +1752,13 @@
   }
   $("btn-stats").onclick = () => { renderStats(); $("dlg-stats").showModal(); };
 
+  // the text of a torrent's error, in English from its code when the server gave one
+  function errText(t) { return window.__trCode(t.errorCode, t.errorArgs, t.error); }
   const shownErrors = {};
   function reportErrors() {
     for (const t of torrents) {
       const key = t.error || "";
-      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? "не хватает места на диске. Освободите место и нажмите «Продолжить»" : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.error}`, true);
+      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? "не хватает места на диске. Освободите место и нажмите «Продолжить»" : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
       shownErrors[t.hash] = key;
     }
   }

@@ -97,6 +97,9 @@ type Manager struct {
 	moveQueue        []string                 // moves waiting for a free slot (MaxConcurrentMoves); index 0 goes next
 	checking         map[string]bool          // torrents being re-hashed
 	errs             map[string]torrentError  // why a torrent was stopped by the engine, by hash
+	missMu           sync.Mutex               // leaf: guards missNow; the storage's reading goroutines take it
+	missNow          map[metainfo.Hash]bool   // torrents a read found a file of gone, to be looked at on the next tick
+	missNext         string                   // the hash the last round of looking for missing files got to (the loop's own)
 	watchSeen        map[string]watchStamp    // files seen in the watch folder on the previous scan
 	creates          map[string]*CreateJob    // torrent creations, by job id
 	staged           map[string]*stagedEntry  // .torrent files on the "Add torrents" list, by id
@@ -197,6 +200,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		}
 		return out
 	})
+	m.store.OnMissingFile(m.noteMissing)
 	newConfig := func(port int) *torrent.ClientConfig {
 		cc := torrent.NewDefaultClientConfig()
 		cc.ListenPort = port

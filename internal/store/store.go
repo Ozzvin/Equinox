@@ -38,6 +38,39 @@ type Storage struct {
 
 	partsDir string                     // where the part files live ("" = no part file, see parts.go)
 	skipped  func(metainfo.Hash) []bool // the files a torrent marks "do not download"
+
+	onMissing func(metainfo.Hash) // told when a read finds a file of the torrent gone (see OnMissingFile)
+}
+
+// OnMissingFile sets what is called when the engine reads a piece and a file it lies in is not on the disk (deleted or
+// taken away by hand): the engine itself only refuses the peer that asked and goes on as if nothing happened. It is
+// called on the engine's reading goroutine and must not block. Set it before any torrent is opened.
+func (s *Storage) OnMissingFile(f func(metainfo.Hash)) { s.onMissing = f }
+
+// Restat reads the sizes of a torrent's files from the disk again, as at its opening, and forgets the "complete"
+// records of the pieces whose files are not there any more (see Completion): after files were deleted or taken away by
+// hand, the engine, asked about those pieces again, learns that they are gone. It also comes before a check of files
+// that were put back, which would otherwise find the sizes of when they were missing.
+func (s *Storage) Restat(ih metainfo.Hash) {
+	s.regMu.Lock()
+	t := s.reg[ih]
+	s.regMu.Unlock()
+	if t == nil {
+		return
+	}
+	unlock := t.lockParts()
+	for i := range t.files {
+		f := &t.files[i]
+		if f.pad || f.length == 0 {
+			continue
+		}
+		f.size = 0
+		if fi, err := os.Stat(f.path); err == nil {
+			f.size = fi.Size()
+		}
+	}
+	unlock()
+	t.healStaleCompletion(t.info)
 }
 
 // BlockFiles makes the given files of a torrent unreachable for the engine until the returned function is called: reads
@@ -145,7 +178,7 @@ type fileSpan struct {
 	path   string
 	offset int64 // offset of the file inside the torrent (in v2 and hybrid torrents every file starts on a piece boundary)
 	length int64
-	size   int64 // at open time: size on disk, 0 if the file does not exist
+	size   int64 // at open time (or the last Restat): size on disk, 0 if the file does not exist
 	pad    bool  // a padding file (BEP 47): all zeros, never on the disk
 }
 
@@ -159,7 +192,7 @@ func (s *Storage) OpenTorrent(_ context.Context, info *metainfo.Info, ih metainf
 		return storage.TorrentImpl{}, err
 	}
 	t := &torrentStore{
-		comp: s.comp, ih: ih, owner: s,
+		comp: s.comp, ih: ih, owner: s, info: info,
 		open: map[string]*handle{},
 		stop: make(chan struct{}),
 	}
@@ -221,8 +254,11 @@ type torrentStore struct {
 	comp  storage.PieceCompletion
 	ih    metainfo.Hash
 	owner *Storage
+	info  *metainfo.Info
 	files []fileSpan
 	parts *parts // nil without a part file
+
+	sizeMu sync.Mutex // the sizes of files change under it, after the opening (see Restat and lockParts)
 
 	mu      sync.Mutex
 	open    map[string]*handle
@@ -415,6 +451,9 @@ func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 		}
 		h, err := t.acquire(f.path, write)
 		if err != nil {
+			if !write && errors.Is(err, fs.ErrNotExist) && !t.isBlocked(f.path) && t.owner.onMissing != nil {
+				t.owner.onMissing(t.ih)
+			}
 			return n, err
 		}
 		var m int
@@ -572,13 +611,18 @@ func (t *torrentStore) present(off, n int64) bool {
 	return true
 }
 
-// lockParts holds the part file's lock (the sizes of files and the slots change under it) and returns its unlock.
+// lockParts holds the lock of the files' sizes and the part file's lock (the sizes of files and the slots change under
+// them) and returns their unlock.
 func (t *torrentStore) lockParts() func() {
+	t.sizeMu.Lock()
 	if t.parts == nil {
-		return func() {}
+		return t.sizeMu.Unlock
 	}
 	t.parts.mu.Lock()
-	return t.parts.mu.Unlock
+	return func() {
+		t.parts.mu.Unlock()
+		t.sizeMu.Unlock()
+	}
 }
 
 // keptInParts tells whether file i is kept in the part file. The part file's lock is held.
