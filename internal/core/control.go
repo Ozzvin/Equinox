@@ -41,8 +41,10 @@ type Status struct {
 	Paused        bool      `json:"paused"`
 	Label         string    `json:"label"`
 	SavePath      string    `json:"savePath"`
-	Error         string    `json:"error"`         // why the engine stopped this torrent, "" if it did not
-	ErrorKind     string    `json:"errorKind"`     // disk_full | write | other
+	Error         string    `json:"error"`               // why the engine stopped this torrent, "" if it did not
+	ErrorKind     string    `json:"errorKind"`           // disk_full | write | missing | other
+	ErrorCode     string    `json:"errorCode,omitempty"` // the error's code for a client in another language (see Coder)
+	ErrorArgs     []string  `json:"errorArgs,omitempty"`
 	Checking      bool      `json:"checking"`      // files are being checked against their hashes
 	CheckProgress float64   `json:"checkProgress"` // 0..1 while Checking
 	CheckQueued   int       `json:"checkQueued"`   // 0 = not waiting; N = place in the line for a check of local files (1 = next)
@@ -144,10 +146,13 @@ func (m *Manager) SetPaused(hash string, paused bool) error {
 	if err != nil {
 		return err
 	}
+	var gone []int
 	if !paused {
+		gone = m.takeMissing(hash)
 		m.clearError(hash) // resuming is the user's retry: forget the old failure
 	}
 	m.setPaused(t, hash, paused)
+	m.recheckGone(hash, gone)
 	return nil
 }
 
@@ -192,10 +197,13 @@ func (m *Manager) SetAllPaused(paused bool) int {
 		if err != nil { // removed or being moved meanwhile
 			continue
 		}
+		var gone []int
 		if !paused {
+			gone = m.takeMissing(h)
 			m.clearError(h) // resuming is the user's retry: forget the old failure
 		}
 		m.applyPause(t, h, paused)
+		m.recheckGone(h, gone)
 		n++
 	}
 	return n
@@ -615,7 +623,8 @@ func (m *Manager) List() []Status {
 		st.CheckProgress = checkProg[st.Hash]
 		_, checkingNow := checkProg[st.Hash]
 		st.Checking = checking[st.Hash] || checkingNow
-		st.Error, st.ErrorKind = errs[st.Hash].msg, errs[st.Hash].kind
+		e := errs[st.Hash]
+		st.Error, st.ErrorKind, st.ErrorCode, st.ErrorArgs = e.msg, e.kind, e.code, e.args
 		if v, ok := moves[st.Hash]; ok {
 			st.MoveError, st.MoveNote = v.err, v.note
 			if v.running || v.queued {
@@ -798,6 +807,7 @@ func (m *Manager) loop(ctx context.Context) {
 		m.applyQueue(ts, recs)
 		m.applySeedQueue(ts, recs)
 		m.enforce(ts)
+		m.checkMissing(ts, recs, tickN)
 		m.trackAvailability(ts, recs, tickN)
 		m.runMoveQueue()
 	}

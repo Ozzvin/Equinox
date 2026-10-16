@@ -11,10 +11,20 @@ import (
 const (
 	ErrKindDiskFull = "disk_full"
 	ErrKindWrite    = "write"
+	ErrKindMissing  = "missing" // files that were on the disk are not there any more (see missing.go)
 	ErrKindOther    = "other"
 )
 
-type torrentError struct{ kind, msg string }
+type torrentError struct {
+	kind, msg string
+	code      string   // for a client in another language (see Coder), "" if the message has none
+	args      []string // the code's arguments
+	// ErrKindMissing only: the files not found, whether the torrent was paused already when they went missing, and
+	// whether a check of the files that came back is under way
+	files   []int
+	paused  bool
+	recheck bool
+}
 
 // diskFree reports the free space of the drive holding dir. It is a variable so tests can
 // pretend that the disk is full.
