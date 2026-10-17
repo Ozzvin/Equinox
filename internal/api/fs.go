@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -8,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/anacrolix/torrent/metainfo"
 
 	"github.com/Ozzvin/equinox/internal/core"
 )
@@ -42,6 +46,26 @@ type fsListing struct {
 	Truncated bool      `json:"truncated,omitempty"`
 }
 
+// Place is a folder the server is given by the system around it, under the name that system shows it by (see
+// Server.SetPlaces).
+type Place struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// placeOf returns the place p lies in (the deepest one, if places nest).
+func (s *Server) placeOf(p string) (Place, bool) {
+	var best Place
+	found := false
+	for _, pl := range s.places {
+		root := filepath.Clean(pl.Path)
+		if (p == root || strings.HasPrefix(p, root+string(filepath.Separator))) && (!found || len(root) > len(best.Path)) {
+			best, found = Place{Name: pl.Name, Path: root}, true
+		}
+	}
+	return best, found
+}
+
 // rootsMark is the path a client sends to see the drives.
 const rootsMark = "@"
 
@@ -56,6 +80,11 @@ func (s *Server) fsList(w http.ResponseWriter, r *http.Request) {
 	}
 	if want == "" || want == rootsMark {
 		want = s.cfg.Get().DataDir
+	}
+	if len(s.places) > 0 {
+		s.placeListing(&out, filepath.Clean(want))
+		writeJSON(w, http.StatusOK, out)
+		return
 	}
 	p, ok := nearestFolder(filepath.Clean(want))
 	if !ok {
@@ -81,6 +110,36 @@ func nearestFolder(p string) (string, bool) {
 			return "", false
 		}
 		p = up
+	}
+}
+
+// placeListing shows a folder inside the given places only: a path outside them (or one that no longer exists)
+// shows the first place, "up" stops at the top of a place, and the way there starts with the place's name.
+func (s *Server) placeListing(out *fsListing, want string) {
+	p, ok := nearestFolder(want)
+	pl, in := s.placeOf(p)
+	if !ok || !in {
+		if len(out.Places) == 0 {
+			out.Error, out.ErrorCode = "Папка не найдена.", "fs.not_found"
+			return
+		}
+		p = out.Places[0].Path
+		pl, _ = s.placeOf(p)
+	}
+	out.Path = p
+	out.readInto(p)
+	out.Parent = nil
+	if p != pl.Path {
+		up := filepath.Dir(p)
+		out.Parent = &up
+	}
+	out.Crumbs = []fsPlace{{Name: pl.Name, Path: pl.Path}}
+	cur := pl.Path
+	for _, part := range strings.Split(strings.Trim(strings.TrimPrefix(p, pl.Path), `\/`), string(filepath.Separator)) {
+		if part != "" {
+			cur = filepath.Join(cur, part)
+			out.Crumbs = append(out.Crumbs, fsPlace{Name: part, Path: cur})
+		}
 	}
 }
 
@@ -185,6 +244,12 @@ func (s *Server) fsPlaces() []fsPlace {
 			out = append(out, fsPlace{Name: name, Path: path, Kind: kind})
 		}
 	}
+	if len(s.places) > 0 { // the given folders only, the ones that are there (a slot left empty is not)
+		for _, pl := range s.places {
+			add(pl.Name, filepath.Clean(pl.Path), "place")
+		}
+		return out
+	}
 	add("Папка загрузок", s.cfg.Get().DataDir, "data")
 	if home, err := os.UserHomeDir(); err == nil {
 		add("Домашняя папка", home, "home")
@@ -225,6 +290,10 @@ func (s *Server) fsMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parent := filepath.Clean(strings.TrimSpace(b.Parent))
+	if _, in := s.placeOf(parent); len(s.places) > 0 && !in {
+		fail(w, badInputCode("fs.parent_missing", "Папка, в которой нужно создать новую, не найдена."))
+		return
+	}
 	if st, err := os.Stat(parent); err != nil || !st.IsDir() {
 		fail(w, badInputCode("fs.parent_missing", "Папка, в которой нужно создать новую, не найдена."))
 		return
@@ -240,6 +309,84 @@ func (s *Server) fsMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"path": full})
+}
+
+// stagePath puts a .torrent that lies on the server (on Umbrel: in Downloads or a folder added in the app's settings)
+// on the "Add torrents" list, like a file uploaded from the browser: {"path": "/downloads/x.torrent"}. With places
+// (see SetPlaces) the file must be inside one of them, as for a new folder.
+//
+// Several files chosen at once come as {"paths": [...]}: each is staged on its own, one that fails does not stop the
+// others, and the answer (200) lists both: {"staged": [...], "failed": [{"path", "error", "code", "args"}]}.
+func (s *Server) stagePath(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Path  string   `json:"path"`
+		Paths []string `json:"paths"`
+	}
+	if err := decode(r, &b); err != nil || (b.Paths != nil && len(b.Paths) == 0) || len(b.Paths) > maxStagePaths {
+		fail(w, core.ErrInvalidInput)
+		return
+	}
+	if b.Paths == nil {
+		staged, err := s.stageOne(b.Path)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, staged)
+		return
+	}
+	type failure struct {
+		Path string `json:"path"`
+		errorBody
+	}
+	out := struct {
+		Staged []core.StagedTorrent `json:"staged"`
+		Failed []failure            `json:"failed"`
+	}{Staged: []core.StagedTorrent{}, Failed: []failure{}}
+	for _, p := range b.Paths {
+		staged, err := s.stageOne(p)
+		if err != nil {
+			out.Failed = append(out.Failed, failure{Path: p, errorBody: bodyOf(err)})
+			continue
+		}
+		out.Staged = append(out.Staged, staged)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// maxStagePaths is how many files one request may stage: a folder of .torrent files chosen whole is fine, a list
+// without end is not.
+const maxStagePaths = 1000
+
+// stageOne stages one .torrent on the server (see stagePath).
+func (s *Server) stageOne(path string) (core.StagedTorrent, error) {
+	p := filepath.Clean(strings.TrimSpace(path))
+	name := filepath.Base(p)
+	missing := badInputCode("stage.no_file", "Файл не найден: «"+name+"».", name)
+	if _, in := s.placeOf(p); !filepath.IsAbs(p) || (len(s.places) > 0 && !in) {
+		return core.StagedTorrent{}, missing
+	}
+	if !strings.EqualFold(filepath.Ext(p), ".torrent") {
+		return core.StagedTorrent{}, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name)
+	}
+	st, err := os.Stat(p)
+	if err != nil || !st.Mode().IsRegular() {
+		return core.StagedTorrent{}, missing
+	}
+	if st.Size() > maxTorrentFile {
+		mib := fmt.Sprint(maxTorrentFile >> 20)
+		return core.StagedTorrent{}, badInputCode("stage.too_large", "Файл больше "+mib+" МиБ: это не .torrent.", mib)
+	}
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		msg, code := friendlyFsError(err)
+		return core.StagedTorrent{}, badInputCode(code, msg)
+	}
+	mi, err := metainfo.Load(bytes.NewReader(raw))
+	if err != nil {
+		return core.StagedTorrent{}, badInputCode("stage.not_torrent", "Это не файл .torrent: «"+name+"».", name)
+	}
+	return s.m.Stage(mi, raw)
 }
 
 // inputError is an ErrInvalidInput with a message meant for the person using the page.

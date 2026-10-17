@@ -42,6 +42,9 @@ type Options struct {
 	CheckInterval time.Duration // verify/renew period, default 5m
 	MinBackoff    time.Duration // after a failure, default 15s
 	MaxBackoff    time.Duration // default 5m
+	// Router returns the router's address given in the settings ("" = find it), for NAT-PMP where the default
+	// gateway is not the router (a container). Nil is the same as "".
+	Router func() string
 }
 
 func (o *Options) defaults() {
@@ -80,7 +83,7 @@ type Manager struct {
 func New(port int, opts Options, mappers ...Mapper) *Manager {
 	opts.defaults()
 	if len(mappers) == 0 {
-		mappers = []Mapper{NewUPnP(), NewNATPMP()}
+		mappers = []Mapper{NewUPnP(), NewNATPMPWith(opts.Router)}
 	}
 	return &Manager{
 		opts: opts, mappers: mappers, port: port,

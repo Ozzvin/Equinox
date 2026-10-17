@@ -255,6 +255,15 @@ func (m *Manager) RecheckFiles(hash string, files []int) error {
 	if busy {
 		return ErrBusy
 	}
+	// files put back by hand since the torrent was opened: the storage must see their sizes of now, or the check would
+	// take them for still missing
+	m.store.Restat(t.InfoHash())
+	m.mu.Lock()
+	if e, ok := m.errs[hash]; ok && e.kind == ErrKindMissing {
+		e.recheck = true // when it ends, the torrent goes on if the files are all back (see missingChecked)
+		m.errs[hash] = e
+	}
+	m.mu.Unlock()
 	return m.startRecheck(t, hash, sel, 0)
 }
 
@@ -301,6 +310,7 @@ func (m *Manager) startRecheck(t *torrent.Torrent, hash string, files []int, sta
 			m.mu.Unlock()
 			release()
 			m.syncPerm(t, hash)
+			m.missingChecked(t, hash)
 		}()
 		if m.verifyFrom(ctx, t, hash, files, start) == nil && files == nil {
 			m.markV2Checked(hash) // whatever asked for it, the whole torrent has been checked with today's layout

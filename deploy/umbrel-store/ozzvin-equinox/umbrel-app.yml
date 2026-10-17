@@ -1,9 +1,22 @@
 manifestVersion: 1
 id: ozzvin-equinox
+storage:
+  dataRoot: data
+folderAccess:
+  - id: umbrel-downloads
+    name: Downloads
+    note: Equinox downloads into Downloads/Equinox/incomplete and moves finished torrents to Downloads/Equinox/complete. To use another folder (an external drive), add it under "Add your own folder" with any path inside the app, and pick it in Equinox, where it shows as Umbrel shows it (RAID/Torrents for RAID › Torrents).
+    mounts:
+      - service: server
+        targetPath: /downloads
+        readOnly: false
+permissions:
+  - STORAGE_DOWNLOADS
 category: files
 name: Equinox
-version: "1.1.0-rc1"
+version: "1.1.0-rc15"
 tagline: A fast, tidy BitTorrent client
+icon: https://cdn.jsdelivr.net/gh/Ozzvin/umbrel-community-app-store@main/ozzvin-equinox/icon.svg
 description: >-
   Equinox is a lightweight BitTorrent client with a clean web interface.
 
@@ -14,19 +27,28 @@ description: >-
   encryption and IPv6.
 
 
+  Downloads go to Downloads/Equinox/incomplete and move to Downloads/Equinox/complete when finished, so a
+  media server pointed at the complete folder never sees a half-downloaded file. Any other folder, such as an external
+  drive, can be added in the app's settings under "Add your own folder"; Equinox shows it as Umbrel does
+  (RAID/Torrents for RAID › Torrents).
+
+
   Sign in with your Umbrel password as usual: Equinox itself has no separate login here. For incoming connections
-  forward TCP and UDP port 51413 on your router to your Umbrel.
+  Equinox opens port 51420 on your router itself when the router supports NAT-PMP; otherwise forward TCP and UDP
+  port 51420 on your router to your Umbrel by hand.
 developer: Ozzvin
 website: https://github.com/Ozzvin/equinox
 dependencies: []
 repo: https://github.com/Ozzvin/equinox
 support: https://github.com/Ozzvin/equinox/issues
-port: 8091
+port: 9095
 gallery: []
 path: ""
 defaultUsername: ""
 defaultPassword: ""
 releaseNotes: >-
-  Unreleased in this store yet: see https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md
+  The app now opens at port 9095 instead of 8091 (8091 belongs to code-server): update your bookmarks.
+  A .torrent file lying on Umbrel can be added with "From the server…" in the add window.
+  Other changes: see https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md
 submitter: Ozzvin
 submission: ""

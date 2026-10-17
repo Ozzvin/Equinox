@@ -22,14 +22,19 @@
   async function api(method, path, body) {
     const opt = { method, headers: { Authorization: "Bearer " + token } };
     if (body instanceof FormData) opt.body = body;
-    else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
-    const res = await fetch(path, opt);
+    else if (body !== undefined) { opt.body = JSON.stringify(placePaths(body, realPath)); opt.headers["Content-Type"] = "application/json"; }
+    const res = await fetch(placeQuery(path), opt);
     if (res.status === 401) { askToken(); throw new Error("Нет доступа"); }
     if (res.status === 204) return null;
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(window.__trCode(data && data.code, data && data.args, (data && data.error) || res.statusText));
-    return data;
+    return placePaths(data, showPath);
   }
+
+  // A server on another machine (Umbrel, behind its proxy) cannot show its files in a file manager anyone would see:
+  // "Показать в Проводнике" is not offered there, nor is it what a double click does.
+  const REMOTE = !!window.__equinoxRemote;
+  if (REMOTE) $("btn-open").hidden = true;
 
   // ---------- copying ----------
   // The browser lends its clipboard to a page only over HTTPS or from localhost: on Umbrel the page comes by plain
@@ -48,6 +53,50 @@
     try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
     ta.remove();
     if (!ok) throw new Error("copy failed");
+  }
+
+  // ---------- folders by the names of the system around (Umbrel) ----------
+  // A server in a container is given a few folders (see -place): Umbrel's Downloads is /downloads inside it. The page
+  // shows every path by the name the system shows it under ("Downloads/Equinox/complete", as in Umbrel's Files) and
+  // turns it back when sending. Only the fields that hold paths are touched: a label named "Downloads" stays a label.
+  const PLACES = (window.__equinoxPlaces || []).map((p) => ({ name: p.name, path: p.path.replace(/[\\/]+$/, "") || "/", sep: p.path.includes("\\") ? "\\" : "/" }));
+  const PATH_KEYS = new Set(["dataDir", "moveCompletedDir", "watchDir", "torrentCopyDir", "labelPaths", "labels", "savePath",
+    "moveDone", "copyPath", "moveTo", "moveDir", "path", "paths", "parent", "source", "output"]);
+  const PATH_LISTS = new Set(["paths"]); // fields that are lists of paths (several .torrent files from the server)
+  function showPath(p) {
+    if (typeof p !== "string") return p;
+    for (const pl of [...PLACES].sort((a, b) => b.path.length - a.path.length)) {
+      if (p === pl.path) return pl.name;
+      if (p.startsWith(pl.path + pl.sep)) return pl.name + p.slice(pl.path.length).split(pl.sep).join("/");
+    }
+    return p;
+  }
+  function realPath(p) {
+    if (typeof p !== "string") return p;
+    const t = p.trim();
+    for (const pl of [...PLACES].sort((a, b) => b.name.length - a.name.length)) {
+      if (t === pl.name) return pl.path;
+      if (t.startsWith(pl.name + "/")) return pl.path + t.slice(pl.name.length).split("/").join(pl.sep);
+    }
+    return p;
+  }
+  function placePaths(v, conv) {
+    if (!PLACES.length || v === null || typeof v !== "object") return v;
+    if (Array.isArray(v)) return v.map((x) => placePaths(x, conv));
+    const out = {};
+    for (const [k, x] of Object.entries(v)) {
+      if (!PATH_KEYS.has(k)) out[k] = placePaths(x, conv);
+      else if (typeof x === "string") out[k] = conv(x);
+      else if (PATH_LISTS.has(k) && Array.isArray(x)) out[k] = x.map((s) => conv(s));
+      else if (x && typeof x === "object" && !Array.isArray(x)) out[k] = Object.fromEntries(Object.entries(x).map(([n, s]) => [n, conv(s)])); // label -> folder
+      else out[k] = placePaths(x, conv);
+    }
+    return out;
+  }
+  function placeQuery(url) { // the folder asked of the picker travels in the address
+    if (!PLACES.length) return url;
+    const i = url.indexOf("?path=");
+    return i < 0 ? url : url.slice(0, i) + "?path=" + encodeURIComponent(realPath(decodeURIComponent(url.slice(i + 6))));
   }
 
   // ---------- language ----------
@@ -421,7 +470,8 @@
   }
 
   function stateOf(t) {
-    if (t.error) return { cls: "bad", title: t.error, text: t.errorKind === "disk_full" ? "Нет места на диске" : t.errorKind === "write" ? "Ошибка записи на диск" : "Ошибка" };
+    // files that were missing and came back are being checked: the check shows, not the error that is about to go
+    if (t.error && !(t.errorKind === "missing" && (t.checking || t.checkQueued))) return { cls: "bad", title: errText(t), text: t.errorKind === "disk_full" ? "Нет места на диске" : t.errorKind === "write" ? "Ошибка записи на диск" : t.errorKind === "missing" ? "Файлы не найдены" : "Ошибка" };
     if (t.checking) return { cls: "wait", text: t.checkProgress > 0 ? `Проверка файлов ${Math.floor(t.checkProgress * 100)}%` : "Проверка файлов…" };
     if (t.moving) return { cls: "wait", text: t.moving > 0 ? `Перемещение ${Math.round(t.moving * 100)}%` : t.moving === -2 ? "Ждёт переноса" : "Перемещение…", title: t.moving === -2 ? "Стоит в очереди на перенос: одновременно переносится не больше заданного числа раздач" : undefined };
     if (t.checkQueued > 0) return { cls: "wait", text: "Ждёт проверки", title: `Стоит в очереди на проверку локальных файлов: №${t.checkQueued}` };
@@ -920,7 +970,7 @@
     const eta = t.progress >= 1 || !t.hasMetadata ? "—" : fmtEta(etaOf(t));
     const totalDone = t.hasMetadata ? `${bytes(t.done)} из ${bytes(t.size)}` : "—";
     $("pane-status").innerHTML = `<div class="st-bar">${progressBar(t)}</div>
-      ${t.error ? `<p class="err" style="padding:0 16px">${esc(t.error)}</p>` : ""}
+      ${t.error ? `<p class="err" style="padding:0 16px">${esc(errText(t))}</p>` : ""}
       <div class="st-cols">
         <dl class="st-col">
           ${stRow("Скорость загрузки", speed(t.downRate))}
@@ -1232,7 +1282,7 @@
     const tr = e.target.closest("tr");
     if (!tr) return;
     select(tr.dataset.h, e);
-    if (e.detail === 2 && !e.shiftKey && !e.ctrlKey && !e.metaKey) { getSelection().removeAllRanges(); $("btn-open").onclick(); }
+    if (!REMOTE && e.detail === 2 && !e.shiftKey && !e.ctrlKey && !e.metaKey) { getSelection().removeAllRanges(); $("btn-open").onclick(); }
   });
 
   // Run one request per selected torrent; report failures together.
@@ -1491,7 +1541,7 @@
     if (e.target.closest("select, button, option")) return;
     const row = e.target.closest(".file"); if (!row) return;
     // a double click on a file shows it in Explorer, as a double click on a torrent does (with Shift or Ctrl it only selects)
-    if (e.detail === 2 && row.dataset.dir === undefined && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    if (!REMOTE && e.detail === 2 && row.dataset.dir === undefined && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const t = cur(); if (!t) return;
       getSelection().removeAllRanges();
       api("POST", `/api/torrents/${t.hash}/files/${row.dataset.i}/open`).catch((x) => toast(x.message, true));
@@ -1519,7 +1569,7 @@
     const recheckDisabled = !t || !t.hasMetadata || t.checking || !!t.moving;
     menu.innerHTML = `<div class="ctx-head">${n > 1 ? `Выбрано файлов: ${n}` : "Файл"}</div>` +
       PRIO.map(([v, name]) => `<button role="menuitem" data-fprio="${v}">${name}</button>`).join("") +
-      `<hr><button role="menuitem" data-fopen="${i}"${n > 1 ? " disabled" : ""}>Показать в Проводнике</button>` +
+      "<hr>" + (REMOTE ? "" : `<button role="menuitem" data-fopen="${i}"${n > 1 ? " disabled" : ""}>Показать в Проводнике</button>`) +
       `<button role="menuitem" data-frecheck="1"${recheckDisabled ? " disabled" : ""}>${n > 1 ? "Проверить выбранные файлы" : "Проверить файл"}</button>` +
       `<button role="menuitem" class="danger" data-fdel="1">Удалить с диска…</button>`;
     menu.hidden = false;
@@ -1704,11 +1754,13 @@
   }
   $("btn-stats").onclick = () => { renderStats(); $("dlg-stats").showModal(); };
 
+  // the text of a torrent's error, in English from its code when the server gave one
+  function errText(t) { return window.__trCode(t.errorCode, t.errorArgs, t.error); }
   const shownErrors = {};
   function reportErrors() {
     for (const t of torrents) {
       const key = t.error || "";
-      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? "не хватает места на диске. Освободите место и нажмите «Продолжить»" : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.error}`, true);
+      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? "не хватает места на диске. Освободите место и нажмите «Продолжить»" : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
       shownErrors[t.hash] = key;
     }
   }
@@ -1808,7 +1860,7 @@
     const allPaused = list.every((t) => t.paused);
     const items = [
       [allPaused ? "Продолжить" : "Приостановить", "btn-toggle", busy],
-      [one ? "Показать в Проводнике" : undefined, "btn-open", false],
+      [one && !REMOTE ? "Показать в Проводнике" : undefined, "btn-open", false],
       [null],
       ["Метка…", "btn-label", busy], ["Переместить в другую папку…", "btn-move", busy || list.some((t) => !t.hasMetadata)],
       [one ? "Проверить файлы" : undefined, "btn-recheck", busy || !list[0]?.hasMetadata],
@@ -2250,6 +2302,32 @@
   $("btn-add").onclick = () => openAdd();
   $("addw-list").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { adSel = Number(r.dataset.i); renderAdd(); } });
   $("addw-file").onclick = () => $("addw-fileinput").click();
+  // A server on another machine (Umbrel): a .torrent may lie there, in Downloads or a folder added to the app, rather
+  // than on the computer the page is open on. The picker shows the server's folders; the file is read there.
+  let serverTorrentDir = "";
+  $("addw-server").hidden = !REMOTE;
+  $("addw-server").onclick = async () => {
+    const paths = await pickFolder("Файлы .torrent на сервере", serverTorrentDir, "torrent"); // several can be chosen
+    if (!paths || !paths.length) return;
+    serverTorrentDir = paths[0].replace(/[\\/][^\\/]*$/, ""); // the next time the picker opens where this one was
+    try {
+      const r = await api("POST", "/api/stage-path", { paths });
+      let first = -1;
+      for (const st of r.staged) {
+        if (!adItems.some((x) => x.hash === st.hash)) {
+          adItems.push({ kind: "file", name: st.name, size: st.size, hash: st.hash, exists: st.exists, stage: st.id, files: st.files || [],
+            sel: (st.files || []).map(() => true), open: null, opts: optDefaults(), error: "" });
+        }
+        if (first < 0) first = adItems.findIndex((x) => x.hash === st.hash);
+      }
+      if (first >= 0) adSel = first;
+      renderAdd();
+      // one that could not be added does not keep the others off the list; the person learns which it was
+      const why = r.failed.map((f) => window.__trCode(f.code, f.args, f.error));
+      if (why.length === 1) toast(why[0], true);
+      else if (why.length) toast(`Не добавлено файлов: ${why.length}. ${why.join(" ")}`, true);
+    } catch (x) { toast(x.message, true); }
+  };
   $("addw-fileinput").addEventListener("change", async (e) => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) await stageFiles(fl); });
   $("addw-remove").onclick = () => {
     const e = adCur(); if (!e) return;
@@ -2556,8 +2634,12 @@
     },
     network(s, isReset) {
       fillNetwork(s.network || {});
-      $("st-port-num").value = s.listenPort;
-      $("st-port-note").hidden = !(port && s.listenPort !== port.port);
+      // a port given at start (a container publishes just that one) is shown but not changed; "reset" keeps it too
+      const fixed = !!(settings && settings.portFixed);
+      $("st-port-num").value = fixed ? settings.listenPort : s.listenPort;
+      $("st-router").value = s.routerAddress || "";
+      $("st-port-num").readOnly = fixed; $("st-port-rnd").hidden = fixed; $("st-port-fixed").hidden = !fixed;
+      $("st-port-note").hidden = fixed || !(port && s.listenPort !== port.port);
       if (!isReset) { $("st-port").textContent = portDetails(port); $("st-mapping").checked = !!port.enabled; } // the mapping applies at once, not on Save
     },
     view(s, isReset) {
@@ -2664,7 +2746,7 @@
         trackerIcons: $("st-trackericons").checked,
         network: readNetwork(),
         dataDir: $("st-data").value.trim(), moveCompletedDir: tgText("tg-movedone", "st-movedone"), watchDir: tgText("tg-watch", "st-watch"), torrentCopyDir: tgText("tg-copydir", "st-copydir"), labelPaths: readLabelPaths(), labelColors: readLabelColors(),
-        preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"),
+        preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"), routerAddress: $("st-router").value.trim(),
         ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
       if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
@@ -2911,15 +2993,19 @@
   $("st-port-num").addEventListener("input", () => { $("st-port-note").hidden = !(port && Number($("st-port-num").value) !== port.port); });
 
   // ---------- folder picker (our own window, the same in the browser and in the app) ----------
-  // any: a file can be chosen as well as a folder; torrents: only a .torrent file can be chosen (any = "torrent")
-  const pk = { resolve: null, data: null, sel: "", seq: 0, any: false, torrents: false };
-  const pkFinish = (v) => { const r = pk.resolve; pk.resolve = null; if (r) r(v); };
+  // any: a file can be chosen as well as a folder; torrents: only .torrent files can be chosen (any = "torrent"), several
+  // at once (click, Ctrl+click, Shift+click for a run of them, Ctrl+A for all in the folder), and the answer is a list
+  const pk = { resolve: null, data: null, sel: "", seq: 0, any: false, torrents: false, picked: [], anchor: -1 };
+  const pkFinish = (v) => { const r = pk.resolve; pk.resolve = null; if (r) r(pk.torrents && v ? [].concat(v) : v); };
+  const PK_HINT = $("pk-path").getAttribute("placeholder");
   const isTorrentName = (n) => /\.torrent$/i.test(n);
   const pkCanChoose = (v) => !!v && (!pk.torrents || isTorrentName(v));
   function pickFolder(title, initial, any) {
     return new Promise((resolve) => {
       if ($("dlg-picker").open) return resolve("");
-      pk.resolve = resolve; pk.sel = ""; pk.torrents = any === "torrent"; pk.any = any === true;
+      pk.resolve = resolve; pk.sel = ""; pk.picked = []; pk.anchor = -1; pk.torrents = any === "torrent"; pk.any = any === true;
+      $("pk-path").placeholder = PK_HINT;
+      $("pk-list").setAttribute("aria-multiselectable", pk.torrents);
       $("pk-path-l").textContent = pk.torrents ? "Выбранный файл" : "Выбранная папка";
       $("pk-newbtn").hidden = pk.torrents;
       $("pk-title").textContent = title || "Выбор папки";
@@ -2936,7 +3022,8 @@
     catch (x) { $("pk-err").textContent = x.message; $("pk-err").hidden = false; return; }
     if (seq !== pk.seq) return; // a newer request is on its way
     if (!d) { $("pk-err").textContent = "Сервер не вернул список папок."; $("pk-err").hidden = false; return; }
-    pk.data = d; pk.sel = "";
+    pk.data = d; pk.sel = ""; pk.picked = []; pk.anchor = -1;
+    $("pk-path").placeholder = PK_HINT;
     $("pk-err").hidden = true;
     $("pk-path").value = pk.torrents ? "" : d.path; // choosing a .torrent: a folder is only the way to it
     renderPicker();
@@ -2950,7 +3037,8 @@
     $("pk-crumbs").scrollLeft = 1e6;
     const inside = (p) => d.path && (d.path === p || d.path.toLowerCase().startsWith(p.replace(/[\\/]+$/, "").toLowerCase() + (p.endsWith("\\") || p.endsWith("/") ? "" : "\\")) );
     const cur = d.places.filter((p) => d.path === p.path);
-    const curPlace = cur[0] || d.places.filter((p) => p.kind === "drive" && inside(p.path))[0];
+    const curPlace = cur[0] || d.places.filter((p) => p.kind === "drive" && inside(p.path))[0] ||
+      d.places.filter((p) => p.kind === "place" && (d.path === p.path || d.path.startsWith(p.path + "/")))[0]; // Umbrel's folders, by their names
     let last = "";
     $("pk-places").innerHTML = d.places.map((p) => {
       const sep = last && last !== p.kind && (p.kind === "drive") ? '<div class="sp"></div>' : "";
@@ -2967,13 +3055,40 @@
     $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
   }
   const PK_ROWS = ".pk-row.dir, .pk-row.file.pick";
-  function pkSelect(path) {
+  const pkFiles = () => [...$("pk-list").querySelectorAll(".pk-row.file.pick")].map((r) => r.dataset.path);
+  // e: the click or key that chose it; with .torrent files Ctrl adds or takes one away and Shift takes the run from the last one
+  function pkSelect(path, e) {
     pk.sel = path;
-    for (const r of $("pk-list").querySelectorAll(PK_ROWS)) { const on = r.dataset.path === path; r.classList.toggle("sel", on); r.setAttribute("aria-selected", on); if (on) r.scrollIntoView({ block: "nearest" }); }
-    $("pk-path").value = path || (pk.data && !pk.torrents && pk.data.path) || "";
-    $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
+    if (pk.torrents) {
+      const files = pkFiles(), i = files.indexOf(path);
+      if (i < 0) { pk.picked = []; pk.anchor = -1; } // a folder: only the way to the files
+      else if (e && e.shiftKey && pk.anchor >= 0) pk.picked = files.slice(Math.min(pk.anchor, i), Math.max(pk.anchor, i) + 1);
+      else if (e && (e.ctrlKey || e.metaKey)) { pk.picked = pk.picked.includes(path) ? pk.picked.filter((p) => p !== path) : [...pk.picked, path]; pk.anchor = i; }
+      else { pk.picked = [path]; pk.anchor = i; }
+    }
+    pkMark();
   }
-  $("pk-list").addEventListener("click", (e) => { const r = e.target.closest(PK_ROWS); if (r) pkSelect(r.dataset.path); });
+  // keep: the field holds what the person is typing, it is not to be replaced
+  function pkMark(keep) {
+    const path = pk.sel, set = new Set(pk.torrents ? pk.picked : [path]);
+    for (const r of $("pk-list").querySelectorAll(PK_ROWS)) {
+      const on = set.has(r.dataset.path) || (r.dataset.path === path && r.classList.contains("dir"));
+      r.classList.toggle("sel", on); r.setAttribute("aria-selected", on);
+      if (r.dataset.path === path) r.scrollIntoView({ block: "nearest" });
+    }
+    const many = pk.torrents && pk.picked.length > 1;
+    $("pk-path").placeholder = many ? `Выбрано файлов: ${pk.picked.length}` : PK_HINT;
+    if (!keep) $("pk-path").value = many ? "" : pk.torrents ? pk.picked[0] || path || "" : path || (pk.data && pk.data.path) || "";
+    $("pk-ok").disabled = !many && !pkCanChoose($("pk-path").value.trim());
+  }
+  // what "Выбрать" gives: the .torrent files picked, in the order of the folder, or what the field says
+  function pkChosen() {
+    if (pk.torrents && pk.picked.length > 1) { const order = pkFiles(); return [...pk.picked].sort((a, b) => order.indexOf(a) - order.indexOf(b)); }
+    const v = $("pk-path").value.trim();
+    return pkCanChoose(v) ? v : "";
+  }
+  $("pk-list").addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); }); // Shift+click picks files, not the text
+  $("pk-list").addEventListener("click", (e) => { const r = e.target.closest(PK_ROWS); if (r) pkSelect(r.dataset.path, e); });
   $("pk-list").addEventListener("dblclick", (e) => {
     const r = e.target.closest(PK_ROWS); if (!r) return;
     if (r.classList.contains("file")) { pkFinish(r.dataset.path); $("dlg-picker").close(); } // a file is chosen at once
@@ -2982,11 +3097,17 @@
   $("pk-list").addEventListener("keydown", (e) => {
     const rows = [...$("pk-list").querySelectorAll(PK_ROWS)]; if (!rows.length) return;
     const i = rows.findIndex((r) => r.dataset.path === pk.sel);
-    if (e.key === "ArrowDown") { e.preventDefault(); pkSelect(rows[Math.min(rows.length - 1, i + 1)].dataset.path); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); pkSelect(rows[Math.max(0, i - 1)].dataset.path); }
+    const how = { shiftKey: e.shiftKey }; // Shift+arrow takes a run of files, as in a file manager
+    if (e.key === "ArrowDown") { e.preventDefault(); pkSelect(rows[Math.min(rows.length - 1, i + 1)].dataset.path, how); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); pkSelect(rows[Math.max(0, i - 1)].dataset.path, how); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && pk.torrents) {
+      e.preventDefault();
+      const files = pkFiles(); if (!files.length) return;
+      pk.picked = files; pk.anchor = 0; pk.sel = files[0]; pkMark();
+    }
     else if (e.key === "Enter" && i >= 0) {
       e.preventDefault();
-      if (rows[i].classList.contains("file")) { pkFinish(pk.sel); $("dlg-picker").close(); } else pkGo(pk.sel);
+      if (rows[i].classList.contains("file")) { pkFinish(pkChosen() || pk.sel); $("dlg-picker").close(); } else pkGo(pk.sel);
     }
     else if (e.key === "Backspace" && pk.data && pk.data.parent !== null) { e.preventDefault(); pkGo(pk.data.parent); }
   });
@@ -2997,8 +3118,11 @@
     e.preventDefault(); const v = $("pk-path").value.trim();
     if (pk.torrents && isTorrentName(v)) { pkFinish(v); $("dlg-picker").close(); } else if (v) pkGo(v);
   });
-  $("pk-path").addEventListener("input", () => { $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim()); });
-  $("pk-ok").onclick = () => { const v = $("pk-path").value.trim(); if (!pkCanChoose(v)) return; pkFinish(v); $("dlg-picker").close(); };
+  $("pk-path").addEventListener("input", () => {
+    if (pk.picked.length > 1) { pk.picked = []; pk.anchor = -1; pkMark(true); } // typing a path drops the files picked in the list
+    $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
+  });
+  $("pk-ok").onclick = () => { const v = pkChosen(); if (!v) return; pkFinish(v); $("dlg-picker").close(); };
   // new folder
   $("pk-newbtn").onclick = () => { $("pk-newrow").hidden = !$("pk-newrow").hidden; if (!$("pk-newrow").hidden) { $("pk-newname").value = ""; $("pk-newname").focus(); } };
   $("pk-newcancel").onclick = () => { $("pk-newrow").hidden = true; };
@@ -3112,6 +3236,7 @@
     nolimSet("wz-down", s.downLimitKBps); nolimSet("wz-up", s.upLimitKBps);
     $("wz-speed-legend").textContent = `Ограничения скорости, ${limitUnit(bits)}`;
     $("wz-port").value = s.listenPort; $("wz-mapping").checked = !!wz.port.enabled; $("wz-port-note").hidden = true;
+    $("wz-port").readOnly = !!s.portFixed; $("wz-port-rnd").hidden = !!s.portFixed; $("wz-port-fixed").hidden = !s.portFixed;
     $("wz-starthidden").checked = s.startHidden !== false; $("wz-closetray").checked = s.closeToTray !== false; $("wz-notify").checked = s.notifyOnComplete !== false;
     $("wz-autostart").checked = false;
     if (wzDesktop() && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("wz-autostart").checked = !!on; }).catch(() => {});

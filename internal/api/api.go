@@ -44,6 +44,8 @@ type Server struct {
 
 	open       bool     // a proxy in front does the signing in: no personal key, more host names
 	extraHosts []string // host names allowed in open mode besides the usual ones
+	fixedPort  int      // the torrent port given at start (-torrent-port), 0 = the setting rules
+	places     []Place  // the folders a container is given, by the names its system shows (-place); none = the whole disk
 }
 
 // SetOpen puts the server in open mode, for running behind a proxy that signs the user in (Umbrel's app proxy
@@ -55,6 +57,16 @@ func (s *Server) SetOpen(extraHosts []string) {
 	s.token = OpenToken
 	s.extraHosts = extraHosts
 }
+
+// SetPlaces gives the folders the server may use, by the names the system around it shows them under (Umbrel's
+// Files: "Downloads" is /downloads in the container). The page then shows paths by those names, and the folder
+// picker offers just these folders and does not go above them.
+func (s *Server) SetPlaces(ps []Place) { s.places = ps }
+
+// SetFixedPort says the torrent port was given at start and is not the page's to change: a container publishes just
+// that port, and a different one would get no incoming connections at all (found on Umbrel, where the button for a
+// random port moved the program off the published one).
+func (s *Server) SetFixedPort(port int) { s.fixedPort = port }
 
 // LoadToken returns the persistent API token stored at path, creating it if needed.
 func LoadToken(path string) (string, error) {
@@ -91,6 +103,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if s.open {
 			_, _ = w.Write([]byte("window.__equinoxToken = \"" + OpenToken + "\";\n"))
+			// on another machine (Umbrel): the page offers nothing that opens a file manager there
+			_, _ = w.Write([]byte("window.__equinoxRemote = true;\n"))
+		}
+		if len(s.places) > 0 { // before the page's first request: it shows every path by these names
+			b, _ := json.Marshal(s.places)
+			_, _ = w.Write([]byte("window.__equinoxPlaces = " + string(b) + ";\n"))
 		}
 		return
 	}
@@ -193,6 +211,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/fs/mkdir", s.fsMkdir)
 	s.mux.HandleFunc("POST /api/stage", s.stage)
 	s.mux.HandleFunc("POST /api/stage-url", s.stageURL)
+	s.mux.HandleFunc("POST /api/stage-path", s.stagePath)
 	s.mux.HandleFunc("GET /api/changelog", s.changelog)
 	s.mux.HandleFunc("GET /api/tracker-icon", s.trackerIcon)
 	s.mux.HandleFunc("GET /api/stage/{id}", s.stagedInfo)
@@ -238,17 +257,27 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, core.ErrNoMetadata), errors.Is(err, core.ErrBusy):
 		code = http.StatusConflict
 	}
-	body := map[string]any{"error": err.Error()}
+	writeJSON(w, code, bodyOf(err))
+}
+
+// errorBody is how an error goes to the page: its text, and the code and the blanks of the text for a client that
+// words it itself (see core.Coder).
+type errorBody struct {
+	Error string   `json:"error"`
+	Code  string   `json:"code,omitempty"`
+	Args  []string `json:"args,omitempty"`
+}
+
+func bodyOf(err error) errorBody {
+	body := errorBody{Error: err.Error()}
 	var coded core.Coder
-	if errors.As(err, &coded) { // the code and the blanks of the text, for a client that words it itself
-		if c, args := coded.ErrCode(); c != "" {
-			body["code"] = c
-			if len(args) > 0 {
-				body["args"] = args
-			}
+	if errors.As(err, &coded) {
+		body.Code, body.Args = coded.ErrCode()
+		if body.Code == "" {
+			body.Args = nil
 		}
 	}
-	writeJSON(w, code, body)
+	return body
 }
 
 func decode(r *http.Request, v any) error {
@@ -495,8 +524,21 @@ func (s *Server) restartRequired(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.m.RestartInfo())
 }
 
+// noFileManager refuses "show in the file manager" for a server behind a proxy (Umbrel): it runs in a container on
+// another machine, where no one would see a file manager open; the page does not offer it there either.
+func (s *Server) noFileManager(w http.ResponseWriter) bool {
+	if !s.open {
+		return false
+	}
+	fail(w, &core.CodedError{Code: "fs.no_file_manager", Msg: "на этом сервере нельзя открыть папку: он работает на другом устройстве", Err: core.ErrInvalidInput})
+	return true
+}
+
 // openFolder shows the torrent's files in the system file manager (this machine only).
 func (s *Server) openFolder(w http.ResponseWriter, r *http.Request) {
+	if s.noFileManager(w) {
+		return
+	}
 	if err := s.m.OpenFolder(r.PathValue("hash")); err != nil {
 		fail(w, err)
 		return
@@ -506,6 +548,9 @@ func (s *Server) openFolder(w http.ResponseWriter, r *http.Request) {
 
 // openFile shows one file of a torrent in the file manager.
 func (s *Server) openFile(w http.ResponseWriter, r *http.Request) {
+	if s.noFileManager(w) {
+		return
+	}
 	idx, err := strconv.Atoi(r.PathValue("idx"))
 	if err != nil {
 		fail(w, core.ErrInvalidInput)
@@ -871,7 +916,15 @@ func mediaType(name string) string {
 // ---------------------------------------------------------------- settings & status
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.cfg.Get())
+	writeJSON(w, http.StatusOK, s.settingsView())
+}
+
+// settingsView is the settings as the page gets them, with what the page must know besides.
+func (s *Server) settingsView() any {
+	return struct {
+		config.Settings
+		PortFixed bool `json:"portFixed,omitempty"` // the port was given at start: the page shows it but does not change it
+	}{s.cfg.Get(), s.fixedPort > 0}
 }
 
 // getSettingsDefaults gives the settings as a fresh install has them, for "reset the section to the defaults" in
@@ -921,6 +974,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		MoveCompleted    *string                  `json:"moveCompletedDir"`
 		WatchDir         *string                  `json:"watchDir"`
 		ListenPort       *int                     `json:"listenPort"`
+		RouterAddress    *string                  `json:"routerAddress"`
 		Network          *config.Network          `json:"network"`
 		Preallocate      *bool                    `json:"preallocate"`
 		CopyRemovePolicy *config.CopyRemovePolicy `json:"copyRemovePolicy"`
@@ -973,6 +1027,19 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			colors[l] = id
 		}
 	}
+	var router string
+	if b.RouterAddress != nil {
+		router = strings.TrimSpace(*b.RouterAddress)
+		if ip := net.ParseIP(router); router != "" && (ip == nil || ip.To4() == nil) {
+			fail(w, &core.CodedError{Code: "port.router", Args: []string{router}, Msg: "адрес роутера должен быть IPv4-адресом, например 192.168.1.1: " + router, Err: core.ErrInvalidInput})
+			return
+		}
+	}
+	if b.ListenPort != nil && s.fixedPort > 0 && *b.ListenPort != s.fixedPort {
+		fail(w, &core.CodedError{Code: "port.fixed", Msg: "порт задан при запуске сервера, здесь его не поменять", Err: core.ErrInvalidInput})
+		return
+	}
+
 	if b.DownLimitKBps != nil || b.UpLimitKBps != nil || b.AltDownLimitKBps != nil || b.AltUpLimitKBps != nil {
 		cur := s.cfg.Get()
 		pick := func(v *int, now int) int {
@@ -1013,6 +1080,12 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.LabelColors != nil {
 		if err := s.cfg.Update(func(c *config.Settings) { c.LabelColors = colors }); err != nil {
+			fail(w, err)
+			return
+		}
+	}
+	if b.RouterAddress != nil {
+		if err := s.m.SetRouterAddress(router); err != nil {
 			fail(w, err)
 			return
 		}
@@ -1115,7 +1188,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cfg.Get())
+	writeJSON(w, http.StatusOK, s.settingsView())
 }
 
 // altSpeed toggles the turtle mode: POST {"enabled": true|false}.
