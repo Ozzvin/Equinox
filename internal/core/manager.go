@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -794,7 +795,10 @@ type preallocJob struct {
 }
 
 // neededBytes is how much more a torrent's wanted files need to reach their final size, and the files that need
-// it, given the on-disk state right now. base is the torrent's own, already-resolved save folder.
+// it, given the on-disk state right now. base is the torrent's own, already-resolved save folder. A file that is not on
+// the disk although the torrent counts some of its bytes as had was deleted or moved away by hand: it is left alone, for
+// the look for missing files (missing.go) to stop the torrent. Made again here, empty at full length, it would look
+// present, and the torrent would share zeros for the pieces it believes it has.
 func neededBytes(t *torrent.Torrent, base string, prios []int8) (need int64, jobs []preallocJob, err error) {
 	paths, err := store.Paths(base, t.Info())
 	if err != nil {
@@ -805,8 +809,11 @@ func neededBytes(t *torrent.Torrent, base string, prios []int8) (need int64, job
 			continue
 		}
 		var have int64
-		if fi, err := os.Stat(paths[i]); err == nil {
+		fi, err := os.Stat(paths[i])
+		if err == nil {
 			have = fi.Size()
+		} else if errors.Is(err, fs.ErrNotExist) && f.BytesCompleted() > 0 {
+			continue
 		}
 		if have < f.Length() {
 			need += f.Length() - have
