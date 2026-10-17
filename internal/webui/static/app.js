@@ -63,7 +63,8 @@
   // turns it back when sending. Only the fields that hold paths are touched: a label named "Downloads" stays a label.
   const PLACES = (window.__equinoxPlaces || []).map((p) => ({ name: p.name, path: p.path.replace(/[\\/]+$/, "") || "/", sep: p.path.includes("\\") ? "\\" : "/" }));
   const PATH_KEYS = new Set(["dataDir", "moveCompletedDir", "watchDir", "torrentCopyDir", "labelPaths", "labels", "savePath",
-    "moveDone", "copyPath", "moveTo", "moveDir", "path", "parent", "source", "output"]);
+    "moveDone", "copyPath", "moveTo", "moveDir", "path", "paths", "parent", "source", "output"]);
+  const PATH_LISTS = new Set(["paths"]); // fields that are lists of paths (several .torrent files from the server)
   function showPath(p) {
     if (typeof p !== "string") return p;
     for (const pl of [...PLACES].sort((a, b) => b.path.length - a.path.length)) {
@@ -88,6 +89,7 @@
     for (const [k, x] of Object.entries(v)) {
       if (!PATH_KEYS.has(k)) out[k] = placePaths(x, conv);
       else if (typeof x === "string") out[k] = conv(x);
+      else if (PATH_LISTS.has(k) && Array.isArray(x)) out[k] = x.map((s) => conv(s));
       else if (x && typeof x === "object" && !Array.isArray(x)) out[k] = Object.fromEntries(Object.entries(x).map(([n, s]) => [n, conv(s)])); // label -> folder
       else out[k] = placePaths(x, conv);
     }
