@@ -6,10 +6,13 @@ import (
 	"testing"
 
 	"github.com/anacrolix/torrent/metainfo"
+
+	"github.com/Ozzvin/equinox/internal/config"
 )
 
-// seedingOnDisk is threeFilesOnDisk, then waits until the torrent is past its first check: until then the preparation
-// of the disk that follows adding it may still be under way and would make the files again.
+// seedingOnDisk is threeFilesOnDisk, then waits until the torrent is past its first check. (The preparation of the disk
+// that follows adding it may still come later, the check begins on a goroutine of its own; it leaves a missing file
+// alone, see TestPreparingTheDiskDoesNotMakeAMissingFileAgain.)
 func seedingOnDisk(t *testing.T, m *Manager, dir string) (string, []string) {
 	t.Helper()
 	hash, paths := threeFilesOnDisk(t, m, dir)
@@ -144,4 +147,27 @@ func TestSkippedFileIsNotMissed(t *testing.T) {
 	if s, _ := statusOf(m, hash); s.Error != "" || s.Paused {
 		t.Fatalf("a skipped file gone stopped the torrent: %+v", s)
 	}
+}
+
+// The preparation of the disk (begin, which preallocates) must not make a missing file again: an empty file at full length in
+// its place would look present, and the torrent would share zeros for the pieces it believes it has. It runs some time
+// after the torrent is added, and again on "Resume", so a file deleted just before was made again and never missed
+// (TestResumeWithFilesGoneDownloadsThemAgain failed one run in seven on the CI that way, 2026-10-17).
+func TestPreparingTheDiskDoesNotMakeAMissingFileAgain(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.Preallocate = true })
+	hash, paths := seedingOnDisk(t, m, dir)
+	m.store.CloseFiles(metainfo.NewHashFromHex(hash), paths)
+	if err := os.Remove(paths[1]); err != nil {
+		t.Fatal(err)
+	}
+	tt, err := m.get(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.begin(tt, hash)
+	if _, err := os.Stat(paths[1]); !os.IsNotExist(err) {
+		t.Fatalf("the missing file was made again: %v", err)
+	}
+	goneFor(t, m, hash)
 }
