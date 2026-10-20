@@ -1,0 +1,7 @@
+# Extra options for equinox-server (run "equinox-server -h" to list them), applied by
+# "sudo systemctl restart equinox-server". Examples:
+#   EQUINOX_OPTS="-listen 127.0.0.1:8080"
+#   EQUINOX_OPTS="-torrent-port 51420 -completed /srv/torrents/complete"
+# -downloads and -completed only matter on the very first start; later the folders are set on the page.
+# The service runs as the user "equinox": a folder outside /var/lib/equinox must be writable by it.
+EQUINOX_OPTS=""

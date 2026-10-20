@@ -82,7 +82,10 @@ jobs:
             dist/SHA256SUMS.txt
           retention-days: 30
 
-  # The server for Linux, as archives. It is built apart from the Windows job: no installer, no Inno Setup.
+  # Linux: the server as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml), and the
+  # desktop program (tray icon, the interface in the browser) as .deb/.rpm (deploy/linux/nfpm-desktop.yaml) and as an
+  # AppImage for the other distributions.
+  # It is built apart from the Windows job: no installer, no Inno Setup.
   linux:
     needs: [test, test-linux]
     runs-on: ubuntu-latest
@@ -93,14 +96,26 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build the archives
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+      # appimagetool and the AppImage runtimes, pinned by version and checksum
+      - name: Get appimagetool
+        run: |
+          mkdir -p tools
+          get() { curl -fsSL -o "tools/$1" "$2" && echo "$3  tools/$1" | sha256sum -c -; }
+          get appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          get runtime-x86_64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+          get runtime-aarch64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-aarch64 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
+          chmod +x tools/appimagetool
+      - name: Build the archives and packages
         env:
           VERSION_IN: ${{ inputs.version }}
         run: |
           v="$VERSION_IN"
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
           echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$' || { echo "not a version: $v"; exit 1; }
-          mkdir -p dist stage
+          mkdir -p dist stage/icons stage/pkg
+          go run ./cmd/mkicons stage/icons
           for arch in amd64 arm64; do
             name=Equinox-server-linux-$arch-$v
             mkdir -p stage/$name
@@ -108,13 +123,111 @@ jobs:
             cp LICENSE stage/$name/
             cp deploy/linux/README.txt stage/$name/
             tar -C stage -czf dist/$name.tar.gz $name
+            cp stage/$name/equinox-server stage/pkg/
+            GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o stage/pkg/equinox ./cmd/equinox
+            for p in deb rpm; do
+              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/
+              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p $p -t dist/
+            done
+            # AppImage: the program, its menu entry and icon in an AppDir, packed with the runtime of the architecture
+            case $arch in amd64) ai=x86_64 ;; arm64) ai=aarch64 ;; esac
+            app=stage/AppDir-$arch
+            mkdir -p $app/usr/bin $app/usr/share/icons/hicolor/256x256/apps
+            cp stage/pkg/equinox $app/usr/bin/
+            ln -sf usr/bin/equinox $app/AppRun
+            cp deploy/linux/desktop/equinox.desktop $app/
+            cp stage/icons/icon256.png $app/equinox.png
+            cp stage/icons/icon256.png $app/usr/share/icons/hicolor/256x256/apps/equinox.png
+            APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ai tools/appimagetool --no-appstream --runtime-file tools/runtime-$ai $app dist/Equinox-$v-$ai.AppImage
           done
-          (cd dist && sha256sum *.tar.gz > SHA256SUMS-linux.txt)
+          (cd dist && sha256sum *.tar.gz *.deb *.rpm *.AppImage > SHA256SUMS-linux.txt)
+      # Installs the amd64 .deb on the runner: the service user, the unit and the default file must come out right,
+      # and the service must start and answer on its port.
+      - name: Check the .deb
+        run: |
+          sudo apt-get install -y ./dist/equinox-server_*_amd64.deb
+          id equinox
+          systemctl cat equinox-server >/dev/null
+          test -f /etc/default/equinox-server
+          sudo systemctl start equinox-server
+          for i in $(seq 1 30); do sudo test -s /var/lib/equinox/ui-url && break; sleep 1; done
+          sudo systemctl is-active equinox-server
+          curl -fsS -o /dev/null http://127.0.0.1:9091/
+          sudo apt-get remove -y equinox-server
+          ! systemctl is-active equinox-server
+      # The same for the amd64 .rpm, in a Fedora container booted with systemd as its init. The package goes to
+      # /root: systemd mounts an empty tmpfs over /tmp, which would hide a file copied there.
+      - name: Check the .rpm (Fedora)
+        run: |
+          printf '%s\n' 'FROM fedora:latest' 'RUN dnf -y install systemd curl && dnf clean all' 'CMD ["/usr/sbin/init"]' |
+            docker build -q -t fedora-systemd -
+          docker run -d --name fedora --privileged fedora-systemd
+          docker cp dist/$(cd dist && ls equinox-server-*.x86_64.rpm) fedora:/root/equinox-server.rpm
+          f() { docker exec fedora sh -c "$1"; }
+          f 'systemctl is-system-running --wait || true'
+          f 'dnf -y install /root/equinox-server.rpm'
+          f 'id equinox && test -f /etc/default/equinox-server'
+          f 'systemctl start equinox-server'
+          f 'for i in $(seq 1 30); do test -s /var/lib/equinox/ui-url && break; sleep 1; done; systemctl is-active equinox-server'
+          f 'curl -fsS -o /dev/null http://127.0.0.1:9091/'
+          f 'dnf -y remove equinox-server'
+          f '! systemctl is-active equinox-server'
+      # The desktop program's .deb: installs, starts in the tray (the runner has no session bus, so no icon: the program
+      # must run on without it), and a second start hands a magnet link to it. BROWSER=true stands in for the browser.
+      - name: Check the desktop .deb
+        env:
+          BROWSER: "true"
+          VERSION_IN: ${{ inputs.version }}
+        run: |
+          # an rc build is a test build: its autostart entry is kept apart from the installed program's (buildinfo.Channel)
+          auto=~/.config/autostart/equinox.desktop
+          case "$VERSION_IN" in *-*) auto=~/.config/autostart/equinox-dev.desktop ;; esac
+          sudo apt-get install -y ./dist/equinox_*_amd64.deb
+          test -x /usr/bin/equinox
+          grep -q 'x-scheme-handler/magnet' /usr/share/applications/equinox.desktop
+          test -f /usr/share/icons/hicolor/256x256/apps/equinox.png
+          st=$(mktemp -d)
+          equinox -hidden -state "$st" &
+          pid=$!
+          for i in $(seq 1 30); do test -s "$st/ui-url" && break; sleep 1; done
+          url=$(cat "$st/ui-url"); base=${url%%/#token=*}; token=${url##*#token=}
+          curl -fsS "$base/session.js" | grep -q '__equinoxBrowserApp = true'
+          magnet='magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=check'
+          curl -fsS -X PUT -H "Authorization: Bearer $token" -d '{"on":true}' "$base/api/desktop/autostart"
+          grep -q '^Exec=/usr/bin/equinox -hidden$' "$auto"
+          curl -fsS -X PUT -H "Authorization: Bearer $token" -d '{"on":false}' "$base/api/desktop/autostart"
+          test ! -e "$auto"
+          equinox -state "$st" "$magnet"
+          curl -fsS -H "Authorization: Bearer $token" "$base/api/pending-add?for=window" | grep -q 0123456789abcdef0123456789abcdef01234567
+          kill -TERM $pid
+          wait $pid
+          test ! -e "$st/ui-url"
+          sudo apt-get remove -y equinox
+      # The x86_64 AppImage, unpacked (the runner has no FUSE): the program inside starts and answers.
+      - name: Check the AppImage
+        env:
+          BROWSER: "true"
+        run: |
+          img=$(ls dist/Equinox-*-x86_64.AppImage)
+          chmod +x "$img"
+          (cd stage && "../$img" --appimage-extract >/dev/null)
+          test -x stage/squashfs-root/AppRun
+          st=$(mktemp -d)
+          APPIMAGE="$PWD/$img" stage/squashfs-root/AppRun -hidden -state "$st" &
+          pid=$!
+          for i in $(seq 1 30); do test -s "$st/ui-url" && break; sleep 1; done
+          url=$(cat "$st/ui-url"); base=${url%%/#token=*}
+          curl -fsS "$base/session.js" | grep -q '__equinoxBrowserApp = true'
+          kill -TERM $pid
+          wait $pid
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
           name: equinox-linux-${{ inputs.version || github.sha }}
           path: |
             dist/Equinox-server-linux-*.tar.gz
+            dist/equinox*.deb
+            dist/equinox*.rpm
+            dist/Equinox-*.AppImage
             dist/SHA256SUMS-linux.txt
           retention-days: 30

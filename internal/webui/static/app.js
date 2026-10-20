@@ -14,6 +14,8 @@
   let token = "";
   if (typeof window.__equinoxToken === "string") token = window.__equinoxToken;
   const fromLink = location.hash.match(/token=([0-9a-f]+)/i);
+  // the Linux program's tray asks for the settings with a link that also carries the key: "#token=...&settings"
+  const linkSettings = !!fromLink && /&settings$/.test(location.hash);
   if (!token && fromLink) token = fromLink[1];
   if (token) { try { localStorage.setItem("token", token); } catch (_) {} }
   else { try { token = localStorage.getItem("token") || ""; } catch (_) {} }
@@ -615,6 +617,7 @@
   // folder starts open (closed, the tab would show a single row).
   const dirOpen = new Map(); // hash -> Set of folder paths ("Root/sub/") the person opened
   const openOf = (hash) => { let s = dirOpen.get(hash); if (!s) dirOpen.set(hash, (s = new Set())); return s; };
+  const rootShown = new Set(); // hashes whose files were shown once: the root folder is opened only then, and may be closed after
   // the folders of a tree that are closed now: every folder that was not opened
   function closedDirs(tree, open) {
     const closed = new Set();
@@ -734,7 +737,10 @@
     if (!cur() || cur().hash !== t.hash) return;
     const box = $("files"), open = openOf(t.hash);
     const tree = buildFileTree(files);
-    if (!open.size && tree.dirs.size === 1 && !tree.files.length) open.add([...tree.dirs.values()][0].path); // the root folder, the first time
+    if (!rootShown.has(t.hash)) { // the root folder, the first time
+      rootShown.add(t.hash);
+      if (tree.dirs.size === 1 && !tree.files.length) open.add([...tree.dirs.values()][0].path);
+    }
     const closed = closedDirs(tree, open);
     const key = t.hash + ":" + files.length + ":" + t.sequential + ":" + [...closed].sort().join("|");
     // folders and their files, for the selection and the priority of a whole folder
@@ -1537,7 +1543,17 @@
   });
   $("files").addEventListener("click", (e) => {
     const chev = e.target.closest("[data-toggle]");
-    if (chev) { const t = cur(); if (!t) return; const o = openOf(t.hash), p = chev.dataset.toggle; o.has(p) ? o.delete(p) : o.add(p); renderFiles(); return; }
+    if (chev) {
+      const t = cur(); if (!t) return;
+      const o = openOf(t.hash), p = chev.dataset.toggle;
+      if (o.has(p)) {
+        o.delete(p);
+        // a closed folder hides its files: they leave the selection, unless the whole folder is chosen (its row shows that)
+        const idx = dirIdx.get(p) || [];
+        if (!idx.every((i) => fileSel.has(i))) idx.forEach((i) => fileSel.delete(i));
+      } else o.add(p);
+      renderFiles(); return;
+    }
     if (e.target.closest("select, button, option")) return;
     const row = e.target.closest(".file"); if (!row) return;
     // a double click on a file shows it in Explorer, as a double click on a torrent does (with Shift or Ctrl it only selects)
@@ -2058,11 +2074,28 @@
     if (files && files.length) await stageFiles(files);
   }
 
+  // The Linux program shows its window in the user's own browser, where nothing is bound to the page: the system section
+  // of the settings asks the program over the API instead (see api.Desktop). The texts there speak of Windows; here
+  // they speak of the desktop, and the window's own settings (closing, size) are not shown, as there is no window.
+  const BROWSER_APP = !window.__equinoxDesktop && !!window.__equinoxBrowserApp;
+  const SYSTEM_SECTION = !!window.__equinoxDesktop || BROWSER_APP;
+  if (BROWSER_APP) {
+    const tryApi = async (method, path, body) => { try { await api(method, path, body); return ""; } catch (x) { return x.message; } };
+    window.getAutostart = async () => !!(await api("GET", "/api/desktop/autostart")).on;
+    window.setAutostart = (on) => tryApi("PUT", "/api/desktop/autostart", { on });
+    window.registerHandlers = () => tryApi("POST", "/api/desktop/default-app");
+    $("st-autostart-t").textContent = "Запускать при входе в систему";
+    $("st-starthidden-h").textContent = "Тихий запуск: браузер не открывается, раздачи работают. Действует на запуск при входе в систему";
+    $("fs-window").hidden = true;
+    $("st-notify-t").textContent = "Показывать уведомление, когда загрузка завершена или раздача остановлена лимитом";
+    $("st-assoc-h").textContent = "Чтобы файлы .torrent и magnet-ссылки (в том числе из браузера) сразу открывались в Equinox, сделайте его программой по умолчанию.";
+  }
+
   // A magnet link or .torrent file opened from outside the app (Explorer, a second launch) lands
   // here instead of being added at once, so it shows up in the same dialog as anything dropped or
   // typed by hand.
   async function checkPendingAdd() {
-    if (!window.__equinoxDesktop) return;
+    if (!window.__equinoxDesktop && !window.__equinoxBrowserApp) return;
     let items;
     try { items = await api("GET", "/api/pending-add" + (ADD_WINDOW ? "?for=window" : "")); } catch (_) { return; }
     if (!items || !items.length) return;
@@ -2396,7 +2429,13 @@
   });
   $("dlg-add").addEventListener("cancel", (ev) => { if (adBusy) ev.preventDefault(); });
   $("dlg-add").addEventListener("close", () => { // in the window made for adding, closing the dialog is closing the window
-    if (ADD_WINDOW) setTimeout(() => { if (!$("dlg-add").open) { if (typeof window.closeAddWindow === "function") window.closeAddWindow(); else window.close(); } }, 500);
+    if (ADD_WINDOW) setTimeout(() => {
+      if ($("dlg-add").open) return;
+      if (typeof window.closeAddWindow === "function") return window.closeAddWindow();
+      window.close();
+      // a browser tab opened by the Linux program cannot close itself: it becomes the list of torrents
+      setTimeout(() => location.replace("/"), 300);
+    }, 500);
   });
   $("dlg-add").addEventListener("close", () => { // forget what was staged but not added
     for (const e of adItems) if (e.stage) api("DELETE", `/api/stage/${e.stage}`).catch(() => {});
@@ -2652,7 +2691,7 @@
     system(s, isReset) {
       $("st-starthidden").checked = s.startHidden !== false; $("st-closetray").checked = s.closeToTray !== false; $("st-mintray").checked = !!s.minimizeToTray;
       $("st-remwin").checked = !!s.rememberWindow; $("st-notify").checked = s.notifyOnComplete !== false;
-      if (isReset && window.__equinoxDesktop) $("st-autostart").checked = false;
+      if (isReset && SYSTEM_SECTION) $("st-autostart").checked = false;
     },
   };
   // "Сбросить раздел к умолчаниям": the fields get the defaults, nothing is saved until "Сохранить"
@@ -2669,9 +2708,9 @@
     for (const r of document.querySelectorAll('input[name="lg"]')) r.checked = r.value === window.__langPref;
     for (const id of Object.keys(FILL)) FILL[id](settings);
     $("st-autoupdate").checked = settings.autoUpdateCheck !== false;
-    $("sn-system").hidden = !window.__equinoxDesktop;
+    $("sn-system").hidden = !SYSTEM_SECTION;
     $("st-wizard").title = window.__equinoxDesktop ? "Пошаговая помощь: папки, скорость, порт, запуск с Windows" : "Пошаговая помощь: папки, скорость, порт";
-    if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
+    if (SYSTEM_SECTION && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
     openLabelRows();
     setSearch.value = ""; applySearch();
     openSection();
@@ -2750,7 +2789,7 @@
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"), routerAddress: $("st-router").value.trim(),
         ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
-      if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
+      if (SYSTEM_SECTION && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);
         if (err) { toast("Не удалось изменить автозапуск: " + err, true); }
       }
@@ -2769,6 +2808,7 @@
     if (typeof window.registerHandlers !== "function") return;
     const err = await window.registerHandlers();
     if (err) toast("Не удалось зарегистрировать приложение: " + err, true);
+    else if (BROWSER_APP) toast("Equinox открывает файлы .torrent и magnet-ссылки");
   };
 
   const EN_NAMES = { "Переносить завершённые загрузки в": "Move finished downloads to", "Папка автодобавления": "Watch folder", "Сохранять копии .torrent файлов в": "Keep copies of .torrent files in" };
@@ -3394,7 +3434,7 @@
   // The tray menu's "Настройки": the desktop program opens the settings of a window that exists (openSettingsNow), or
   // makes the window with #settings in its address.
   window.openSettingsNow = () => { if (!ADD_WINDOW) $("btn-settings").click(); };
-  if (location.hash === "#settings") {
+  if (location.hash === "#settings" || linkSettings) {
     history.replaceState(null, "", location.pathname + location.search);
     setTimeout(window.openSettingsNow, 600);
   }

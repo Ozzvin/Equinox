@@ -46,6 +46,7 @@ type Server struct {
 	extraHosts []string // host names allowed in open mode besides the usual ones
 	fixedPort  int      // the torrent port given at start (-torrent-port), 0 = the setting rules
 	places     []Place  // the folders a container is given, by the names its system shows (-place); none = the whole disk
+	desktop    Desktop  // the desktop program whose window is the user's own browser (Linux), see SetBrowserApp
 }
 
 // SetOpen puts the server in open mode, for running behind a proxy that signs the user in (Umbrel's app proxy
@@ -105,6 +106,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("window.__equinoxToken = \"" + OpenToken + "\";\n"))
 			// on another machine (Umbrel): the page offers nothing that opens a file manager there
 			_, _ = w.Write([]byte("window.__equinoxRemote = true;\n"))
+		}
+		if s.desktop != nil {
+			_, _ = w.Write([]byte("window.__equinoxBrowserApp = true;\n"))
 		}
 		if len(s.places) > 0 { // before the page's first request: it shows every path by these names
 			b, _ := json.Marshal(s.places)
@@ -178,6 +182,7 @@ func (s *Server) authorised(r *http.Request) bool {
 }
 
 func (s *Server) routes() {
+	s.desktopRoutes()
 	s.mux.HandleFunc("GET /api/torrents", s.list)
 	s.mux.HandleFunc("POST /api/torrents", s.add)
 	s.mux.HandleFunc("DELETE /api/torrents/{hash}", s.remove)

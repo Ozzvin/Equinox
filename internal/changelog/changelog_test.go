@@ -95,7 +95,8 @@ func TestEmbeddedChangelogMatchesTheVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v := strings.TrimSpace(string(raw)); entries[0].Version != v {
+	// an rc or beta build (1.1.0-rc18) carries the entry of the version it leads to, as "installed" does
+	if v := strings.TrimSpace(string(raw)); entries[0].Version != Base(v) {
 		t.Errorf("the newest entry of CHANGELOG.md is %s, the version is %s", entries[0].Version, v)
 	}
 }
