@@ -617,6 +617,7 @@
   // folder starts open (closed, the tab would show a single row).
   const dirOpen = new Map(); // hash -> Set of folder paths ("Root/sub/") the person opened
   const openOf = (hash) => { let s = dirOpen.get(hash); if (!s) dirOpen.set(hash, (s = new Set())); return s; };
+  const rootShown = new Set(); // hashes whose files were shown once: the root folder is opened only then, and may be closed after
   // the folders of a tree that are closed now: every folder that was not opened
   function closedDirs(tree, open) {
     const closed = new Set();
@@ -736,7 +737,10 @@
     if (!cur() || cur().hash !== t.hash) return;
     const box = $("files"), open = openOf(t.hash);
     const tree = buildFileTree(files);
-    if (!open.size && tree.dirs.size === 1 && !tree.files.length) open.add([...tree.dirs.values()][0].path); // the root folder, the first time
+    if (!rootShown.has(t.hash)) { // the root folder, the first time
+      rootShown.add(t.hash);
+      if (tree.dirs.size === 1 && !tree.files.length) open.add([...tree.dirs.values()][0].path);
+    }
     const closed = closedDirs(tree, open);
     const key = t.hash + ":" + files.length + ":" + t.sequential + ":" + [...closed].sort().join("|");
     // folders and their files, for the selection and the priority of a whole folder
@@ -1539,7 +1543,17 @@
   });
   $("files").addEventListener("click", (e) => {
     const chev = e.target.closest("[data-toggle]");
-    if (chev) { const t = cur(); if (!t) return; const o = openOf(t.hash), p = chev.dataset.toggle; o.has(p) ? o.delete(p) : o.add(p); renderFiles(); return; }
+    if (chev) {
+      const t = cur(); if (!t) return;
+      const o = openOf(t.hash), p = chev.dataset.toggle;
+      if (o.has(p)) {
+        o.delete(p);
+        // a closed folder hides its files: they leave the selection, unless the whole folder is chosen (its row shows that)
+        const idx = dirIdx.get(p) || [];
+        if (!idx.every((i) => fileSel.has(i))) idx.forEach((i) => fileSel.delete(i));
+      } else o.add(p);
+      renderFiles(); return;
+    }
     if (e.target.closest("select, button, option")) return;
     const row = e.target.closest(".file"); if (!row) return;
     // a double click on a file shows it in Explorer, as a double click on a torrent does (with Shift or Ctrl it only selects)
