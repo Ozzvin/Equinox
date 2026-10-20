@@ -10,6 +10,7 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
 
+	"github.com/Ozzvin/equinox/internal/buildinfo"
 	"github.com/Ozzvin/equinox/internal/core"
 )
 
@@ -70,6 +71,10 @@ func TestStageByLink(t *testing.T) {
 }
 
 func TestChangelogEndpoint(t *testing.T) {
+	// on Linux the 1.0.x entries, written for Windows alone, are not shown, and the list would be empty
+	old := buildinfo.Packaging
+	buildinfo.Packaging = "windows"
+	t.Cleanup(func() { buildinfo.Packaging = old })
 	e := setup(t)
 	r := e.do(t, "GET", "/api/changelog", nil, nil)
 	defer r.Body.Close()
