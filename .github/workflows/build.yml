@@ -177,7 +177,11 @@ jobs:
       - name: Check the desktop .deb
         env:
           BROWSER: "true"
+          VERSION_IN: ${{ inputs.version }}
         run: |
+          # an rc build is a test build: its autostart entry is kept apart from the installed program's (buildinfo.Channel)
+          auto=~/.config/autostart/equinox.desktop
+          case "$VERSION_IN" in *-*) auto=~/.config/autostart/equinox-dev.desktop ;; esac
           sudo apt-get install -y ./dist/equinox_*_amd64.deb
           test -x /usr/bin/equinox
           grep -q 'x-scheme-handler/magnet' /usr/share/applications/equinox.desktop
@@ -190,9 +194,9 @@ jobs:
           curl -fsS "$base/session.js" | grep -q '__equinoxBrowserApp = true'
           magnet='magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=check'
           curl -fsS -X PUT -H "Authorization: Bearer $token" -d '{"on":true}' "$base/api/desktop/autostart"
-          grep -q '^Exec=/usr/bin/equinox -hidden$' ~/.config/autostart/equinox.desktop
+          grep -q '^Exec=/usr/bin/equinox -hidden$' "$auto"
           curl -fsS -X PUT -H "Authorization: Bearer $token" -d '{"on":false}' "$base/api/desktop/autostart"
-          test ! -e ~/.config/autostart/equinox.desktop
+          test ! -e "$auto"
           equinox -state "$st" "$magnet"
           curl -fsS -H "Authorization: Bearer $token" "$base/api/pending-add?for=window" | grep -q 0123456789abcdef0123456789abcdef01234567
           kill -TERM $pid
