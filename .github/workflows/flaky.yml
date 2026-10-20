@@ -9,7 +9,7 @@ on:
     branches: [flaky-tests]
 
 env:
-  RUN: "TestAddedPeerIsUsed|TestTrackAvailabilityRemembersASeedThatWasSeen|TestSkippedFileStaysOffTheDisk|TestResumeWithFilesGoneDownloadsThemAgain|TestMissingFile|TestPreparingTheDiskDoesNotMakeAMissingFileAgain"
+  RUN: "TestAddedPeerIsUsed|TestTrackAvailabilityRemembersASeedThatWasSeen|TestSkippedFileStaysOffTheDisk|TestResumeWithFilesGoneDownloadsThemAgain|TestMissingFile|TestPreparingTheDiskDoesNotMakeAMissingFileAgain|TestDeleteFileWhileTheTorrentIsBeingChecked"
   COUNT: "25"
   RACE: "-race"
 

@@ -2688,6 +2688,7 @@
     changelogShown = true;
     // the latest versions are shown, the older ones are folded behind a button
     const SHOWN = 3, rel = d.releases || [];
+    if (!rel.length) { $("up-log").innerHTML = `<p class="muted small" style="padding:8px 12px">${L("Записей пока нет", "No entries yet")}</p>`; return; }
     const item = (r) => `<details class="cl-item"><summary><b>${esc(r.version)}</b>${r.version === d.current ? `<span class="badge">${L("установлена", "installed")}</span>` : ""}</summary><div class="cl-body">${mdLite(r.body)}</div></details>`;
     const rest = rel.slice(SHOWN);
     $("up-log").innerHTML = rel.slice(0, SHOWN).map(item).join("") + (rest.length

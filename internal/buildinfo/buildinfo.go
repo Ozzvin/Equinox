@@ -4,12 +4,27 @@ package buildinfo
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 )
 
 // Version is the release number, "dev" for a build made without the scripts.
 var Version = "dev"
+
+// Packaging names a build that its system alone does not tell apart: the Docker workflow sets it to "umbrel"
+// (-ldflags "-X github.com/Ozzvin/equinox/internal/buildinfo.Packaging=umbrel") for the image Umbrel runs. Empty
+// for the Windows build and for the Linux archives and packages.
+var Packaging = ""
+
+// Platform is what the changelog is shown for: "umbrel" for the Docker image, otherwise the system ("windows",
+// "linux").
+func Platform() string {
+	if Packaging != "" {
+		return Packaging
+	}
+	return runtime.GOOS
+}
 
 // BetaPrefix starts the version of a test build ("beta-1.0.17"): the number is the release it is heading
 // for, and the prefix keeps it apart from that release everywhere the version is shown.
