@@ -634,9 +634,13 @@ func (s *Server) trackerIcon(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
-// changelog is what each version changed, from the CHANGELOG.md the program carries: the newest first.
+// changelog is what each version changed, from the CHANGELOG.md the program carries: the newest first, only the lines
+// that concern this platform. "current" is the entry of this build ("1.1.0" for 1.1.0-rc17).
 func (s *Server) changelog(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"current": buildinfo.Version, "releases": changelog.Parse(equinox.Changelog)})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"current":  changelog.Base(buildinfo.Version),
+		"releases": changelog.For(changelog.Parse(equinox.Changelog), buildinfo.Platform()),
+	})
 }
 
 // stageURL downloads the .torrent a link leads to and puts it on the list like a file that was uploaded:
