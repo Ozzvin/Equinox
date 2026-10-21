@@ -56,9 +56,9 @@ Download the file you need from the [Releases](https://github.com/Ozzvin/equinox
 
 | File | What it is |
 |---|---|
-| `Equinox-Setup-<version>.exe` | the installer; by default it installs for the current user, without administrator rights |
-| `Equinox-pc-<version>.zip` | a portable desktop version: window and tray, no installation needed |
-| `Equinox-server-<version>.zip` | a server version without a window: the interface opens in a browser |
+| `Equinox-Setup.exe` | the installer; by default it installs for the current user, without administrator rights |
+| `Equinox-pc.zip` | a portable desktop version: window and tray, no installation needed |
+| `Equinox-server.zip` | a server version without a window: the interface opens in a browser |
 
 The installer can also be run "for all users" (a choice on its first page, or run it as administrator): the program is then placed in `Program Files`, and auto-update asks for confirmation in a Windows window (UAC).
 

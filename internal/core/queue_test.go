@@ -14,6 +14,7 @@ func queuedOf(m *Manager, hash string) int {
 }
 
 func TestQueueLimitsActiveDownloadsAndReorders(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	if err := m.SetMaxActiveDownloads(1); err != nil {

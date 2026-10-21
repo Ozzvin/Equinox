@@ -81,6 +81,7 @@ func TestRankSeeds(t *testing.T) {
 // With a limit of one place, of three finished torrents one shares and the other two wait in line, showing
 // their place; taking the limit off lets all of them share.
 func TestSeedLimitQueuesTheRest(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	var hashes []string
@@ -138,6 +139,7 @@ func rankCopy(c []seedCand, limit int) map[metainfo.Hash]int {
 // a map that is published to the manager without the lock (the race detector, and in a bad moment a
 // "concurrent map read and map write" crash, catch it).
 func TestApplySeedQueueDoesNotReadPublishedMapsUnlocked(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxActiveSeeds = 1 })
 	for i := 0; i < 3; i++ {

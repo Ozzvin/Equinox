@@ -70,6 +70,7 @@ func fileDone(t *testing.T, m *Manager, hash string) []int64 {
 // A check of chosen files goes through their pieces only: a spoiled file that was chosen is found, one that was not is
 // left alone.
 func TestRecheckOfChosenFiles(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	hash, paths := threeFilesOnDisk(t, m, dir)
@@ -138,6 +139,7 @@ func TestFileCheckedShowsOnlyChosenFiles(t *testing.T) {
 // A check of chosen files cut short goes on with the same files after a restart; checks.json of the older form (a
 // number per torrent) is still read.
 func TestRecheckOfChosenFilesGoesOnAfterARestart(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	hash, paths := threeFilesOnDisk(t, m, dir)

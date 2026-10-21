@@ -24,7 +24,7 @@ Open the torrent port (51413, TCP and UDP by default) in your firewall and route
 Packages (.deb for Debian/Ubuntu, .rpm for Fedora/openSUSE) install the same program as a systemd service
 that runs as the user "equinox" and keeps its state in /var/lib/equinox (downloads: /var/lib/equinox/downloads):
 
-    sudo apt install ./equinox-server_<version>_amd64.deb      (or: sudo dnf install ./equinox-server-<version>.rpm)
+    sudo apt install ./Equinox-server-linux-amd64.deb      (or: sudo dnf install ./Equinox-server-linux-amd64.rpm)
     sudo systemctl enable --now equinox-server
     sudo cat /var/lib/equinox/ui-url                            the link with the access key
 

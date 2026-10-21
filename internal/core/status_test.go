@@ -68,6 +68,7 @@ func TestTorrentOptionsAndStatusExtras(t *testing.T) {
 // available somewhere among the connected peers (LastFullAvailable), even though the local copy is still
 // empty. Both must be remembered once seen, and must stay set afterwards even if that peer then leaves.
 func TestTrackAvailabilityRemembersASeedThatWasSeen(t *testing.T) {
+	slow(t)
 	dirA, dirB := t.TempDir(), t.TempDir()
 	a := newManager(t, dirA, nil)
 	tp := makeTorrent(t, dirA, "avail.bin", 200<<10)

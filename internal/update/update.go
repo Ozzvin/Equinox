@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Ozzvin/equinox/internal/buildinfo"
+	"github.com/Ozzvin/equinox/internal/changelog"
 )
 
 const cacheTTL = time.Hour
@@ -31,12 +33,40 @@ const cacheTTL = time.Hour
 // Caps on what a release may hand us. Nothing here is trusted to be the size it claims: a
 // Content-Length is the server's word, so the readers below are bounded instead.
 const (
-	maxSetupBytes   = 256 << 20 // the installer; it is ~10 MB today
-	maxSumsBytes    = 1 << 20   // SHA256SUMS.txt is a handful of lines
-	maxReleaseBytes = 8 << 20   // the release JSON from the GitHub API
-	maxVersionBytes = 64        // the mirror's version.txt: "v1.0.35"
-	maxNotesBytes   = 256 << 10 // the mirror's notes.md, if it has one
+	maxSetupBytes    = 256 << 20 // the installer; it is ~10 MB today
+	maxSumsBytes     = 1 << 20   // SHA256SUMS.txt is a handful of lines
+	maxReleaseBytes  = 8 << 20   // the release JSON from the GitHub API
+	maxVersionBytes  = 64        // the mirror's version.txt: "v1.0.35"
+	maxNotesBytes    = 256 << 10 // the mirror's notes.md, if it has one
+	maxManifestBytes = 64 << 10  // latest.json: a line per platform
 )
+
+// manifestName is the release's list of the version each platform's files really are, keyed as buildinfo.Platform
+// names them: {"windows": "1.1.1", "umbrel": "1.1.0", "linux": "1.1.1"}. A release carries the files of every
+// platform, and those of a platform it did not change are the previous release's as they were, so the tag is the
+// version of none of them in particular. A release without it (all of them up to 1.1.0) is one version throughout:
+// its tag. The mirror keeps a copy beside version.txt.
+const manifestName = "latest.json"
+
+// errNotFound is a file the server says it does not have (404), as opposed to one it could not give.
+var errNotFound = errors.New("not found")
+
+// manifestVersion reads this platform's version out of a manifest: "" when the release has nothing for it.
+func manifestVersion(b []byte) (string, error) {
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return "", fmt.Errorf("update: %s: %w", manifestName, err)
+	}
+	v, _ := m[buildinfo.Platform()].(string)
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	if v != "" && !plainVersion(v) {
+		return "", fmt.Errorf("update: %s: %q is not a version", manifestName, v)
+	}
+	return v, nil
+}
+
+// plainVersion is a release number such as "1.1.0", the only kind a release is.
+func plainVersion(v string) bool { return v != "" && strings.Trim(v, "0123456789.") == "" }
 
 // githubWait is how long the check waits for the GitHub API before it asks the mirror. A blocked GitHub often
 // does not refuse at once but lets the connection hang, and the whole check has to fit in the caller's time.
@@ -53,7 +83,7 @@ var MirrorBase = "https://equinoxtorrent.com/download/"
 // Info describes a GitHub release that is newer than the version currently running.
 type Info struct {
 	Version string // e.g. "1.0.6", without the leading "v"
-	Notes   string // the release's own description (Markdown)
+	Notes   string // what changed, from the release's description (Markdown, see changelog.ReleaseNotes)
 	URL     string // the release's page, for a manual download
 
 	setupURL  string
@@ -65,12 +95,12 @@ type Info struct {
 	mirrorSumsURL  string
 }
 
-// legacySetupName is the installer's name in the releases before file names carried the version. Releases up
-// to 1.0.45 also published the installer under it for the copies older than 1.0.17, which look for exactly this
-// name; later ones do not, and it is only a fallback here for a release or mirror that has no versioned one.
+// legacySetupName is the installer's name in the releases before 1.0.17 and again from the one after 1.1.0, whose
+// files carry no version (latest.json tells it). Releases up to 1.0.45 also published the installer under it for the
+// copies older than 1.0.17, which look for exactly this name; 1.0.46 to 1.1.0 did not.
 const legacySetupName = "Equinox-Setup.exe"
 
-// versionedSetupName is the installer's name in a release: "Equinox-Setup-1.0.17.exe".
+// versionedSetupName is the installer's name in the releases 1.0.17 to 1.1.0: "Equinox-Setup-1.0.17.exe".
 func versionedSetupName(version string) string { return "Equinox-Setup-" + version + ".exe" }
 
 type ghAsset struct {
@@ -166,17 +196,29 @@ func fetch(ctx context.Context) (*Info, error) {
 	return minfo, nil
 }
 
-// fetchMirror reads the latest release from the site's mirror: its version from version.txt, the installer's
-// name from the release's SHA256SUMS.txt (the versioned name if it is listed, else the old fixed one), and the
-// description from notes.md when the mirror has one.
+// fetchMirror reads the latest release from the site's mirror: its version from latest.json, or from version.txt
+// when the mirror has no manifest, the installer's name from the release's SHA256SUMS.txt (the versioned name if it
+// is listed, else the old fixed one), and the description from notes.md when the mirror has one.
 func fetchMirror(ctx context.Context) (*Info, error) {
-	tag, err := getSmall(ctx, MirrorBase+"version.txt", maxVersionBytes)
-	if err != nil {
+	var latest string
+	manifest, err := getSmall(ctx, MirrorBase+manifestName, maxManifestBytes)
+	switch {
+	case err == nil:
+		if latest, err = manifestVersion(manifest); err != nil || latest == "" {
+			return nil, err
+		}
+	case errors.Is(err, errNotFound):
+		// a release before the manifest, or the site's copy script before it: one version throughout
+		tag, err := getSmall(ctx, MirrorBase+"version.txt", maxVersionBytes)
+		if err != nil {
+			return nil, err
+		}
+		if latest = strings.TrimPrefix(strings.TrimSpace(string(tag)), "v"); !plainVersion(latest) {
+			return nil, fmt.Errorf("update: the mirror's version.txt is not a version: %q", tag)
+		}
+	default:
+		// the tag may be ahead of this platform's files: without the manifest the check does not guess
 		return nil, err
-	}
-	latest := strings.TrimPrefix(strings.TrimSpace(string(tag)), "v")
-	if latest == "" || strings.Trim(latest, "0123456789.") != "" {
-		return nil, fmt.Errorf("update: the mirror's version.txt is not a version: %q", tag)
 	}
 	if compareVersions(latest, buildinfo.Version) <= 0 {
 		return nil, nil
@@ -194,7 +236,7 @@ func fetchMirror(ctx context.Context) (*Info, error) {
 	}
 	info := &Info{Version: latest, URL: MirrorBase + name, setupURL: MirrorBase + name, setupName: name, sumsURL: MirrorBase + "SHA256SUMS.txt"}
 	if notes, err := getSmall(ctx, MirrorBase+"notes.md", maxNotesBytes); err == nil {
-		info.Notes = string(notes) // optional: without it the page says the description is not given
+		info.Notes = changelog.ReleaseNotes(string(notes), buildinfo.Platform()) // optional: without it the page says the description is not given
 	}
 	return info, nil
 }
@@ -211,6 +253,9 @@ func getSmall(ctx context.Context, url string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	defer res.Body.Close()
+	if res.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("update: %s: %w", filepath.Base(url), errNotFound)
+	}
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("update: %s: %s", filepath.Base(url), res.Status)
 	}
@@ -244,10 +289,23 @@ func fetchGitHub(ctx context.Context) (*Info, error) {
 		return nil, err
 	}
 	latest := strings.TrimPrefix(rel.TagName, "v")
+	for _, a := range rel.Assets {
+		if a.Name != manifestName {
+			continue
+		}
+		// read where the release is read: when GitHub's downloads fail, so does the check, and the mirror is asked
+		manifest, err := getSmall(ctx, a.URL, maxManifestBytes)
+		if err != nil {
+			return nil, err
+		}
+		if latest, err = manifestVersion(manifest); err != nil || latest == "" {
+			return nil, err // nothing for this platform in the release
+		}
+	}
 	if compareVersions(latest, buildinfo.Version) <= 0 {
 		return nil, nil // already on the latest version (or newer, e.g. a dev build)
 	}
-	info := &Info{Version: latest, Notes: rel.Body, URL: rel.HTMLURL}
+	info := &Info{Version: latest, Notes: changelog.ReleaseNotes(rel.Body, buildinfo.Platform()), URL: rel.HTMLURL}
 	for _, a := range rel.Assets {
 		switch a.Name {
 		case versionedSetupName(latest):

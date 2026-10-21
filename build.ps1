@@ -2,13 +2,13 @@
   Собирает две версии Equinox, каждая в своём архиве:
   для ПК (окно и трей) и серверную (без окна).
 
-    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup-<версия>.exe,
-                             архивы Equinox-pc-<версия>.zip и Equinox-server-<версия>.zip
+    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup.exe,
+                             архивы Equinox-pc.zip и Equinox-server.zip
     .\build.ps1 -SkipTests   то же без запуска тестов (быстрее)
 
   Результат лежит в папке dist (она не входит в репозиторий).
 #>
-param([switch]$SkipTests)
+param([switch]$SkipTests, [ValidateSet('amd64', 'arm64')][string]$Arch = 'amd64')
 $Version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot VERSION) -Raw).Trim()
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +36,12 @@ if (-not $SkipTests) {
     Check "go test"
 }
 
+# The tests above run on the machine itself; the other architecture is cross-compiled, and its files carry
+# "-arm64" in their names, the x64 ones nothing.
+$env:GOOS = 'windows'
+$env:GOARCH = $Arch
+$Suffix = if ($Arch -eq 'arm64') { '-arm64' } else { '' }
+
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 # File names carry the version, so a rebuild for a new version would leave the previous one's files beside
 # them (and in the checksums): clear what this script makes. dist\beta and the like are not touched.
@@ -57,7 +63,7 @@ $iscc = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($iscc) {
     $ver = $Version
-    & $iscc /Qp "/DAppVersion=$ver" installer\equinox.iss
+    & $iscc /Qp "/DAppVersion=$ver" "/DArch=$Arch" installer\equinox.iss
     Check "сборка установщика"
 } else {
     Write-Host "Inno Setup не найден, установщик пропущен (winget install JRSoftware.InnoSetup)" -ForegroundColor Yellow
@@ -104,10 +110,12 @@ function Pack($exe, $nameInZip, $readme, $zip) {
     Compress-Archive -Force -Path (Join-Path $stage '*') -DestinationPath $zip
     Remove-Item -Recurse -Force $stage
 }
-# The portable programs carry the version in their file name too ("Equinox 1.0.17.exe"); the installed
-# one stays Equinox.exe, which the shortcuts, autostart and file associations point at.
-Pack dist\Equinox.exe "Equinox $Version.exe" $pcReadme "dist\Equinox-pc-$Version.zip"
-Pack dist\Equinox-server.exe "Equinox-server $Version.exe" $serverReadme "dist\Equinox-server-$Version.zip"
+# The files of a release carry no version (since the release after 1.1.0): a release holds the files of every platform,
+# some of them taken over unchanged from the one before, and latest.json says which version each really is; the links
+# releases/latest/download/<file> stay the same. The portable programs inside carry it ("Equinox 1.0.17.exe"); the
+# installed one stays Equinox.exe, which the shortcuts, autostart and file associations point at.
+Pack dist\Equinox.exe "Equinox $Version.exe" $pcReadme "dist\Equinox-pc$Suffix.zip"
+Pack dist\Equinox-server.exe "Equinox-server $Version.exe" $serverReadme "dist\Equinox-server$Suffix.zip"
 
 Step "контрольные суммы"
 $sums = Get-ChildItem dist -File | Where-Object { $_.Name -like 'Equinox*' -and $_.Extension -in ".exe", ".zip" } | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
@@ -115,4 +123,4 @@ Set-Content -Encoding ASCII -Path dist\SHA256SUMS.txt -Value $sums
 
 Write-Host ""
 Get-ChildItem dist | Select-Object Name, @{n = 'МБ'; e = { [math]::Round($_.Length / 1MB, 1) }} | Format-Table -AutoSize
-Write-Host "Готово: dist\Equinox-Setup-$Version.exe, Equinox-pc-$Version.zip, Equinox-server-$Version.zip" -ForegroundColor Green
+Write-Host "Готово ($Version, $Arch): dist\Equinox-Setup$Suffix.exe, Equinox-pc$Suffix.zip, Equinox-server$Suffix.zip" -ForegroundColor Green

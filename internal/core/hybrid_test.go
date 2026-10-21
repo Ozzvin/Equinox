@@ -150,6 +150,7 @@ func TestHybridTorrentFilesAreWrittenWhereTheyBelong(t *testing.T) {
 // (and downloaded again); a new torrent, or one checked once already, is not checked again. The mark comes when the
 // check is over, not while it waits its turn, and the waiting check is already in checks.json for the next start.
 func TestOldV2TorrentIsCheckedOnce(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	mi, _ := hybridTorrent(t, dir)
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })

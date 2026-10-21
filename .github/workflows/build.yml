@@ -1,27 +1,100 @@
 name: Build
-run-name: Build ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
+run-name: Build ${{ inputs.mode }} ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
 
+# What a run does is picked by "mode":
+#   check   (default) builds and tests, leaves the files as artifacts of the run and publishes nothing;
+#   release builds the platforms ticked below, carries the files of the others over from the previous release and
+#           makes a DRAFT release v<version> (files of every platform, latest.json, SHA256SUMS.txt, a description from
+#           .github/release/body.md and CHANGELOG.md). It is published by hand, after reading it;
+#   beta    builds the same, tests only what is quick (go test -short, no race detector; "full_tests" brings the
+#           release's full set back) and replaces the ONE standing pre-release "pre-release" with the result, so the
+#           list of releases stays clean. A pre-release is not what the update check takes as the latest release.
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Режим: check — только собрать; release — черновик релиза; beta — обновить pre-release"
+        required: true
+        type: choice
+        options: [check, release, beta]
+        default: check
       version:
-        description: "Версия для сборки (пусто — взять из файла VERSION)"
+        description: "Версия (пусто — из файла VERSION; для беты — VERSION-beta.<номер запуска>)"
         required: false
         type: string
+      windows:
+        description: "Собрать Windows (x64 и ARM64); иначе файлы берутся из прошлого релиза"
+        required: false
+        type: boolean
+        default: true
+      linux:
+        description: "Собрать Linux (x64 и arm64); иначе файлы берутся из прошлого релиза"
+        required: false
+        type: boolean
+        default: true
+      umbrel:
+        description: "В latest.json: образ Docker этой версии опубликован (Umbrel — на эту версию)"
+        required: false
+        type: boolean
+        default: true
+      full_tests:
+        description: "Для беты: полные тесты, как у релиза (go test -race)"
+        required: false
+        type: boolean
+        default: false
 
-# Building needs nothing but reading the code: the release is published by hand afterwards.
+# Building needs nothing but reading the code; only the jobs that publish ask for more (below).
 permissions:
   contents: read
 
 # The version reaches the scripts through the environment, never written into their text, and must look like one:
 # a quote in the field would otherwise end the string and run whatever follows it.
 jobs:
+  # The version and what the run does, checked once for all the jobs below.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      quick: ${{ steps.v.outputs.quick }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        env:
+          MODE: ${{ inputs.mode }}
+          VERSION_IN: ${{ inputs.version }}
+          WINDOWS: ${{ inputs.windows }}
+          FULL_TESTS: ${{ inputs.full_tests }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          v="$VERSION_IN"
+          if [ -z "$v" ]; then
+            v=$(tr -d '[:space:]' < VERSION)
+            [ "$MODE" != beta ] || v="$v-beta.$RUN_NUMBER"
+          fi
+          case "$MODE" in
+            release) re='^[0-9]+\.[0-9]+\.[0-9]+$' ;;
+            beta) re='^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' ;;
+            *) re='^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+|-beta\.[0-9]+)?$' ;;
+          esac
+          echo "$v" | grep -Eq "$re" || { echo "not a version for the mode $MODE: $v"; exit 1; }
+          # The clients before the manifest take a release's version from its tag, and the tag must be that of the
+          # Windows file: a release without a new Windows file would offer them the old one again and again.
+          if [ "$MODE" = release ] && [ "$WINDOWS" != true ]; then
+            echo "a release must build Windows too (older clients read the version from the tag)"; exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          # a beta is tested quickly unless asked otherwise; a release and a check always run everything
+          if [ "$MODE" = beta ] && [ "$FULL_TESTS" != true ]; then echo "quick=true" >> "$GITHUB_OUTPUT"; else echo "quick=false" >> "$GITHUB_OUTPUT"; fi
+
   # The same tests test.yml runs on every push to main, run again here: that workflow is triggered by push, this
   # one by hand (at release time, see docs/architecture.md), so nothing otherwise makes sure this exact commit's
   # tests are green before it is built and released — v1.0.26 was once built and nearly released on a red run,
   # caught only because someone happened to be watching. CGO_ENABLED is left unset (not "0", unlike the build
   # jobs below): the race detector needs cgo, and windows-latest has a C compiler in PATH for it.
+  # A quick run (a beta) skips the race detector and the tests marked slow(t) (go test -short).
   test:
+    needs: prepare
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,9 +105,13 @@ jobs:
         shell: bash
         run: test -z "$(gofmt -l cmd internal)"
       - run: go vet ./...
-      - run: go test -race -count=1 ./...
+      - if: needs.prepare.outputs.quick != 'true'
+        run: go test -race -count=1 ./...
+      - if: needs.prepare.outputs.quick == 'true'
+        run: go test -short -count=1 ./...
 
   test-linux:
+    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,11 +119,21 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go vet ./...
-      - run: go test -race -count=1 ./...
+      - if: needs.prepare.outputs.quick != 'true'
+        run: go test -race -count=1 ./...
+      - if: needs.prepare.outputs.quick == 'true'
+        run: go test -short -count=1 ./...
 
-  build:
-    needs: [test, test-linux]
+  # Windows, one job per architecture. Both are cross-built on the same runner (build.ps1 -Arch); the tests have run
+  # in the jobs above, so they are skipped here. x64 files have no suffix in their names, ARM64 ones "-arm64".
+  build-windows:
+    if: inputs.windows
+    needs: [prepare, test, test-linux]
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
     env:
       # windows-latest has a C compiler in PATH (unlike the maintainer's own dev machine), so
       # without this, `go build` silently enables cgo here and links against MinGW's runtime
@@ -61,34 +148,38 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
       - name: Set version
-        if: inputs.version != ''
         shell: pwsh
         env:
-          VERSION_IN: ${{ inputs.version }}
-        run: |
-          if ($env:VERSION_IN -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$') { throw "not a version: $env:VERSION_IN" }
-          Set-Content -Path VERSION -Value $env:VERSION_IN
-      - name: Build (gofmt, vet, tests, exe, installer, archives)
+          VERSION_IN: ${{ needs.prepare.outputs.version }}
+        run: Set-Content -Path VERSION -Value $env:VERSION_IN
+      - name: Build (gofmt, vet, exe, installer, archives)
         shell: pwsh
-        run: .\build.ps1
+        run: .\build.ps1 -SkipTests -Arch ${{ matrix.arch }}
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: equinox-${{ inputs.version || github.sha }}
+          name: files-windows-${{ matrix.arch }}
           path: |
-            dist/Equinox-Setup-*.exe
-            dist/Equinox-pc-*.zip
-            dist/Equinox-server-*.zip
-            dist/SHA256SUMS.txt
+            dist/Equinox-Setup*.exe
+            dist/Equinox-pc*.zip
+            dist/Equinox-server*.zip
           retention-days: 30
 
-  # Linux: the server as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml), and the
-  # desktop program (tray icon, the interface in the browser) as .deb/.rpm (deploy/linux/nfpm-desktop.yaml) and as an
-  # AppImage for the other distributions.
-  # It is built apart from the Windows job: no installer, no Inno Setup.
-  linux:
-    needs: [test, test-linux]
+  # Linux. The programs are built once per architecture (linux-bin); then every format is a job of its own, so the list
+  # of jobs of a run says which one failed ("Linux deb arm64", "Linux Flatpak amd64") and the others still finish.
+  # The server as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml), and the desktop
+  # program (tray icon, the interface in the browser) as .deb/.rpm (deploy/linux/nfpm-desktop.yaml) and as an AppImage
+  # for the other distributions. x64 adds the pacman packages and a Flatpak. No installer, no Inno Setup. The files
+  # carry the architecture and no version (see build.ps1): Equinox-server-linux-amd64.tar.gz, Equinox-linux-amd64.deb,
+  # Equinox-server-linux-arm64.rpm, Equinox-linux-amd64.AppImage. The checks install and start what was built; they run
+  # for x64 only, an arm64 package cannot be run on the runner.
+  linux-bin:
+    if: inputs.linux
+    needs: [prepare, test, test-linux]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
     env:
       CGO_ENABLED: "0"
     steps:
@@ -96,56 +187,83 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
-      # appimagetool and the AppImage runtimes, pinned by version and checksum
-      - name: Get appimagetool
-        run: |
-          mkdir -p tools
-          get() { curl -fsSL -o "tools/$1" "$2" && echo "$3  tools/$1" | sha256sum -c -; }
-          get appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
-          get runtime-x86_64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
-          get runtime-aarch64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-aarch64 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
-          chmod +x tools/appimagetool
-      - name: Build the archives and packages
+      - name: Build the programs and the icons
         env:
-          VERSION_IN: ${{ inputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
         run: |
-          v="$VERSION_IN"
-          [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
-          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$' || { echo "not a version: $v"; exit 1; }
-          mkdir -p dist stage/icons stage/pkg
+          mkdir -p stage/icons stage/pkg
           go run ./cmd/mkicons stage/icons
-          for arch in amd64 arm64; do
-            name=Equinox-server-linux-$arch-$v
-            mkdir -p stage/$name
-            GOOS=linux GOARCH=$arch go build -trimpath               -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v"               -o stage/$name/equinox-server ./cmd/equinox-server
-            cp LICENSE stage/$name/
-            cp deploy/linux/README.txt stage/$name/
-            tar -C stage -czf dist/$name.tar.gz $name
-            cp stage/$name/equinox-server stage/pkg/
-            GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o stage/pkg/equinox ./cmd/equinox
-            for p in deb rpm; do
-              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/
-              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p $p -t dist/
-            done
-            # AppImage: the program, its menu entry and icon in an AppDir, packed with the runtime of the architecture
-            case $arch in amd64) ai=x86_64 ;; arm64) ai=aarch64 ;; esac
-            app=stage/AppDir-$arch
-            mkdir -p $app/usr/bin $app/usr/share/icons/hicolor/256x256/apps
-            cp stage/pkg/equinox $app/usr/bin/
-            ln -sf usr/bin/equinox $app/AppRun
-            cp deploy/linux/desktop/equinox.desktop $app/
-            cp stage/icons/icon256.png $app/equinox.png
-            cp stage/icons/icon256.png $app/usr/share/icons/hicolor/256x256/apps/equinox.png
-            APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ai tools/appimagetool --no-appstream --runtime-file tools/runtime-$ai $app dist/Equinox-$v-$ai.AppImage
+          for cmd in equinox equinox-server; do
+            GOOS=linux GOARCH=$ARCH go build -trimpath -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$VERSION" -o stage/pkg/$cmd ./cmd/$cmd
           done
-          (cd dist && sha256sum *.tar.gz *.deb *.rpm *.AppImage > SHA256SUMS-linux.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-linux-${{ matrix.arch }}
+          path: stage
+          retention-days: 1
+
+  build-linux:
+    name: Linux ${{ matrix.format }} ${{ matrix.arch }}
+    if: inputs.linux
+    needs: [prepare, linux-bin]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, format: archive }
+          - { arch: arm64, format: archive }
+          - { arch: amd64, format: deb }
+          - { arch: arm64, format: deb }
+          - { arch: amd64, format: rpm }
+          - { arch: arm64, format: rpm }
+          - { arch: amd64, format: pacman }
+          - { arch: amd64, format: AppImage }
+          - { arch: arm64, format: AppImage }
+          - { arch: amd64, format: Flatpak }
+    env:
+      ARCH: ${{ matrix.arch }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bin-linux-${{ matrix.arch }}
+          path: stage
+      - run: |
+          chmod +x stage/pkg/*
+          mkdir -p dist
+
+      - name: Archive of the server
+        if: matrix.format == 'archive'
+        run: |
+          name=Equinox-server-linux-$ARCH
+          mkdir -p stage/$name
+          cp stage/pkg/equinox-server LICENSE deploy/linux/README.txt stage/$name/
+          tar -C stage -czf dist/$name.tar.gz $name
+
+      # .deb, .rpm and pacman: the same two nfpm files, the package format picked by -p
+      - uses: actions/setup-go@v5
+        if: contains(fromJSON('["deb","rpm","pacman"]'), matrix.format)
+        with:
+          go-version-file: go.mod
+      - name: Packages (nfpm)
+        if: contains(fromJSON('["deb","rpm","pacman"]'), matrix.format)
+        env:
+          FORMAT: ${{ matrix.format }}
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+          case $FORMAT in pacman) p=archlinux; ext=pkg.tar.zst ;; *) p=$FORMAT; ext=$FORMAT ;; esac
+          VERSION=$VERSION ARCH=$ARCH nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/Equinox-server-linux-$ARCH.$ext
+          VERSION=$VERSION ARCH=$ARCH nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p $p -t dist/Equinox-linux-$ARCH.$ext
+
       # Installs the amd64 .deb on the runner: the service user, the unit and the default file must come out right,
       # and the service must start and answer on its port.
-      - name: Check the .deb
+      - name: Check the server .deb
+        if: matrix.format == 'deb' && matrix.arch == 'amd64'
         run: |
-          sudo apt-get install -y ./dist/equinox-server_*_amd64.deb
+          sudo apt-get install -y ./dist/Equinox-server-linux-amd64.deb
           id equinox
           systemctl cat equinox-server >/dev/null
           test -f /etc/default/equinox-server
@@ -155,34 +273,18 @@ jobs:
           curl -fsS -o /dev/null http://127.0.0.1:9091/
           sudo apt-get remove -y equinox-server
           ! systemctl is-active equinox-server
-      # The same for the amd64 .rpm, in a Fedora container booted with systemd as its init. The package goes to
-      # /root: systemd mounts an empty tmpfs over /tmp, which would hide a file copied there.
-      - name: Check the .rpm (Fedora)
-        run: |
-          printf '%s\n' 'FROM fedora:latest' 'RUN dnf -y install systemd curl && dnf clean all' 'CMD ["/usr/sbin/init"]' |
-            docker build -q -t fedora-systemd -
-          docker run -d --name fedora --privileged fedora-systemd
-          docker cp dist/$(cd dist && ls equinox-server-*.x86_64.rpm) fedora:/root/equinox-server.rpm
-          f() { docker exec fedora sh -c "$1"; }
-          f 'systemctl is-system-running --wait || true'
-          f 'dnf -y install /root/equinox-server.rpm'
-          f 'id equinox && test -f /etc/default/equinox-server'
-          f 'systemctl start equinox-server'
-          f 'for i in $(seq 1 30); do test -s /var/lib/equinox/ui-url && break; sleep 1; done; systemctl is-active equinox-server'
-          f 'curl -fsS -o /dev/null http://127.0.0.1:9091/'
-          f 'dnf -y remove equinox-server'
-          f '! systemctl is-active equinox-server'
       # The desktop program's .deb: installs, starts in the tray (the runner has no session bus, so no icon: the program
       # must run on without it), and a second start hands a magnet link to it. BROWSER=true stands in for the browser.
       - name: Check the desktop .deb
+        if: matrix.format == 'deb' && matrix.arch == 'amd64'
         env:
           BROWSER: "true"
-          VERSION_IN: ${{ inputs.version }}
+          VERSION_IN: ${{ needs.prepare.outputs.version }}
         run: |
-          # an rc build is a test build: its autostart entry is kept apart from the installed program's (buildinfo.Channel)
+          # an rc or beta build is a test build: its autostart entry is kept apart from the installed program's (buildinfo.Channel)
           auto=~/.config/autostart/equinox.desktop
           case "$VERSION_IN" in *-*) auto=~/.config/autostart/equinox-dev.desktop ;; esac
-          sudo apt-get install -y ./dist/equinox_*_amd64.deb
+          sudo apt-get install -y ./dist/Equinox-linux-amd64.deb
           test -x /usr/bin/equinox
           grep -q 'x-scheme-handler/magnet' /usr/share/applications/equinox.desktop
           test -f /usr/share/icons/hicolor/256x256/apps/equinox.png
@@ -203,12 +305,68 @@ jobs:
           wait $pid
           test ! -e "$st/ui-url"
           sudo apt-get remove -y equinox
-      # The x86_64 AppImage, unpacked (the runner has no FUSE): the program inside starts and answers.
+      # The same for the amd64 .rpm, in a Fedora container booted with systemd as its init. The package goes to
+      # /root: systemd mounts an empty tmpfs over /tmp, which would hide a file copied there.
+      - name: Check the .rpm (Fedora)
+        if: matrix.format == 'rpm' && matrix.arch == 'amd64'
+        run: |
+          printf '%s\n' 'FROM fedora:latest' 'RUN dnf -y install systemd curl && dnf clean all' 'CMD ["/usr/sbin/init"]' |
+            docker build -q -t fedora-systemd -
+          docker run -d --name fedora --privileged fedora-systemd
+          docker cp dist/Equinox-server-linux-amd64.rpm fedora:/root/equinox-server.rpm
+          f() { docker exec fedora sh -c "$1"; }
+          f 'systemctl is-system-running --wait || true'
+          f 'dnf -y install /root/equinox-server.rpm'
+          f 'id equinox && test -f /etc/default/equinox-server'
+          f 'systemctl start equinox-server'
+          f 'for i in $(seq 1 30); do test -s /var/lib/equinox/ui-url && break; sleep 1; done; systemctl is-active equinox-server'
+          f 'curl -fsS -o /dev/null http://127.0.0.1:9091/'
+          f 'dnf -y remove equinox-server'
+          f '! systemctl is-active equinox-server'
+      # The pacman packages in an Arch container (no systemd running there): both install, the files and the service
+      # user are in place, both remove.
+      - name: Check the pacman packages (Arch)
+        if: matrix.format == 'pacman'
+        run: |
+          docker run --rm -v "$PWD/dist:/pkg:ro" archlinux:latest sh -c '
+            set -e
+            pacman -U --noconfirm /pkg/Equinox-server-linux-amd64.pkg.tar.zst /pkg/Equinox-linux-amd64.pkg.tar.zst
+            test -x /usr/bin/equinox-server
+            test -x /usr/bin/equinox
+            test -f /usr/lib/systemd/system/equinox-server.service
+            test -f /usr/share/applications/equinox.desktop
+            id equinox
+            pacman -R --noconfirm equinox-server equinox
+            ! test -e /usr/bin/equinox-server
+          '
+
+      # AppImage: the program, its menu entry and icon in an AppDir, packed with the runtime of the architecture
+      # (appimagetool and the runtimes are pinned by version and checksum)
+      - name: AppImage
+        if: matrix.format == 'AppImage'
+        run: |
+          mkdir -p tools
+          get() { curl -fsSL -o "tools/$1" "$2" && echo "$3  tools/$1" | sha256sum -c -; }
+          get appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          get runtime-x86_64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+          get runtime-aarch64 https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-aarch64 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
+          chmod +x tools/appimagetool
+          case $ARCH in amd64) ai=x86_64 ;; arm64) ai=aarch64 ;; esac
+          app=stage/AppDir-$ARCH
+          mkdir -p $app/usr/bin $app/usr/share/icons/hicolor/256x256/apps
+          cp stage/pkg/equinox $app/usr/bin/
+          ln -sf usr/bin/equinox $app/AppRun
+          cp deploy/linux/desktop/equinox.desktop $app/
+          cp stage/icons/icon256.png $app/equinox.png
+          cp stage/icons/icon256.png $app/usr/share/icons/hicolor/256x256/apps/equinox.png
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ai tools/appimagetool --no-appstream --runtime-file tools/runtime-$ai $app dist/Equinox-linux-$ARCH.AppImage
+      # The amd64 (x86_64) AppImage, unpacked (the runner has no FUSE): the program inside starts and answers.
       - name: Check the AppImage
+        if: matrix.format == 'AppImage' && matrix.arch == 'amd64'
         env:
           BROWSER: "true"
         run: |
-          img=$(ls dist/Equinox-*-x86_64.AppImage)
+          img=dist/Equinox-linux-amd64.AppImage
           chmod +x "$img"
           (cd stage && "../$img" --appimage-extract >/dev/null)
           test -x stage/squashfs-root/AppRun
@@ -220,14 +378,114 @@ jobs:
           curl -fsS "$base/session.js" | grep -q '__equinoxBrowserApp = true'
           kill -TERM $pid
           wait $pid
+
+      # The Flatpak of the desktop program (x64), made from the binary built above (deploy/linux/flatpak). The
+      # runner's AppArmor forbids the user namespaces flatpak-builder works in, so that is switched off for the job.
+      - name: Build the Flatpak
+        if: matrix.format == 'Flatpak'
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          mkdir -p stage/flatpak
+          cp stage/pkg/equinox stage/flatpak/equinox
+          cp stage/icons/icon256.png stage/icons/icon48.png stage/flatpak/
+          cp deploy/linux/flatpak/io.github.ozzvin.Equinox.desktop deploy/linux/flatpak/io.github.ozzvin.Equinox.yml stage/flatpak/
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --install-deps-from=flathub \
+            --repo=stage/flatpak-repo stage/flatpak-build stage/flatpak/io.github.ozzvin.Equinox.yml
+          flatpak build-bundle stage/flatpak-repo dist/Equinox-linux-amd64.flatpak io.github.ozzvin.Equinox
+      # It installs from the file and the program is in it. (The window, tray and notifications are not tried: the
+      # runner has no desktop.)
+      - name: Check the Flatpak
+        if: matrix.format == 'Flatpak'
+        run: |
+          flatpak install --user -y --noninteractive ./dist/Equinox-linux-amd64.flatpak
+          flatpak info --user io.github.ozzvin.Equinox
+          flatpak run --user --command=sh io.github.ozzvin.Equinox -c 'test -x /app/bin/equinox && test -f /app/share/applications/io.github.ozzvin.Equinox.desktop'
+          flatpak uninstall --user -y io.github.ozzvin.Equinox
+
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: equinox-linux-${{ inputs.version || github.sha }}
-          path: |
-            dist/Equinox-server-linux-*.tar.gz
-            dist/equinox*.deb
-            dist/equinox*.rpm
-            dist/Equinox-*.AppImage
-            dist/SHA256SUMS-linux.txt
+          name: files-linux-${{ matrix.format }}-${{ matrix.arch }}
+          path: dist/Equinox-*linux-*
           retention-days: 30
+
+  # A draft of the release v<version>: this run's files and, for a platform not rebuilt, the previous release's, checked
+  # against its checksums (assemble.sh), latest.json, SHA256SUMS.txt and the description (body.sh). Nothing is public
+  # until it is published by hand. This job and the beta's alone may write to the repository.
+  release:
+    if: ${{ !cancelled() && !failure() && inputs.mode == 'release' }}
+    needs: [prepare, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      OUT: ${{ github.workspace }}/out
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: files-*
+          path: out
+          merge-multiple: true
+      - name: Assemble the files
+        env:
+          MODE: release
+          BUILT_WINDOWS: ${{ inputs.windows }}
+          BUILT_LINUX: ${{ inputs.linux }}
+          UMBREL: ${{ inputs.umbrel }}
+          FILES: ${{ github.workspace }}/.github/release/files.txt
+        run: .github/release/assemble.sh
+      - name: Description
+        run: .github/release/body.sh "$RUNNER_TEMP/body.md"
+      - name: Draft
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            [ "$(gh release view "$tag" --json isDraft --jq .isDraft)" = true ] || { echo "$tag is already published"; exit 1; }
+            gh release delete "$tag" --yes
+          fi
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "$tag" --notes-file "$RUNNER_TEMP/body.md" out/*
+          echo "Draft: $(gh release view "$tag" --json url --jq .url)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # The beta: the one standing pre-release, replaced by this run's files. It is deleted and made again (with its tag,
+  # on this commit) rather than edited: that needs no right to move a tag, and the list of releases still holds one.
+  beta:
+    if: ${{ !cancelled() && !failure() && inputs.mode == 'beta' }}
+    needs: [prepare, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      OUT: ${{ github.workspace }}/out
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: files-*
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        env:
+          MODE: beta
+        run: .github/release/assemble.sh
+      - name: Pre-release
+        env:
+          FULL_TESTS: ${{ inputs.full_tests }}
+        run: |
+          {
+            echo "## Тестовая сборка $VERSION"
+            echo
+            echo "**Это бета для проверки, не релиз.** Она не предлагается как обновление. Коммит: \`${GITHUB_SHA::8}\`, собрана $(date -u +'%Y-%m-%d %H:%M UTC')."
+            if [ "$FULL_TESTS" = true ]; then echo "Тесты: полные."; else echo "Тесты: быстрые (go test -short), без проверки гонок."; fi
+            echo
+            echo "Каждая следующая бета заменяет эту: ссылки на файлы остаются прежними."
+          } > "$RUNNER_TEMP/beta.md"
+          if gh release view pre-release >/dev/null 2>&1; then gh release delete pre-release --cleanup-tag --yes; fi
+          gh release create pre-release --prerelease --target "$GITHUB_SHA" --title "pre-release $VERSION" --notes-file "$RUNNER_TEMP/beta.md" out/*
+          echo "Pre-release: $(gh release view pre-release --json url --jq .url)" | tee -a "$GITHUB_STEP_SUMMARY"

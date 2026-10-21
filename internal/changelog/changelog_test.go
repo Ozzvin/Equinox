@@ -58,8 +58,35 @@ func TestFor(t *testing.T) {
 	}
 }
 
+// The description of the 1.1.0 release on GitHub, shortened: the update window shows only its lists, and on Windows
+// without the lines for Docker and Umbrel.
+func TestReleaseNotes(t *testing.T) {
+	body := "## Equinox 1.1.0\r\n\r\n**Главное в версии: Equinox теперь работает в Docker.** Подробности.\r\n\r\n" +
+		"**Windows** — установщик `Equinox-Setup-1.1.0.exe`.\r\n\r\n" +
+		"### Новое\r\n\r\n- Только для Docker и Umbrel: «С сервера…» в окне добавления.\r\n\r\n" +
+		"### Исправлено\r\n\r\n- Только для Docker и Umbrel: выбранные .torrent с сервера снова находятся.\r\n" +
+		"- Пропавший файл больше не создаётся пустым.\r\n- [windows] Корневую папку можно свернуть,\r\n  и она не раскрывается.\r\n\r\n" +
+		"Сборки для Windows не подписаны, поэтому SmartScreen может показать предупреждение.\r\n"
+	for platform, want := range map[string]string{
+		"windows": "### Исправлено\n\n- Пропавший файл больше не создаётся пустым.\n- Корневую папку можно свернуть,\n  и она не раскрывается.",
+		"umbrel": "### Новое\n\n- «С сервера…» в окне добавления.\n\n### Исправлено\n\n- Выбранные .torrent с сервера снова находятся.\n" +
+			"- Пропавший файл больше не создаётся пустым.",
+	} {
+		if got := ReleaseNotes(body, platform); got != want {
+			t.Errorf("%s: got %q\nwant %q", platform, got, want)
+		}
+	}
+	// the releases up to 1.0.47 are their lists alone; a description of another shape is only filtered by tags
+	if got := ReleaseNotes("### Исправлено\n\n- правка\n", "windows"); got != "### Исправлено\n\n- правка" {
+		t.Errorf("lists alone: %q", got)
+	}
+	if got := ReleaseNotes("- Fixed the tray menu.\n- [umbrel] server only\n", "windows"); got != "- Fixed the tray menu." {
+		t.Errorf("another shape: %q", got)
+	}
+}
+
 func TestBaseAndLess(t *testing.T) {
-	for v, want := range map[string]string{"1.1.0-rc17": "1.1.0", "beta-1.0.48": "1.0.48", "1.0.47": "1.0.47", "dev": "dev"} {
+	for v, want := range map[string]string{"1.1.0-rc17": "1.1.0", "1.1.1-beta.2": "1.1.1", "beta-1.0.48": "1.0.48", "1.0.47": "1.0.47", "dev": "dev"} {
 		if got := Base(v); got != want {
 			t.Errorf("Base(%q) = %q, want %q", v, got, want)
 		}
@@ -95,7 +122,7 @@ func TestEmbeddedChangelogMatchesTheVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// an rc or beta build (1.1.0-rc18) carries the entry of the version it leads to, as "installed" does
+	// an rc or beta build (1.1.0-rc18, 1.1.1-beta.2) carries the entry of the version it leads to, as "installed" does
 	if v := strings.TrimSpace(string(raw)); entries[0].Version != Base(v) {
 		t.Errorf("the newest entry of CHANGELOG.md is %s, the version is %s", entries[0].Version, v)
 	}
