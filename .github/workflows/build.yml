@@ -57,7 +57,7 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       quick: ${{ steps.v.outputs.quick }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Version
         id: v
         env:
@@ -97,8 +97,8 @@ jobs:
     needs: prepare
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: gofmt
@@ -114,8 +114,8 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - run: go vet ./...
@@ -141,8 +141,8 @@ jobs:
       # runner, absent on a plain Windows install, so the built exe fails to even start there.
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install Inno Setup
@@ -156,7 +156,7 @@ jobs:
         shell: pwsh
         run: .\build.ps1 -SkipTests -Arch ${{ matrix.arch }}
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: files-windows-${{ matrix.arch }}
           path: |
@@ -183,8 +183,8 @@ jobs:
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Build the programs and the icons
@@ -197,7 +197,7 @@ jobs:
           for cmd in equinox equinox-server; do
             GOOS=linux GOARCH=$ARCH go build -trimpath -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$VERSION" -o stage/pkg/$cmd ./cmd/$cmd
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: bin-linux-${{ matrix.arch }}
           path: stage
@@ -226,8 +226,8 @@ jobs:
       ARCH: ${{ matrix.arch }}
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
         with:
           name: bin-linux-${{ matrix.arch }}
           path: stage
@@ -244,7 +244,7 @@ jobs:
           tar -C stage -czf dist/$name.tar.gz $name
 
       # .deb, .rpm and pacman: the same two nfpm files, the package format picked by -p
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         if: contains(fromJSON('["deb","rpm","pacman"]'), matrix.format)
         with:
           go-version-file: go.mod
@@ -405,7 +405,7 @@ jobs:
           flatpak uninstall --user -y io.github.ozzvin.Equinox
 
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: files-linux-${{ matrix.format }}-${{ matrix.arch }}
           path: dist/Equinox-*linux-*
@@ -425,8 +425,8 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       OUT: ${{ github.workspace }}/out
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: files-*
           path: out
@@ -464,8 +464,8 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       OUT: ${{ github.workspace }}/out
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: files-*
           path: out
