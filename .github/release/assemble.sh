@@ -19,6 +19,8 @@ if [ "$MODE" = release ]; then
   echo "previous release: $prev"
   mkdir -p "$RUNNER_TEMP/prev"
   gh release download "$prev" -D "$RUNNER_TEMP/prev" --clobber
+  # the sums of older releases were written on Windows, with CRLF line ends
+  [ ! -f "$RUNNER_TEMP/prev/SHA256SUMS.txt" ] || sed -i 's/$//' "$RUNNER_TEMP/prev/SHA256SUMS.txt"
 
   # the version of each platform in the previous release: its latest.json, or (before it existed) its tag for all
   prevver=${prev#v}
@@ -37,7 +39,7 @@ if [ "$MODE" = release ]; then
         echo "not in $prev, left out: $name"
         continue
       fi
-      sum=$(grep -E "  \*?$name\$" "$RUNNER_TEMP/prev/SHA256SUMS.txt" | cut -d' ' -f1)
+      sum=$(grep -E "  \*?$name\$" "$RUNNER_TEMP/prev/SHA256SUMS.txt" | cut -d' ' -f1 || true)
       [ -n "$sum" ] || { echo "no checksum of $name in $prev"; exit 1; }
       [ "$(sha256sum "$src" | cut -d' ' -f1)" = "$sum" ] || { echo "checksum mismatch: $name"; exit 1; }
       cp "$src" "$name"
