@@ -85,6 +85,7 @@ func TestDetailsAndTrackers(t *testing.T) {
 }
 
 func TestRecheckDetectsCorruption(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	tp := makeTorrent(t, dir, "check.bin", 64<<10)

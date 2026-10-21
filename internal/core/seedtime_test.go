@@ -10,6 +10,7 @@ import (
 )
 
 func TestSeedTimeLimitStopsSeedingAndReportsIt(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	tp := makeTorrent(t, dir, "a.bin", 50<<10)
 	putOnDisk(t, dir, "a.bin")

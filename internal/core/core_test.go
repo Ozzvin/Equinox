@@ -246,6 +246,15 @@ func TestPreallocateRefusesWhenNoSpace(t *testing.T) {
 	}
 }
 
+// slow skips a test that takes seconds (the 28 of them are most of the package's ~4 minutes with -race) in the quick run,
+// go test -short, which a beta build may take instead of the full one; a release always runs them all.
+func slow(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("slow: runs without -short")
+	}
+}
+
 // waitFor's window is generous (not just enough for a normal run) because `go test -race` can
 // slow things down several times over (e.g. TestDeleteFileWhileTheTorrentIsBeingChecked hashes
 // 200 MB); a passing test still returns the moment its condition holds, so this only costs

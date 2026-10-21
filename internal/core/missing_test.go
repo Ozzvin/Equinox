@@ -61,6 +61,7 @@ func goneFor(t *testing.T, m *Manager, hash string) Status {
 // A file of a seeding torrent deleted by hand stops it with an error naming the file, and the pieces of that file stop
 // counting as had; put back, the file is checked and the torrent seeds again by itself.
 func TestMissingFileStopsTheTorrentAndItGoesOnWhenItIsBack(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	hash, paths := seedingOnDisk(t, m, dir)
@@ -89,6 +90,7 @@ func TestMissingFileStopsTheTorrentAndItGoesOnWhenItIsBack(t *testing.T) {
 
 // A torrent the person had paused stays paused when its files come back.
 func TestMissingFileOfAPausedTorrentLeavesItPaused(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	hash, paths := seedingOnDisk(t, m, dir)
@@ -123,6 +125,7 @@ func TestMissingFileOfAPausedTorrentLeavesItPaused(t *testing.T) {
 // "Resume" with the files still gone clears the error and has them checked: what is not there is to be downloaded
 // again, and the torrent is not stopped for it once more.
 func TestResumeWithFilesGoneDownloadsThemAgain(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	hash, paths := seedingOnDisk(t, m, dir)
@@ -151,6 +154,7 @@ func TestResumeWithFilesGoneDownloadsThemAgain(t *testing.T) {
 
 // A skipped file, and one nothing of which was had yet, are not missed when they are not on the disk.
 func TestSkippedFileIsNotMissed(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	hash, paths := seedingOnDisk(t, m, dir)
@@ -176,6 +180,7 @@ func TestSkippedFileIsNotMissed(t *testing.T) {
 // after the torrent is added, and again on "Resume", so a file deleted just before was made again and never missed
 // (TestResumeWithFilesGoneDownloadsThemAgain failed one run in seven on the CI that way, 2026-10-17).
 func TestPreparingTheDiskDoesNotMakeAMissingFileAgain(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.Preallocate = true })
 	hash, paths := seedingOnDisk(t, m, dir)

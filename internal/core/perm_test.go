@@ -18,6 +18,7 @@ func permOf(m *Manager, hash string) permState {
 // Pause, the download queue and a failure all decide the same two switches. They must
 // combine, not overwrite each other.
 func TestPauseQueueAndFailureCombine(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	if err := m.SetMaxActiveDownloads(1); err != nil {

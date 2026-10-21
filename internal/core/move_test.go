@@ -135,6 +135,7 @@ func TestMoveBeforeAnythingIsDownloadedOnlyChangesTheFolder(t *testing.T) {
 }
 
 func TestCompletedTorrentsAreMovedAutomatically(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	done := filepath.Join(dir, "finished")
 	m := newManager(t, dir, func(s *config.Settings) { s.MoveCompletedDir = done })
@@ -390,6 +391,7 @@ func TestMoveStorageClearsItsTrail(t *testing.T) {
 // a move slow enough to poll mid-flight (a same-drive move is a near-instant rename): simulate the exact state
 // List() sees during a real one directly, since that is the only part of a move this is really about.
 func TestListShowsTheTrackerWhileMoving(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, nil)
 	defer m.Close()
@@ -446,6 +448,7 @@ func TestListShowsTheTrackerWhileMoving(t *testing.T) {
 // into the general folder and moved to the label's folder when it finishes (not to the general folder for finished
 // ones); a torrent with a folder of its own for finished torrents goes there.
 func TestLabelFolderIsWhereAFinishedTorrentGoes(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	done, films := filepath.Join(dir, "finished"), filepath.Join(dir, "films")
 	m := newManager(t, dir, func(s *config.Settings) {

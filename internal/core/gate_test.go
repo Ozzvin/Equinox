@@ -34,6 +34,7 @@ func waiting(m *Manager) (n int) {
 }
 
 func TestChecksWaitForAFreeSlot(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
 	hashes := addOnDisk(t, m, dir, 3)
