@@ -2,12 +2,16 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
 
 	"github.com/Ozzvin/equinox/internal/config"
+	"github.com/Ozzvin/equinox/internal/store"
 )
 
 // seedingOnDisk is threeFilesOnDisk, then waits until the torrent is past its first check. (The preparation of the disk
@@ -24,15 +28,33 @@ func seedingOnDisk(t *testing.T, m *Manager, dir string) (string, []string) {
 	return hash, paths
 }
 
-// goneFor waits until the torrent is stopped for files gone.
+// goneFor waits until the torrent is stopped for files gone. When it is not, it tells what kept the look for missing
+// files from seeing them: an error of another kind, files busy, or bytes of theirs the torrent does not count as had.
 func goneFor(t *testing.T, m *Manager, hash string) Status {
 	t.Helper()
-	var st Status
-	waitFor(t, func() bool {
-		s, ok := statusOf(m, hash)
-		st = s
-		return ok && s.ErrorKind == ErrKindMissing
-	})
+	for i := 0; i < 600; i++ {
+		if s, ok := statusOf(m, hash); ok && s.ErrorKind == ErrKindMissing {
+			return s
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	st, _ := statusOf(m, hash)
+	m.mu.Lock()
+	e, failed := m.errs[hash]
+	busy, ph, checking, rechecking := m.filesBusy(hash), m.phase[hash], m.checking[hash], m.rechecking[hash]
+	prog, inProg := m.checkProg[hash]
+	_, sel := m.checkSel[hash]
+	m.mu.Unlock()
+	var files []string
+	if tt, err := m.get(hash); err == nil && tt.Info() != nil {
+		paths, _ := store.Paths(m.saveDir(hash), tt.Info())
+		for i, f := range tt.Files() {
+			_, serr := os.Stat(paths[i])
+			files = append(files, fmt.Sprintf("%d: done %d/%d, stat %v", i, f.BytesCompleted(), f.Length(), serr))
+		}
+	}
+	t.Fatalf("not stopped for files gone in time\n  status: %+v\n  error: %v %+v\n  busy %v (phase %+v, checking %v, rechecking %v, checkProg %v %v, checkSel %v)\n  files:\n    %s",
+		st, failed, e, busy, ph, checking, rechecking, inProg, prog, sel, strings.Join(files, "\n    "))
 	return st
 }
 
