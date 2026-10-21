@@ -158,6 +158,7 @@ func TestMirrorReadsTheManifest(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	useMirror(t, "1.0.0", downGitHub(t).URL, srv.URL+"/download/")
+	buildinfo.Packaging = "windows" // on any runner
 	t.Cleanup(func() { buildinfo.Packaging = "" })
 	if info, err := Check(context.Background(), true); err != nil || info != nil {
 		t.Fatalf("Check on windows = %+v, %v, want no update", info, err)

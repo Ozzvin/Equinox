@@ -141,8 +141,8 @@ func TestCheckPrefersTheVersionedInstaller(t *testing.T) {
 // tag, says which version this platform's files are, and a platform the release has nothing for gets no update.
 func TestCheckTakesThePlatformsVersionFromTheManifest(t *testing.T) {
 	old := buildinfo.Version
-	buildinfo.Version = "1.1.0"
-	t.Cleanup(func() { buildinfo.Version = old })
+	buildinfo.Version, buildinfo.Packaging = "1.1.0", "windows" // the platform the manifests below are for, on any runner
+	t.Cleanup(func() { buildinfo.Version, buildinfo.Packaging = old, "" })
 
 	for _, c := range []struct {
 		name, manifest, want string
