@@ -7,7 +7,7 @@ func TestIsRelease(t *testing.T) {
 	t.Cleanup(func() { Version = old })
 	for v, want := range map[string]bool{
 		"1.0.16": true, "1.0": true, "12.0.1": true,
-		"dev": false, "": false, "beta-1.0.17": false, "1.0.17-beta": false, "1.0.x": false, "1": false,
+		"dev": false, "": false, "beta-1.0.17": false, "1.0.17-beta": false, "1.1.1-beta.1": false, "1.1.0-rc17": false, "1.0.x": false, "1": false,
 	} {
 		Version = v
 		if got := IsRelease(); got != want {
@@ -19,7 +19,7 @@ func TestIsRelease(t *testing.T) {
 func TestChannel(t *testing.T) {
 	old := Version
 	t.Cleanup(func() { Version = old })
-	for v, want := range map[string]string{"1.0.16": "", "beta-1.0.17": "beta", "dev": "dev", "": "dev", "1.0.17-rc": "dev"} {
+	for v, want := range map[string]string{"1.0.16": "", "beta-1.0.17": "beta", "dev": "dev", "": "dev", "1.0.17-rc": "dev", "1.1.1-beta.1": "dev"} {
 		Version = v
 		if got := Channel(); got != want {
 			t.Errorf("Channel() for %q = %q, want %q", v, got, want)
@@ -28,7 +28,7 @@ func TestChannel(t *testing.T) {
 }
 
 func TestPeerIDPrefix(t *testing.T) {
-	for v, want := range map[string]string{"1.0.0": "-EQ1000-", "1.2.3": "-EQ1230-", "dev": "-EQ0000-", "": "-EQ0000-", "12.0.1": "-EQ2010-", "beta-1.0.17": "-EQ1070-"} {
+	for v, want := range map[string]string{"1.0.0": "-EQ1000-", "1.2.3": "-EQ1230-", "dev": "-EQ0000-", "": "-EQ0000-", "12.0.1": "-EQ2010-", "beta-1.0.17": "-EQ1070-", "1.1.0-rc17": "-EQ1100-", "1.1.1-beta.2": "-EQ1110-"} {
 		got := peerIDPrefix(v)
 		if got != want {
 			t.Errorf("%q: got %s, want %s", v, got, want)

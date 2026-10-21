@@ -203,7 +203,8 @@ func hasText(lines []string) bool {
 	return false
 }
 
-// Base is the version a build belongs to in the changelog: "1.1.0" for "1.1.0-rc17", "1.0.48" for "beta-1.0.48".
+// Base is the version a build belongs to in the changelog: "1.1.0" for "1.1.0-rc17", "1.1.1" for the GitHub beta
+// "1.1.1-beta.2", "1.0.48" for the local test build "beta-1.0.48".
 func Base(version string) string {
 	v := strings.TrimPrefix(version, buildinfo.BetaPrefix)
 	if i := strings.IndexByte(v, '-'); i >= 0 {

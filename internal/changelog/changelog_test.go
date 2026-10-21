@@ -86,7 +86,7 @@ func TestReleaseNotes(t *testing.T) {
 }
 
 func TestBaseAndLess(t *testing.T) {
-	for v, want := range map[string]string{"1.1.0-rc17": "1.1.0", "beta-1.0.48": "1.0.48", "1.0.47": "1.0.47", "dev": "dev"} {
+	for v, want := range map[string]string{"1.1.0-rc17": "1.1.0", "1.1.1-beta.2": "1.1.1", "beta-1.0.48": "1.0.48", "1.0.47": "1.0.47", "dev": "dev"} {
 		if got := Base(v); got != want {
 			t.Errorf("Base(%q) = %q, want %q", v, got, want)
 		}
@@ -122,7 +122,7 @@ func TestEmbeddedChangelogMatchesTheVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// an rc or beta build (1.1.0-rc18) carries the entry of the version it leads to, as "installed" does
+	// an rc or beta build (1.1.0-rc18, 1.1.1-beta.2) carries the entry of the version it leads to, as "installed" does
 	if v := strings.TrimSpace(string(raw)); entries[0].Version != Base(v) {
 		t.Errorf("the newest entry of CHANGELOG.md is %s, the version is %s", entries[0].Version, v)
 	}

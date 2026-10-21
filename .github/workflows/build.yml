@@ -66,7 +66,7 @@ jobs:
         env:
           VERSION_IN: ${{ inputs.version }}
         run: |
-          if ($env:VERSION_IN -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$') { throw "not a version: $env:VERSION_IN" }
+          if ($env:VERSION_IN -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+|-beta\.[0-9]+)?$') { throw "not a version: $env:VERSION_IN" }
           Set-Content -Path VERSION -Value $env:VERSION_IN
       - name: Build (gofmt, vet, tests, exe, installer, archives)
         shell: pwsh
@@ -115,7 +115,7 @@ jobs:
         run: |
           v="$VERSION_IN"
           [ -n "$v" ] || v=$(tr -d '[:space:]' < VERSION)
-          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$' || { echo "not a version: $v"; exit 1; }
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+|-beta\.[0-9]+)?$' || { echo "not a version: $v"; exit 1; }
           mkdir -p dist stage/icons stage/pkg
           go run ./cmd/mkicons stage/icons
           for arch in amd64 arm64; do
