@@ -148,6 +148,26 @@ func TestInstallerFromAMirrorThatIsBehindIsRefused(t *testing.T) {
 	}
 }
 
+// A mirror with a manifest is read by it, not by version.txt: the tag may be ahead of this platform's files.
+func TestMirrorReadsTheManifest(t *testing.T) {
+	mirror := fakeMirror(t, "v1.0.1", []byte("x"), "")
+	mux := http.NewServeMux()
+	mux.Handle("/download/", mirror.Config.Handler)
+	manifest := `{"windows": "1.0.0", "umbrel": "1.0.1"}`
+	mux.HandleFunc("/download/latest.json", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(manifest)) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	useMirror(t, "1.0.0", downGitHub(t).URL, srv.URL+"/download/")
+	t.Cleanup(func() { buildinfo.Packaging = "" })
+	if info, err := Check(context.Background(), true); err != nil || info != nil {
+		t.Fatalf("Check on windows = %+v, %v, want no update", info, err)
+	}
+	buildinfo.Packaging = "umbrel"
+	if info, err := Check(context.Background(), true); err != nil || info == nil || info.Version != "1.0.1" {
+		t.Fatalf("Check on umbrel = %+v, %v, want 1.0.1", info, err)
+	}
+}
+
 // When GitHub answers, the release found there also knows where the mirror keeps the same files.
 func TestReleaseFromGitHubKnowsTheMirror(t *testing.T) {
 	gh := fakeGitHub(t, []byte("x"), "v1.0.1")

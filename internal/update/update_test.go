@@ -137,6 +137,60 @@ func TestCheckPrefersTheVersionedInstaller(t *testing.T) {
 	}
 }
 
+// A release carries every platform's files, those it did not change from the release before: the manifest, not the
+// tag, says which version this platform's files are, and a platform the release has nothing for gets no update.
+func TestCheckTakesThePlatformsVersionFromTheManifest(t *testing.T) {
+	old := buildinfo.Version
+	buildinfo.Version = "1.1.0"
+	t.Cleanup(func() { buildinfo.Version = old })
+
+	for _, c := range []struct {
+		name, manifest, want string
+		fails                bool
+	}{
+		{"this platform changed", `{"windows": "1.1.1", "umbrel": "1.1.0"}`, "1.1.1", false},
+		{"this platform as it was", `{"windows": "1.1.0", "umbrel": "1.1.1"}`, "", false},
+		{"nothing for this platform", `{"umbrel": "1.1.1"}`, "", false},
+		{"a garbled manifest", `<html>`, "", true},
+		{"not a version", `{"windows": "1.1.1-rc1"}`, "", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var srv *httptest.Server
+			mux := http.NewServeMux()
+			mux.HandleFunc("/release", func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(ghRelease{TagName: "v1.1.1", Assets: []ghAsset{
+					{Name: "Equinox-Setup.exe", URL: srv.URL + "/setup"}, {Name: "SHA256SUMS.txt", URL: srv.URL + "/sums"},
+					{Name: "latest.json", URL: srv.URL + "/manifest"},
+				}})
+			})
+			mux.HandleFunc("/manifest", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(c.manifest)) })
+			srv = httptest.NewServer(mux)
+			t.Cleanup(srv.Close)
+			oldURL := APIURL
+			APIURL = srv.URL + "/release"
+			t.Cleanup(func() { APIURL = oldURL })
+
+			info, err := Check(context.Background(), true)
+			if c.fails {
+				if err == nil {
+					t.Fatalf("Check = %+v, want an error", info)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got string
+			if info != nil {
+				got = info.Version
+			}
+			if got != c.want {
+				t.Fatalf("update to %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 // A beta must not be told to "update" to the release before it: that installer would replace the real
 // installation with an older program. It does not even ask GitHub.
 func TestCheckSaysNothingToABetaBuild(t *testing.T) {
