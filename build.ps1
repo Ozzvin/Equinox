@@ -2,8 +2,8 @@
   Собирает две версии Equinox, каждая в своём архиве:
   для ПК (окно и трей) и серверную (без окна).
 
-    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup-<версия>.exe,
-                             архивы Equinox-pc-<версия>.zip и Equinox-server-<версия>.zip
+    .\build.ps1              проверки, тесты, сборка, установщик dist\Equinox-Setup.exe,
+                             архивы Equinox-pc.zip и Equinox-server.zip
     .\build.ps1 -SkipTests   то же без запуска тестов (быстрее)
 
   Результат лежит в папке dist (она не входит в репозиторий).
@@ -104,10 +104,12 @@ function Pack($exe, $nameInZip, $readme, $zip) {
     Compress-Archive -Force -Path (Join-Path $stage '*') -DestinationPath $zip
     Remove-Item -Recurse -Force $stage
 }
-# The portable programs carry the version in their file name too ("Equinox 1.0.17.exe"); the installed
-# one stays Equinox.exe, which the shortcuts, autostart and file associations point at.
-Pack dist\Equinox.exe "Equinox $Version.exe" $pcReadme "dist\Equinox-pc-$Version.zip"
-Pack dist\Equinox-server.exe "Equinox-server $Version.exe" $serverReadme "dist\Equinox-server-$Version.zip"
+# The files of a release carry no version (since the release after 1.1.0): a release holds the files of every platform,
+# some of them taken over unchanged from the one before, and latest.json says which version each really is; the links
+# releases/latest/download/<file> stay the same. The portable programs inside carry it ("Equinox 1.0.17.exe"); the
+# installed one stays Equinox.exe, which the shortcuts, autostart and file associations point at.
+Pack dist\Equinox.exe "Equinox $Version.exe" $pcReadme "dist\Equinox-pc.zip"
+Pack dist\Equinox-server.exe "Equinox-server $Version.exe" $serverReadme "dist\Equinox-server.zip"
 
 Step "контрольные суммы"
 $sums = Get-ChildItem dist -File | Where-Object { $_.Name -like 'Equinox*' -and $_.Extension -in ".exe", ".zip" } | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
@@ -115,4 +117,4 @@ Set-Content -Encoding ASCII -Path dist\SHA256SUMS.txt -Value $sums
 
 Write-Host ""
 Get-ChildItem dist | Select-Object Name, @{n = 'МБ'; e = { [math]::Round($_.Length / 1MB, 1) }} | Format-Table -AutoSize
-Write-Host "Готово: dist\Equinox-Setup-$Version.exe, Equinox-pc-$Version.zip, Equinox-server-$Version.zip" -ForegroundColor Green
+Write-Host "Готово ($Version): dist\Equinox-Setup.exe, Equinox-pc.zip, Equinox-server.zip" -ForegroundColor Green

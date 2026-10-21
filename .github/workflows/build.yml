@@ -76,16 +76,18 @@ jobs:
         with:
           name: equinox-${{ inputs.version || github.sha }}
           path: |
-            dist/Equinox-Setup-*.exe
-            dist/Equinox-pc-*.zip
-            dist/Equinox-server-*.zip
+            dist/Equinox-Setup.exe
+            dist/Equinox-pc.zip
+            dist/Equinox-server.zip
             dist/SHA256SUMS.txt
           retention-days: 30
 
   # Linux: the server as archives and as .deb/.rpm packages with a systemd service (deploy/linux/nfpm.yaml), and the
   # desktop program (tray icon, the interface in the browser) as .deb/.rpm (deploy/linux/nfpm-desktop.yaml) and as an
   # AppImage for the other distributions.
-  # It is built apart from the Windows job: no installer, no Inno Setup.
+  # It is built apart from the Windows job: no installer, no Inno Setup. The files carry the architecture and no version
+  # (see build.ps1): Equinox-server-linux-amd64.tar.gz, Equinox-linux-amd64.deb, Equinox-server-linux-arm64.rpm,
+  # Equinox-linux-amd64.AppImage.
   linux:
     needs: [test, test-linux]
     runs-on: ubuntu-latest
@@ -117,7 +119,7 @@ jobs:
           mkdir -p dist stage/icons stage/pkg
           go run ./cmd/mkicons stage/icons
           for arch in amd64 arm64; do
-            name=Equinox-server-linux-$arch-$v
+            name=Equinox-server-linux-$arch
             mkdir -p stage/$name
             GOOS=linux GOARCH=$arch go build -trimpath               -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v"               -o stage/$name/equinox-server ./cmd/equinox-server
             cp LICENSE stage/$name/
@@ -126,8 +128,8 @@ jobs:
             cp stage/$name/equinox-server stage/pkg/
             GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X github.com/Ozzvin/equinox/internal/buildinfo.Version=$v" -o stage/pkg/equinox ./cmd/equinox
             for p in deb rpm; do
-              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/
-              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p $p -t dist/
+              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm.yaml -p $p -t dist/Equinox-server-linux-$arch.$p
+              VERSION=$v ARCH=$arch nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p $p -t dist/Equinox-linux-$arch.$p
             done
             # AppImage: the program, its menu entry and icon in an AppDir, packed with the runtime of the architecture
             case $arch in amd64) ai=x86_64 ;; arm64) ai=aarch64 ;; esac
@@ -138,14 +140,14 @@ jobs:
             cp deploy/linux/desktop/equinox.desktop $app/
             cp stage/icons/icon256.png $app/equinox.png
             cp stage/icons/icon256.png $app/usr/share/icons/hicolor/256x256/apps/equinox.png
-            APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ai tools/appimagetool --no-appstream --runtime-file tools/runtime-$ai $app dist/Equinox-$v-$ai.AppImage
+            APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$ai tools/appimagetool --no-appstream --runtime-file tools/runtime-$ai $app dist/Equinox-linux-$arch.AppImage
           done
           (cd dist && sha256sum *.tar.gz *.deb *.rpm *.AppImage > SHA256SUMS-linux.txt)
       # Installs the amd64 .deb on the runner: the service user, the unit and the default file must come out right,
       # and the service must start and answer on its port.
       - name: Check the .deb
         run: |
-          sudo apt-get install -y ./dist/equinox-server_*_amd64.deb
+          sudo apt-get install -y ./dist/Equinox-server-linux-amd64.deb
           id equinox
           systemctl cat equinox-server >/dev/null
           test -f /etc/default/equinox-server
@@ -162,7 +164,7 @@ jobs:
           printf '%s\n' 'FROM fedora:latest' 'RUN dnf -y install systemd curl && dnf clean all' 'CMD ["/usr/sbin/init"]' |
             docker build -q -t fedora-systemd -
           docker run -d --name fedora --privileged fedora-systemd
-          docker cp dist/$(cd dist && ls equinox-server-*.x86_64.rpm) fedora:/root/equinox-server.rpm
+          docker cp dist/Equinox-server-linux-amd64.rpm fedora:/root/equinox-server.rpm
           f() { docker exec fedora sh -c "$1"; }
           f 'systemctl is-system-running --wait || true'
           f 'dnf -y install /root/equinox-server.rpm'
@@ -182,7 +184,7 @@ jobs:
           # an rc build is a test build: its autostart entry is kept apart from the installed program's (buildinfo.Channel)
           auto=~/.config/autostart/equinox.desktop
           case "$VERSION_IN" in *-*) auto=~/.config/autostart/equinox-dev.desktop ;; esac
-          sudo apt-get install -y ./dist/equinox_*_amd64.deb
+          sudo apt-get install -y ./dist/Equinox-linux-amd64.deb
           test -x /usr/bin/equinox
           grep -q 'x-scheme-handler/magnet' /usr/share/applications/equinox.desktop
           test -f /usr/share/icons/hicolor/256x256/apps/equinox.png
@@ -203,12 +205,12 @@ jobs:
           wait $pid
           test ! -e "$st/ui-url"
           sudo apt-get remove -y equinox
-      # The x86_64 AppImage, unpacked (the runner has no FUSE): the program inside starts and answers.
+      # The amd64 (x86_64) AppImage, unpacked (the runner has no FUSE): the program inside starts and answers.
       - name: Check the AppImage
         env:
           BROWSER: "true"
         run: |
-          img=$(ls dist/Equinox-*-x86_64.AppImage)
+          img=dist/Equinox-linux-amd64.AppImage
           chmod +x "$img"
           (cd stage && "../$img" --appimage-extract >/dev/null)
           test -x stage/squashfs-root/AppRun
@@ -226,8 +228,8 @@ jobs:
           name: equinox-linux-${{ inputs.version || github.sha }}
           path: |
             dist/Equinox-server-linux-*.tar.gz
-            dist/equinox*.deb
-            dist/equinox*.rpm
-            dist/Equinox-*.AppImage
+            dist/Equinox-*linux-*.deb
+            dist/Equinox-*linux-*.rpm
+            dist/Equinox-linux-*.AppImage
             dist/SHA256SUMS-linux.txt
           retention-days: 30

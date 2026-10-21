@@ -1,6 +1,6 @@
 # .deb and .rpm of the desktop program (tray icon, the interface in the browser), built by the "linux" job of
 # .github/workflows/build.yml:
-#   VERSION=1.1.0 ARCH=amd64 nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p deb -t dist/
+#   VERSION=1.1.0 ARCH=amd64 nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p deb -t dist/Equinox-linux-amd64.deb
 # The binary is copied for it to stage/pkg/equinox, the icons to stage/icons (cmd/mkicons).
 name: equinox
 arch: ${ARCH}

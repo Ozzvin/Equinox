@@ -95,12 +95,12 @@ type Info struct {
 	mirrorSumsURL  string
 }
 
-// legacySetupName is the installer's name in the releases before file names carried the version. Releases up
-// to 1.0.45 also published the installer under it for the copies older than 1.0.17, which look for exactly this
-// name; later ones do not, and it is only a fallback here for a release or mirror that has no versioned one.
+// legacySetupName is the installer's name in the releases before 1.0.17 and again from the one after 1.1.0, whose
+// files carry no version (latest.json tells it). Releases up to 1.0.45 also published the installer under it for the
+// copies older than 1.0.17, which look for exactly this name; 1.0.46 to 1.1.0 did not.
 const legacySetupName = "Equinox-Setup.exe"
 
-// versionedSetupName is the installer's name in a release: "Equinox-Setup-1.0.17.exe".
+// versionedSetupName is the installer's name in the releases 1.0.17 to 1.1.0: "Equinox-Setup-1.0.17.exe".
 func versionedSetupName(version string) string { return "Equinox-Setup-" + version + ".exe" }
 
 type ghAsset struct {
