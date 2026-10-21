@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Equinox
+GenericName=Torrent Client
+GenericName[ru]=Торрент-клиент
+Comment=Download and share files over BitTorrent
+Comment[ru]=Скачивание и раздача файлов по BitTorrent
+Exec=equinox %U
+Icon=io.github.ozzvin.Equinox
+Terminal=false
+Categories=Network;FileTransfer;P2P;
+MimeType=application/x-bittorrent;x-scheme-handler/magnet;
+Keywords=torrent;magnet;bittorrent;
+StartupNotify=false

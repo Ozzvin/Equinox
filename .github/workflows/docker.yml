@@ -1,7 +1,7 @@
 name: Docker image
 run-name: Docker image ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
 
-# Manual, like the Build workflow: publishes ghcr.io/ozzvin/equinox:<version> and :latest for linux/amd64 and
+# Manual, like the Build workflow: publishes ghcr.io/ozzvin/equinox:<version> and :latest (a beta: and :beta) for linux/amd64 and
 # linux/arm64. The package is private until it is made public in the package settings on GitHub.
 on:
   workflow_dispatch:
@@ -41,6 +41,8 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
           # :latest only for a plain release number, not for a candidate such as 1.1.0-rc1
           if echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "latest=ghcr.io/ozzvin/equinox:latest" >> "$GITHUB_OUTPUT"; else echo "latest=" >> "$GITHUB_OUTPUT"; fi
+          # a beta (1.1.1-beta.2) also takes the tag :beta, moved on by every beta; :latest stays where it is
+          if echo "$v" | grep -Eq -- '-beta\.[0-9]+$'; then echo "beta=ghcr.io/ozzvin/equinox:beta" >> "$GITHUB_OUTPUT"; else echo "beta=" >> "$GITHUB_OUTPUT"; fi
       - name: Build the server for both architectures
         run: |
           mkdir -p bin
@@ -93,6 +95,7 @@ jobs:
           tags: |
             ghcr.io/ozzvin/equinox:${{ steps.v.outputs.version }}
             ${{ steps.v.outputs.latest }}
+            ${{ steps.v.outputs.beta }}
           labels: |
             org.opencontainers.image.source=https://github.com/Ozzvin/equinox
             org.opencontainers.image.version=${{ steps.v.outputs.version }}
