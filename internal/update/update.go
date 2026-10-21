@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Ozzvin/equinox/internal/buildinfo"
+	"github.com/Ozzvin/equinox/internal/changelog"
 )
 
 const cacheTTL = time.Hour
@@ -53,7 +54,7 @@ var MirrorBase = "https://equinoxtorrent.com/download/"
 // Info describes a GitHub release that is newer than the version currently running.
 type Info struct {
 	Version string // e.g. "1.0.6", without the leading "v"
-	Notes   string // the release's own description (Markdown)
+	Notes   string // what changed, from the release's description (Markdown, see changelog.ReleaseNotes)
 	URL     string // the release's page, for a manual download
 
 	setupURL  string
@@ -194,7 +195,7 @@ func fetchMirror(ctx context.Context) (*Info, error) {
 	}
 	info := &Info{Version: latest, URL: MirrorBase + name, setupURL: MirrorBase + name, setupName: name, sumsURL: MirrorBase + "SHA256SUMS.txt"}
 	if notes, err := getSmall(ctx, MirrorBase+"notes.md", maxNotesBytes); err == nil {
-		info.Notes = string(notes) // optional: without it the page says the description is not given
+		info.Notes = changelog.ReleaseNotes(string(notes), buildinfo.Platform()) // optional: without it the page says the description is not given
 	}
 	return info, nil
 }
@@ -247,7 +248,7 @@ func fetchGitHub(ctx context.Context) (*Info, error) {
 	if compareVersions(latest, buildinfo.Version) <= 0 {
 		return nil, nil // already on the latest version (or newer, e.g. a dev build)
 	}
-	info := &Info{Version: latest, Notes: rel.Body, URL: rel.HTMLURL}
+	info := &Info{Version: latest, Notes: changelog.ReleaseNotes(rel.Body, buildinfo.Platform()), URL: rel.HTMLURL}
 	for _, a := range rel.Assets {
 		switch a.Name {
 		case versionedSetupName(latest):
