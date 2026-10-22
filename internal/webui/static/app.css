@@ -705,7 +705,7 @@ html[data-density="compact"] .seg-note { display: none; }
 
 /* options tab */
 .opt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 16px; padding: 4px 16px 12px; }
-.opt-form fieldset { margin: 8px 0; }
+.opt-form fieldset { margin: 8px 0; min-width: 0; } /* a long download folder is cut with "…", not widening the tab */
 /* label above its field, like the rest of the app (a row-based two-column grid looked broken for short
    numeric fields: a wide gap opened up between a short label and its narrow input) */
 .opt-form label:not(.check) { display: block; margin: 0 0 10px; font-weight: 550; font-size: 13px; }
@@ -715,10 +715,12 @@ html[data-density="compact"] .seg-note { display: none; }
 .opt-form label.check { display: flex; gap: 9px; align-items: flex-start; margin: 8px 0; font-weight: 500; font-size: 13px; }
 .opt-form label.check input { width: auto; height: auto; margin-top: 3px; }
 .opt-form .pick { margin-bottom: 6px; }
-.opt-form .op-limrow { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
-.opt-form .op-limrow label.check { flex: 1 1 auto; margin: 0; }
+/* the two stop-seeding limits: each box with its number on one line, the numbers under each other */
+.opt-form .op-limits { display: grid; grid-template-columns: minmax(0, max-content) 160px; gap: 8px 12px; align-items: center; margin: 8px 0; }
+.opt-form .op-limrow { display: contents; }
+.opt-form .op-limrow label.check { margin: 0; }
 .opt-form .op-limrow label.check input { margin-top: 0; }
-.opt-form .op-limit { flex: 0 0 auto; width: 120px; }
+.opt-form input.op-limit { width: 160px; margin: 0; }
 .opt-form .row-end { margin-top: 8px; }
 .file.dir.skip .fn, .file.dir.skip .fs { text-decoration: none; opacity: .6; }
 

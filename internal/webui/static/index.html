@@ -129,10 +129,12 @@
       <fieldset>
         <legend>Раздача</legend>
         <label>Метка<select id="op-label"></select></label>
-        <div class="op-limrow"><label class="check"><input type="checkbox" id="op-ratio-on"><span>Остановить раздачу при рейтинге</span></label>
-          <input type="number" min="0" step="0.1" id="op-ratio" class="op-limit" disabled></div>
-        <div class="op-limrow"><label class="check"><input type="checkbox" id="op-seedtime-on"><span>Остановить раздачу после, часов</span></label>
-          <input type="number" min="0" step="0.5" id="op-seedtime" class="op-limit" disabled></div>
+        <div class="op-limits">
+          <div class="op-limrow"><label class="check"><input type="checkbox" id="op-ratio-on"><span>Остановить раздачу при рейтинге</span></label>
+            <input type="number" min="0" step="0.1" id="op-ratio" class="op-limit" disabled></div>
+          <div class="op-limrow"><label class="check"><input type="checkbox" id="op-seedtime-on"><span>Остановить раздачу после, часов</span></label>
+            <input type="number" min="0" step="0.5" id="op-seedtime" class="op-limit" disabled></div>
+        </div>
         <div class="op-path"><span class="muted small">Папка загрузки</span><div class="pick"><span id="op-path" class="op-pathval"></span><button type="button" class="btn small" id="op-move">Переместить…</button></div></div>
       </fieldset>
     </div>
