@@ -715,7 +715,10 @@ html[data-density="compact"] .seg-note { display: none; }
 .opt-form label.check { display: flex; gap: 9px; align-items: flex-start; margin: 8px 0; font-weight: 500; font-size: 13px; }
 .opt-form label.check input { width: auto; height: auto; margin-top: 3px; }
 .opt-form .pick { margin-bottom: 6px; }
-.opt-form .op-limit { max-width: 220px; margin-bottom: 6px; }
+.opt-form .op-limrow { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
+.opt-form .op-limrow label.check { flex: 1 1 auto; margin: 0; }
+.opt-form .op-limrow label.check input { margin-top: 0; }
+.opt-form .op-limit { flex: 0 0 auto; width: 120px; }
 .opt-form .row-end { margin-top: 8px; }
 .file.dir.skip .fn, .file.dir.skip .fs { text-decoration: none; opacity: .6; }
 
