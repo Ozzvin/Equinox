@@ -1029,6 +1029,57 @@
     $("op-path").textContent = d.savePath || "—";
     $("op-path").title = d.savePath || "";
     $("op-move").disabled = !!t.moving;
+    fillLimits([d], focused);
+  }
+  // "Остановить раздачу при рейтинге" and "… после, часов": the torrent's own limit; unticked (0 on the daemon) it
+  // goes by the settings, which the empty field says. Saved as soon as it changes, as the rest of the tab; several
+  // torrents whose box is half ticked (they differ) are left alone until it is ticked, cleared or a number typed.
+  const LIMITS = [
+    { on: "op-ratio-on", field: "op-ratio", path: "ratio-limit", own: (d) => d.ratioLimit || 0,
+      global: () => (settings && settings.ratioLimit) || 0, body: (v) => ({ limit: v }) },
+    { on: "op-seedtime-on", field: "op-seedtime", path: "seed-time-limit", own: (d) => (d.seedTimeLimit || 0) / 60,
+      global: () => ((settings && settings.seedTimeLimitMinutes) || 0) / 60, body: (v) => ({ minutes: Math.round(v * 60) }) },
+  ];
+  function fillLimits(ds, focused) {
+    if (optDirty || focused) return;
+    for (const l of LIMITS) {
+      const on = $(l.on), f = $(l.field), vals = ds.map(l.own), g = l.global();
+      setTri(on, vals.map((v) => v > 0));
+      f.value = mixedOf(vals) || !(vals[0] > 0) ? "" : +vals[0].toFixed(2);
+      f.placeholder = mixedOf(vals) ? "у раздач разные значения" : g > 0 ? `как в настройках: ${+g.toFixed(2)}` : "в настройках не задано";
+      f.disabled = !on.checked && !on.indeterminate;
+      f.dataset.had = vals.some((v) => v > 0) ? "1" : "";
+    }
+  }
+  const limitSent = {};
+  async function saveLimit(l) {
+    const on = $(l.on), list = chosen();
+    if (!list.length || on.indeterminate) return;
+    const v = on.checked ? Number($(l.field).value) : 0;
+    if (on.checked && !(v > 0)) return; // ticked: only with a number
+    const key = list.map((t) => t.hash).sort().join(",") + "|" + v;
+    if (limitSent[l.path] === key) return;
+    limitSent[l.path] = key; optDirty = false; optMultiAt = 0;
+    await each(list, (t) => post(t, l.path, l.body(v)), list.length > 1 ? `Применено к раздачам: ${list.length}` : "Параметры раздачи сохранены");
+    renderDetails();
+  }
+  for (const l of LIMITS) {
+    const on = $(l.on), f = $(l.field);
+    f.addEventListener("input", () => { optDirty = true; limitSent[l.path] = ""; });
+    f.addEventListener("change", () => { if (on.indeterminate) { on.indeterminate = false; on.checked = true; } saveLimit(l); });
+    f.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); f.dispatchEvent(new Event("change")); } });
+    // ticked and left without a number: nothing was saved, so the box goes back
+    f.addEventListener("blur", () => {
+      if (!on.checked || Number(f.value) > 0) return;
+      on.checked = false; f.value = ""; f.disabled = true; optDirty = false;
+      if (f.dataset.had) saveLimit(l); // it had a limit of its own: emptied, it goes by the settings again
+    });
+    on.addEventListener("change", () => {
+      f.disabled = !on.checked; limitSent[l.path] = "";
+      if (!on.checked) f.value = "";
+      if (on.checked && !f.value) { optDirty = true; f.focus(); } // the number comes first
+      else saveLimit(l);
+    });
   }
   // Where a finished torrent goes when its own field is empty: its label's folder when finished torrents are moved and
   // the label has one, else the general folder for finished torrents.
@@ -1122,6 +1173,7 @@
     $("op-path").textContent = !saves.length ? "—" : mixedOf(saves) ? "у раздач разные папки" : saves[0];
     $("op-path").title = mixedOf(saves) ? "" : saves[0] || "";
     $("op-move").disabled = list.some((t) => t.moving);
+    fillLimits(ds, focused);
   }
 
   async function renderDetails() {
