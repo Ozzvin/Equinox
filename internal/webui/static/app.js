@@ -967,7 +967,7 @@
   function ago(iso) {
     if (!iso || iso.startsWith("0001")) return "—";
     const sec = (Date.now() - new Date(iso).getTime()) / 1000;
-    return sec < 2 ? "сейчас" : fmtDur(sec) + " назад";
+    return sec < 30 ? "сейчас" : fmtDur(sec) + " назад"; // half a minute of "now": a seed still there does not count up seconds
   }
   async function renderStatus(t, same) {
     let x = { activeSeconds: 0, lastTransfer: -1, availability: 0 };
