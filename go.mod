@@ -5,6 +5,7 @@ go 1.27.0
 require (
 	github.com/anacrolix/torrent v1.61.0
 	github.com/energye/systray v1.0.3
+	github.com/godbus/dbus/v5 v5.1.0
 	github.com/huin/goupnp v1.3.0
 	github.com/jackpal/gateway v1.2.0
 	github.com/jackpal/go-nat-pmp v1.1.0
@@ -44,7 +45,6 @@ require (
 	github.com/go-llsqlite/crawshaw v0.5.6-0.20250312230104-194977a03421 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

@@ -14,6 +14,8 @@
   let token = "";
   if (typeof window.__equinoxToken === "string") token = window.__equinoxToken;
   const fromLink = location.hash.match(/token=([0-9a-f]+)/i);
+  // the Linux program's tray asks for the settings with a link that also carries the key: "#token=...&settings"
+  const linkSettings = !!fromLink && /&settings$/.test(location.hash);
   if (!token && fromLink) token = fromLink[1];
   if (token) { try { localStorage.setItem("token", token); } catch (_) {} }
   else { try { token = localStorage.getItem("token") || ""; } catch (_) {} }
@@ -35,6 +37,25 @@
   // "Показать в Проводнике" is not offered there, nor is it what a double click does.
   const REMOTE = !!window.__equinoxRemote;
   if (REMOTE) $("btn-open").hidden = true;
+
+  // ---------- copying ----------
+  // The browser lends its clipboard to a page only over HTTPS or from localhost: on Umbrel the page comes by plain
+  // http://umbrel.local:9095, navigator.clipboard is missing there and every "copy" failed. The old way, a selected
+  // text field and execCommand("copy"), still works there while the click that asked for it is fresh.
+  async function copyText(text) {
+    if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+      try { await navigator.clipboard.writeText(text); return; } catch (_) { /* try the old way */ }
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+    // inside an open modal dialog: elsewhere the dialog keeps the focus and nothing is selected
+    (document.querySelector("dialog[open]") || document.body).appendChild(ta);
+    ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    ta.remove();
+    if (!ok) throw new Error("copy failed");
+  }
 
   // ---------- folders by the names of the system around (Umbrel) ----------
   // A server in a container is given a few folders (see -place): Umbrel's Downloads is /downloads inside it. The page
@@ -80,25 +101,6 @@
     return i < 0 ? url : url.slice(0, i) + "?path=" + encodeURIComponent(realPath(decodeURIComponent(url.slice(i + 6))));
   }
 
-  // ---------- copying ----------
-  // The browser lends its clipboard to a page only over HTTPS or from localhost: on Umbrel the page comes by plain
-  // http://umbrel.local:9095, navigator.clipboard is missing there and every "copy" failed. The old way, a selected
-  // text field and execCommand("copy"), still works there while the click that asked for it is fresh.
-  async function copyText(text) {
-    if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
-      try { await navigator.clipboard.writeText(text); return; } catch (_) { /* try the old way */ }
-    }
-    const ta = document.createElement("textarea");
-    ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
-    // inside an open modal dialog: elsewhere the dialog keeps the focus and nothing is selected
-    (document.querySelector("dialog[open]") || document.body).appendChild(ta);
-    ta.focus(); ta.select();
-    let ok = false;
-    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
-    ta.remove();
-    if (!ok) throw new Error("copy failed");
-  }
-
   // ---------- language ----------
   // i18n.js decides the language and, in English, translates the texts the page shows. What it cannot do is here: the
   // numbers, units and dates that are put together from pieces are made in the language of the page.
@@ -119,6 +121,21 @@
     let i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
     return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + " " + units[i];
   }
+  // "Not enough disk space" (core.noSpace): the server gives the byte counts and the sizes are written here, in the
+  // units of the list and with the Russian decimal comma. Any other code goes to the dictionary as before.
+  const sizeText = (n) => (EN ? bytes(n) : bytes(n).replace(".", ","));
+  function noSpaceText(code, args) {
+    if (code !== "disk.no_space" && code !== "disk.no_space_others" && code !== "move.no_space") return "";
+    const [a, b, c] = (args || []).map(Number), others = code === "disk.no_space_others";
+    const need = others ? a + b : a, free = others ? c : b;
+    if (!(need >= 0 && free >= 0)) return "";
+    const head = `На диске не хватает ${sizeText(Math.max(0, need - free))} (нужно ${sizeText(need)}, `;
+    if (code === "move.no_space") return head + `свободно в целевой папке ${sizeText(free)})`;
+    return head + `свободно ${sizeText(free)})` + (others ? `, считая ${sizeText(b)} для других активных раздач на этом диске` : "");
+  }
+  const trCodeOf = window.__trCode;
+  window.__trCode = (code, args, message) => noSpaceText(code, args) || trCodeOf(code, args, message);
+  const lowerFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s); // a sentence after "«…»: " in a toast
   // Speeds are shown in bytes per second (binary prefixes, as sizes) or, by the setting, in bits per second
   // (decimal prefixes, as networks count them).
   const bitsMode = () => !!(typeof settings !== "undefined" && settings && settings.speedUnit === "bits");
@@ -965,7 +982,7 @@
   function ago(iso) {
     if (!iso || iso.startsWith("0001")) return "—";
     const sec = (Date.now() - new Date(iso).getTime()) / 1000;
-    return sec < 2 ? "сейчас" : fmtDur(sec) + " назад";
+    return sec < 30 ? "сейчас" : fmtDur(sec) + " назад"; // half a minute of "now": a seed still there does not count up seconds
   }
   async function renderStatus(t, same) {
     let x = { activeSeconds: 0, lastTransfer: -1, availability: 0 };
@@ -1027,6 +1044,57 @@
     $("op-path").textContent = d.savePath || "—";
     $("op-path").title = d.savePath || "";
     $("op-move").disabled = !!t.moving;
+    fillLimits([d], focused);
+  }
+  // "Остановить раздачу при рейтинге" and "… после, часов": the torrent's own limit; unticked (0 on the daemon) it
+  // goes by the settings, which the empty field says. Saved as soon as it changes, as the rest of the tab; several
+  // torrents whose box is half ticked (they differ) are left alone until it is ticked, cleared or a number typed.
+  const LIMITS = [
+    { on: "op-ratio-on", field: "op-ratio", path: "ratio-limit", own: (d) => d.ratioLimit || 0,
+      global: () => (settings && settings.ratioLimit) || 0, body: (v) => ({ limit: v }) },
+    { on: "op-seedtime-on", field: "op-seedtime", path: "seed-time-limit", own: (d) => (d.seedTimeLimit || 0) / 60,
+      global: () => ((settings && settings.seedTimeLimitMinutes) || 0) / 60, body: (v) => ({ minutes: Math.round(v * 60) }) },
+  ];
+  function fillLimits(ds, focused) {
+    if (optDirty || focused) return;
+    for (const l of LIMITS) {
+      const on = $(l.on), f = $(l.field), vals = ds.map(l.own), g = l.global();
+      setTri(on, vals.map((v) => v > 0));
+      f.value = mixedOf(vals) || !(vals[0] > 0) ? "" : +vals[0].toFixed(2);
+      f.placeholder = mixedOf(vals) ? "у раздач разные значения" : g > 0 ? `как в настройках: ${+g.toFixed(2)}` : "в настройках не задано";
+      f.disabled = !on.checked && !on.indeterminate;
+      f.dataset.had = vals.some((v) => v > 0) ? "1" : "";
+    }
+  }
+  const limitSent = {};
+  async function saveLimit(l) {
+    const on = $(l.on), list = chosen();
+    if (!list.length || on.indeterminate) return;
+    const v = on.checked ? Number($(l.field).value) : 0;
+    if (on.checked && !(v > 0)) return; // ticked: only with a number
+    const key = list.map((t) => t.hash).sort().join(",") + "|" + v;
+    if (limitSent[l.path] === key) return;
+    limitSent[l.path] = key; optDirty = false; optMultiAt = 0;
+    await each(list, (t) => post(t, l.path, l.body(v)), list.length > 1 ? `Применено к раздачам: ${list.length}` : "Параметры раздачи сохранены");
+    renderDetails();
+  }
+  for (const l of LIMITS) {
+    const on = $(l.on), f = $(l.field);
+    f.addEventListener("input", () => { optDirty = true; limitSent[l.path] = ""; });
+    f.addEventListener("change", () => { if (on.indeterminate) { on.indeterminate = false; on.checked = true; } saveLimit(l); });
+    f.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); f.dispatchEvent(new Event("change")); } });
+    // ticked and left without a number: nothing was saved, so the box goes back
+    f.addEventListener("blur", () => {
+      if (!on.checked || Number(f.value) > 0) return;
+      on.checked = false; f.value = ""; f.disabled = true; optDirty = false;
+      if (f.dataset.had) saveLimit(l); // it had a limit of its own: emptied, it goes by the settings again
+    });
+    on.addEventListener("change", () => {
+      f.disabled = !on.checked; limitSent[l.path] = "";
+      if (!on.checked) f.value = "";
+      if (on.checked && !f.value) { optDirty = true; f.focus(); } // the number comes first
+      else saveLimit(l);
+    });
   }
   // Where a finished torrent goes when its own field is empty: its label's folder when finished torrents are moved and
   // the label has one, else the general folder for finished torrents.
@@ -1120,6 +1188,7 @@
     $("op-path").textContent = !saves.length ? "—" : mixedOf(saves) ? "у раздач разные папки" : saves[0];
     $("op-path").title = mixedOf(saves) ? "" : saves[0] || "";
     $("op-move").disabled = list.some((t) => t.moving);
+    fillLimits(ds, focused);
   }
 
   async function renderDetails() {
@@ -1774,14 +1843,15 @@
   function reportErrors() {
     for (const t of torrents) {
       const key = t.error || "";
-      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? "не хватает места на диске. Освободите место и нажмите «Продолжить»" : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
+      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? (noSpaceText(t.errorCode, t.errorArgs) ? lowerFirst(errText(t)) + ". Освободите место и нажмите «Продолжить»" : "не хватает места на диске. Освободите место и нажмите «Продолжить»") : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
       shownErrors[t.hash] = key;
     }
   }
   const shownMoveMsg = {};
   function reportMoves() {
     for (const t of torrents) {
-      const msg = t.moveError ? `Не удалось переместить «${t.name}»: ${t.moveError}` : t.moveNote ? `«${t.name}»: ${t.moveNote}` : "";
+      const why = t.moveErrorCode ? lowerFirst(window.__trCode(t.moveErrorCode, t.moveErrorArgs, t.moveError)) : t.moveError;
+      const msg = t.moveError ? `Не удалось переместить «${t.name}»: ${why}` : t.moveNote ? `«${t.name}»: ${t.moveNote}` : "";
       if (msg && shownMoveMsg[t.hash] !== msg) toast(msg, !!t.moveError);
       shownMoveMsg[t.hash] = msg;
     }
@@ -2072,11 +2142,28 @@
     if (files && files.length) await stageFiles(files);
   }
 
+  // The Linux program shows its window in the user's own browser, where nothing is bound to the page: the system section
+  // of the settings asks the program over the API instead (see api.Desktop). The texts there speak of Windows; here
+  // they speak of the desktop, and the window's own settings (closing, size) are not shown, as there is no window.
+  const BROWSER_APP = !window.__equinoxDesktop && !!window.__equinoxBrowserApp;
+  const SYSTEM_SECTION = !!window.__equinoxDesktop || BROWSER_APP;
+  if (BROWSER_APP) {
+    const tryApi = async (method, path, body) => { try { await api(method, path, body); return ""; } catch (x) { return x.message; } };
+    window.getAutostart = async () => !!(await api("GET", "/api/desktop/autostart")).on;
+    window.setAutostart = (on) => tryApi("PUT", "/api/desktop/autostart", { on });
+    window.registerHandlers = () => tryApi("POST", "/api/desktop/default-app");
+    $("st-autostart-t").textContent = "Запускать при входе в систему";
+    $("st-starthidden-h").textContent = "Тихий запуск: браузер не открывается, раздачи работают. Действует на запуск при входе в систему";
+    $("fs-window").hidden = true;
+    $("st-notify-t").textContent = "Показывать уведомление, когда загрузка завершена или раздача остановлена лимитом";
+    $("st-assoc-h").textContent = "Чтобы файлы .torrent и magnet-ссылки (в том числе из браузера) сразу открывались в Equinox, сделайте его программой по умолчанию.";
+  }
+
   // A magnet link or .torrent file opened from outside the app (Explorer, a second launch) lands
   // here instead of being added at once, so it shows up in the same dialog as anything dropped or
   // typed by hand.
   async function checkPendingAdd() {
-    if (!window.__equinoxDesktop) return;
+    if (!window.__equinoxDesktop && !window.__equinoxBrowserApp) return;
     let items;
     try { items = await api("GET", "/api/pending-add" + (ADD_WINDOW ? "?for=window" : "")); } catch (_) { return; }
     if (!items || !items.length) return;
@@ -2410,7 +2497,13 @@
   });
   $("dlg-add").addEventListener("cancel", (ev) => { if (adBusy) ev.preventDefault(); });
   $("dlg-add").addEventListener("close", () => { // in the window made for adding, closing the dialog is closing the window
-    if (ADD_WINDOW) setTimeout(() => { if (!$("dlg-add").open) { if (typeof window.closeAddWindow === "function") window.closeAddWindow(); else window.close(); } }, 500);
+    if (ADD_WINDOW) setTimeout(() => {
+      if ($("dlg-add").open) return;
+      if (typeof window.closeAddWindow === "function") return window.closeAddWindow();
+      window.close();
+      // a browser tab opened by the Linux program cannot close itself: it becomes the list of torrents
+      setTimeout(() => location.replace("/"), 300);
+    }, 500);
   });
   $("dlg-add").addEventListener("close", () => { // forget what was staged but not added
     for (const e of adItems) if (e.stage) api("DELETE", `/api/stage/${e.stage}`).catch(() => {});
@@ -2666,7 +2759,7 @@
     system(s, isReset) {
       $("st-starthidden").checked = s.startHidden !== false; $("st-closetray").checked = s.closeToTray !== false; $("st-mintray").checked = !!s.minimizeToTray;
       $("st-remwin").checked = !!s.rememberWindow; $("st-notify").checked = s.notifyOnComplete !== false;
-      if (isReset && window.__equinoxDesktop) $("st-autostart").checked = false;
+      if (isReset && SYSTEM_SECTION) $("st-autostart").checked = false;
     },
   };
   // "Сбросить раздел к умолчаниям": the fields get the defaults, nothing is saved until "Сохранить"
@@ -2683,9 +2776,9 @@
     for (const r of document.querySelectorAll('input[name="lg"]')) r.checked = r.value === window.__langPref;
     for (const id of Object.keys(FILL)) FILL[id](settings);
     $("st-autoupdate").checked = settings.autoUpdateCheck !== false;
-    $("sn-system").hidden = !window.__equinoxDesktop;
+    $("sn-system").hidden = !SYSTEM_SECTION;
     $("st-wizard").title = window.__equinoxDesktop ? "Пошаговая помощь: папки, скорость, порт, запуск с Windows" : "Пошаговая помощь: папки, скорость, порт";
-    if (window.__equinoxDesktop && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
+    if (SYSTEM_SECTION && typeof window.getAutostart === "function") window.getAutostart().then((on) => { $("st-autostart").checked = !!on; }).catch(() => {});
     openLabelRows();
     setSearch.value = ""; applySearch();
     openSection();
@@ -2764,7 +2857,7 @@
         preallocate: $("st-prealloc").checked, listenPort: n("st-port-num"), routerAddress: $("st-router").value.trim(),
         ratioLimit: tgNum("tg-ratio", "st-ratio"), seedTimeLimitMinutes: Math.round(tgNum("tg-seedtime", "st-seedtime") * 60), maxConcurrentChecks: tgNum("tg-maxchecks", "st-maxchecks"), maxConcurrentMoves: tgNum("tg-maxmoves", "st-maxmoves"), speedUnit: $("st-unit-bits").checked ? "bits" : "bytes", addPaused: $("st-addpaused").checked, addSequential: $("st-addseq").checked, addEdgePieces: $("st-addedge").checked, notifyOnComplete: $("st-notify").checked, autoUpdateCheck: $("st-autoupdate").checked, startHidden: $("st-starthidden").checked, closeToTray: $("st-closetray").checked, minimizeToTray: $("st-mintray").checked, rememberWindow: $("st-remwin").checked, maxActiveDownloads: tgNum("tg-maxactive", "st-maxactive"), maxActiveSeeds: tgNum("tg-maxseeds", "st-maxseeds"), altSchedule: readSchedule(), copyRemovePolicy: $("st-copy").value,
       });
-      if (window.__equinoxDesktop && typeof window.setAutostart === "function") {
+      if (SYSTEM_SECTION && typeof window.setAutostart === "function") {
         const err = await window.setAutostart($("st-autostart").checked);
         if (err) { toast("Не удалось изменить автозапуск: " + err, true); }
       }
@@ -2783,6 +2876,7 @@
     if (typeof window.registerHandlers !== "function") return;
     const err = await window.registerHandlers();
     if (err) toast("Не удалось зарегистрировать приложение: " + err, true);
+    else if (BROWSER_APP) toast("Equinox открывает файлы .torrent и magnet-ссылки");
   };
 
   const EN_NAMES = { "Переносить завершённые загрузки в": "Move finished downloads to", "Папка автодобавления": "Watch folder", "Сохранять копии .torrent файлов в": "Keep copies of .torrent files in" };
@@ -3043,6 +3137,14 @@
     $("pk-path").value = pk.torrents ? "" : d.path; // choosing a .torrent: a folder is only the way to it
     renderPicker();
   }
+  // How full a disk is, for the bar under a place: the share used, the caption, and the colour (yellow under a tenth
+  // free, red under 2% or 1 GB). null when the server could not tell (a network folder): then there is no bar.
+  function diskBar(total, free) {
+    if (!(total > 0) || !(free >= 0)) return null;
+    const share = free / total;
+    return { used: Math.min(100, Math.round((1 - share) * 1000) / 10), text: `Свободно ${sizeText(free)} из ${sizeText(total)}`,
+      cls: share < 0.02 || free < 2 ** 30 ? "bad" : share < 0.1 ? "warn" : "" };
+  }
   const pkDate = (s) => { const t = Date.parse(s); return t > 31536000000 ? new Date(t).toLocaleDateString(LOCALE) + " " + new Date(t).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) : ""; };
   function renderPicker() {
     const d = pk.data; if (!d) return;
@@ -3058,7 +3160,9 @@
     $("pk-places").innerHTML = d.places.map((p) => {
       const sep = last && last !== p.kind && (p.kind === "drive") ? '<div class="sp"></div>' : "";
       last = p.kind;
-      return sep + `<button type="button" data-go="${esc(p.path)}" title="${esc(p.path)}"${curPlace === p ? ' aria-current="true"' : ""}><svg class="i"><use href="#i-folder"/></svg><span>${esc(p.name)}</span></button>`;
+      const bar = diskBar(p.totalBytes, p.freeBytes);
+      const label = bar ? `<span class="pl"><span>${esc(p.name)}</span><span class="dbar ${bar.cls}"><i style="width:${bar.used}%"></i></span><span class="cap">${bar.text}</span></span>` : `<span>${esc(p.name)}</span>`;
+      return sep + `<button type="button" data-go="${esc(p.path)}" title="${esc(p.path)}"${bar ? ' class="disk"' : ""}${curPlace === p ? ' aria-current="true"' : ""}><svg class="i"><use href="#i-folder"/></svg>${label}</button>`;
     }).join("");
     const rows = d.entries.map((e, i) => e.dir ?
       `<div class="pk-row dir" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-folder"/></svg><span>${esc(e.name)}</span></span><span class="r dt"></span><span class="dt">${pkDate(e.modified)}</span></div>` :
@@ -3068,6 +3172,7 @@
       (!d.error && d.entries.length === 0 ? `<div class="pk-msg">${pk.torrents ? "Здесь пусто." : "Здесь пусто. Можно выбрать эту папку или создать в ней новую."}</div>` : "") +
       (d.truncated ? '<div class="pk-msg">Показаны первые записи, остальные скрыты.</div>' : "");
     $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
+    $("pk-free").textContent = !pk.torrents && d.freeBytes != null ? "Свободно " + sizeText(d.freeBytes) : "";
   }
   const PK_ROWS = ".pk-row.dir, .pk-row.file.pick";
   const pkFiles = () => [...$("pk-list").querySelectorAll(".pk-row.file.pick")].map((r) => r.dataset.path);
@@ -3408,7 +3513,7 @@
   // The tray menu's "Настройки": the desktop program opens the settings of a window that exists (openSettingsNow), or
   // makes the window with #settings in its address.
   window.openSettingsNow = () => { if (!ADD_WINDOW) $("btn-settings").click(); };
-  if (location.hash === "#settings") {
+  if (location.hash === "#settings" || linkSettings) {
     history.replaceState(null, "", location.pathname + location.search);
     setTimeout(window.openSettingsNow, 600);
   }

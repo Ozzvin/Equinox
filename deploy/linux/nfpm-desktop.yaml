@@ -1,0 +1,37 @@
+# .deb and .rpm of the desktop program (tray icon, the interface in the browser), built by the "linux" job of
+# .github/workflows/build.yml:
+#   VERSION=1.1.0 ARCH=amd64 nfpm pkg -f deploy/linux/nfpm-desktop.yaml -p deb -t dist/Equinox-linux-amd64.deb
+# The binary is copied for it to stage/pkg/equinox, the icons to stage/icons (cmd/mkicons).
+name: equinox
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: net
+priority: optional
+maintainer: Ozzvin <https://github.com/Ozzvin>
+description: |
+  Equinox torrent client.
+  A tray icon and the web interface in your browser; opens .torrent files and magnet links.
+vendor: Ozzvin
+homepage: https://github.com/Ozzvin/equinox
+license: MIT
+recommends:
+  - xdg-utils
+
+contents:
+  - src: stage/pkg/equinox
+    dst: /usr/bin/equinox
+    file_info:
+      mode: 0755
+  - src: deploy/linux/desktop/equinox.desktop
+    dst: /usr/share/applications/equinox.desktop
+  - src: stage/icons/icon16.png
+    dst: /usr/share/icons/hicolor/16x16/apps/equinox.png
+  - src: stage/icons/icon32.png
+    dst: /usr/share/icons/hicolor/32x32/apps/equinox.png
+  - src: stage/icons/icon48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/equinox.png
+  - src: stage/icons/icon256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/equinox.png
+  - src: LICENSE
+    dst: /usr/share/doc/equinox/LICENSE

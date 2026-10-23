@@ -38,6 +38,7 @@ func addTwoFilesOnDisk(t *testing.T, m *Manager, dir, name string) (hash, aPath,
 }
 
 func TestOpenFileSelectsThatFile(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 0 })
 	h, a, b := addTwoFilesOnDisk(t, m, dir, "opn")
@@ -108,6 +109,7 @@ func TestDeleteFilesRemovesThemFromDiskAndStopsWantingThem(t *testing.T) {
 // A file can be deleted while the torrent is being checked: the engine keeps opening it, so the store must
 // keep it out of the engine's reach for the moment of the deletion.
 func TestDeleteFileWhileTheTorrentIsBeingChecked(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 0 })
 	tp := makeTorrent(t, dir, "big.bin", 200<<20)
@@ -137,6 +139,7 @@ func TestDeleteFileWhileTheTorrentIsBeingChecked(t *testing.T) {
 }
 
 func TestDeleteFileHeldByAnotherProgramSaysSo(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 0 })
 	h, a, _ := addTwoFilesOnDisk(t, m, dir, "held")

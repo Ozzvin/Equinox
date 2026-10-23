@@ -72,7 +72,11 @@ func PeerIDPrefix() string { return peerIDPrefix(Version) }
 
 func peerIDPrefix(v string) string {
 	var digits [4]int
-	for i, part := range strings.SplitN(strings.TrimPrefix(v, BetaPrefix), ".", 4) {
+	v = strings.TrimPrefix(v, BetaPrefix)
+	if i := strings.IndexByte(v, '-'); i >= 0 {
+		v = v[:i] // a candidate or a beta of a release ("1.1.0-rc17", "1.1.1-beta.2") counts as that release
+	}
+	for i, part := range strings.SplitN(v, ".", 4) {
 		n, err := strconv.Atoi(part)
 		if err != nil || n < 0 {
 			break

@@ -25,7 +25,6 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
-OutputBaseFilename=Equinox-Setup-{#AppVersion}
 SetupIconFile=equinox.ico
 UninstallDisplayIcon={app}\Equinox.exe
 Compression=lzma2
@@ -33,8 +32,20 @@ SolidCompression=yes
 WizardStyle=modern
 ; .torrent and magnet: Explorer is told the associations changed (see the "assoc" tasks below)
 ChangesAssociations=yes
+; Arch: x64 (the default) or arm64 (ISCC /DArch=arm64, the native program for Windows on ARM; the x64 installer also
+; runs there, emulated). The two differ in the architecture they accept and in the file name.
+#ifndef Arch
+  #define Arch "x64"
+#endif
+#if Arch == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+OutputBaseFilename=Equinox-Setup-arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+OutputBaseFilename=Equinox-Setup
+#endif
 ; Язык установщика выбирается по языку Windows (русский, иначе английский); окно выбора языка показывается, только
 ; если язык Windows не подошёл ни к одному. При обновлении (в том числе тихом, из самой программы) остаётся язык,
 ; выбранный при прошлой установке. Первым стоит английский: он и запасной вариант.

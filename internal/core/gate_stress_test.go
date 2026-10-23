@@ -11,6 +11,7 @@ import (
 
 // Many torrents with real amounts of data on disk: at no moment may more torrents be hashing than the limit.
 func TestNeverMoreChecksThanTheLimit(t *testing.T) {
+	slow(t)
 	for _, limit := range []int{1, 2} {
 		t.Run(fmt.Sprintf("limit%d", limit), func(t *testing.T) {
 			dir := t.TempDir()
@@ -115,6 +116,7 @@ func TestChecksAfterRestartRespectTheLimit(t *testing.T) {
 
 // Lowering the limit while checks are running puts the ones lowest in the queue back into the line.
 func TestLoweringTheLimitPutsTheExtraCheckBackInTheLine(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 2 })
 	var hashes []string
@@ -165,6 +167,7 @@ func TestLoweringTheLimitPutsTheExtraCheckBackInTheLine(t *testing.T) {
 // A manual recheck (the "Проверить файлы" button) must respect the check limit too, queuing
 // behind whatever already holds the slot instead of running alongside it.
 func TestRecheckRespectsTheLimit(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
 	var hashes []string
@@ -223,6 +226,7 @@ func TestRecheckRespectsTheLimit(t *testing.T) {
 // from the line itself and from what is running, both under the manager's lock: the start of a short check
 // is too brief for a poll to be sure to catch it.
 func TestRecheckJumpsToTheFrontOfTheQueue(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
 	var hashes []string

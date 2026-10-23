@@ -95,7 +95,7 @@ func (m *Manager) moveFiles(ctx context.Context, files []fileMove, cur, target s
 			}
 			if free, err := freeSpace(target); err == nil && uint64(left) > free {
 				undo()
-				return fmt.Errorf("%w: moving needs %d bytes, %d free in the target folder", ErrNoDiskSpace, left, free), nil
+				return noSpace(CodeNoSpaceMove, uint64(left), 0, free), nil
 			}
 		}
 		copies = append(copies, f) // before the copy: a half-written one is removed by undo too

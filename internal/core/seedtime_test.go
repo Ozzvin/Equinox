@@ -10,6 +10,7 @@ import (
 )
 
 func TestSeedTimeLimitStopsSeedingAndReportsIt(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	tp := makeTorrent(t, dir, "a.bin", 50<<10)
 	putOnDisk(t, dir, "a.bin")
@@ -75,6 +76,43 @@ func TestSeedTimeLimitFallsBackToTheGlobalSetting(t *testing.T) {
 	if err := m.SetSeedTimeLimit(makeAndAdd(t, m, dir), -1); err == nil {
 		t.Fatal("negative limit must be refused")
 	}
+}
+
+// The limits set on the Options tab: a torrent's own ratio and seeding time are kept in its record, win over the
+// settings, and 0 gives it the settings' ones back.
+func TestOwnLimitsWinOverTheSettingsAndZeroGivesThemBack(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.RatioLimit = 2; s.SeedTimeLimitMinutes = 90 })
+	hash := makeAndAdd(t, m, dir)
+	check := func(ratio, ratioInForce float64, seed, seedInForce int) {
+		t.Helper()
+		d, err := m.Details(hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d.RatioLimit != ratio || d.RatioInForce != ratioInForce || d.SeedTimeLimit != seed || d.SeedTimeInForce != seedInForce {
+			t.Fatalf("ratio %v in force %v, seeding time %d in force %d; want %v %v %d %d",
+				d.RatioLimit, d.RatioInForce, d.SeedTimeLimit, d.SeedTimeInForce, ratio, ratioInForce, seed, seedInForce)
+		}
+	}
+	check(0, 2, 0, 90)
+	if err := m.SetRatioLimit(hash, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetSeedTimeLimit(hash, 30); err != nil {
+		t.Fatal(err)
+	}
+	check(0.5, 0.5, 30, 30)
+	if r := m.snapshotRecords()[hash]; r.RatioLimit != 0.5 || r.SeedTimeLimit != 30 {
+		t.Fatalf("not kept in the record: %+v", r)
+	}
+	if err := m.SetRatioLimit(hash, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetSeedTimeLimit(hash, 0); err != nil {
+		t.Fatal(err)
+	}
+	check(0, 2, 0, 90)
 }
 
 // putOnDisk copies the source file of makeTorrent into the download folder, so the torrent is complete.

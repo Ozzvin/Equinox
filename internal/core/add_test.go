@@ -161,6 +161,7 @@ func TestBatchRejectsBadOptions(t *testing.T) {
 }
 
 func TestSkipCheckTrustsFilesOnDisk(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	tp := makeTorrent(t, dir, "trust.bin", 96<<10) // the torrent describes bytes of value 7
 
@@ -301,6 +302,7 @@ func TestEdgePiecesAreRaisedWithoutSequentialMode(t *testing.T) {
 func mustHashString(t *torrent.Torrent) string { return t.InfoHash().HexString() }
 
 func TestPerTorrentCompletedFolderBeatsTheGlobalOne(t *testing.T) {
+	slow(t)
 	dir := t.TempDir()
 	globalDone := filepath.Join(dir, "global-done")
 	own := filepath.Join(dir, "own-done")

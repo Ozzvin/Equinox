@@ -129,6 +129,12 @@
       <fieldset>
         <legend>Раздача</legend>
         <label>Метка<select id="op-label"></select></label>
+        <div class="op-limits">
+          <div class="op-limrow"><label class="check"><input type="checkbox" id="op-ratio-on"><span>Остановить раздачу при рейтинге</span></label>
+            <input type="number" min="0" step="0.1" id="op-ratio" class="op-limit" disabled></div>
+          <div class="op-limrow"><label class="check"><input type="checkbox" id="op-seedtime-on"><span>Остановить раздачу после, часов</span></label>
+            <input type="number" min="0" step="0.5" id="op-seedtime" class="op-limit" disabled></div>
+        </div>
         <div class="op-path"><span class="muted small">Папка загрузки</span><div class="pick"><span id="op-path" class="op-pathval"></span><button type="button" class="btn small" id="op-move">Переместить…</button></div></div>
       </fieldset>
     </div>
@@ -606,10 +612,10 @@
         <h3 class="pane-title">Системные</h3>
         <fieldset>
           <legend>Запуск</legend>
-          <div class="srow one"><label class="check"><input type="checkbox" id="st-autostart"><span>Запускать вместе с Windows<br><span class="muted small">Программа стартует при входе в систему</span></span></label></div>
-          <div class="srow one"><label class="check"><input type="checkbox" id="st-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small">Тихий запуск: окно не открывается, раздачи работают. Действует на запуск вместе с Windows</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-autostart"><span><span id="st-autostart-t">Запускать вместе с Windows</span><br><span class="muted small">Программа стартует при входе в систему</span></span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-starthidden"><span>Запускаться свёрнутой в трей<br><span class="muted small" id="st-starthidden-h">Тихий запуск: окно не открывается, раздачи работают. Действует на запуск вместе с Windows</span></span></label></div>
         </fieldset>
-        <fieldset>
+        <fieldset id="fs-window">
           <legend>Окно</legend>
           <div class="srow one"><label class="check"><input type="checkbox" id="st-closetray"><span>Прятать в трей при закрытии окна<br><span class="muted small">Если выключить, закрытие окна завершит программу и остановит раздачи</span></span></label></div>
           <div class="srow one"><label class="check"><input type="checkbox" id="st-mintray"><span>Прятать в трей при сворачивании</span></label></div>
@@ -618,12 +624,12 @@
         </fieldset>
         <fieldset id="fs-notify">
           <legend>Уведомления</legend>
-          <div class="srow one"><label class="check"><input type="checkbox" id="st-notify"><span>Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label></div>
+          <div class="srow one"><label class="check"><input type="checkbox" id="st-notify"><span id="st-notify-t">Показывать уведомление Windows, когда загрузка завершена или раздача остановлена лимитом</span></label></div>
         </fieldset>
         <fieldset>
           <legend>Программа по умолчанию</legend>
           <div class="srow one">
-            <p class="muted small">Equinox уже можно выбрать для файлов .torrent и magnet-ссылок в «Открыть с помощью». Чтобы он открывал их сам, без выбора каждый раз, сделайте его программой по умолчанию — Windows потребует подтвердить это в своих настройках.</p>
+            <p class="muted small" id="st-assoc-h">Equinox уже можно выбрать для файлов .torrent и magnet-ссылок в «Открыть с помощью». Чтобы он открывал их сам, без выбора каждый раз, сделайте его программой по умолчанию — Windows потребует подтвердить это в своих настройках.</p>
             <button type="button" class="btn small" id="st-assoc">Сделать Equinox торрент-клиентом по умолчанию</button>
           </div>
         </fieldset>
@@ -800,7 +806,7 @@
     </div>
   </div>
   <p class="err" id="pk-err" hidden></p>
-  <label class="pk-path"><span id="pk-path-l">Выбранная папка</span><input id="pk-path" autocomplete="off" spellcheck="false" placeholder="Введите путь или выберите папку в списке"></label>
+  <label class="pk-path"><span id="pk-path-l">Выбранная папка</span> <span id="pk-free" class="pk-free"></span><input id="pk-path" autocomplete="off" spellcheck="false" placeholder="Введите путь или выберите папку в списке"></label>
   <div class="row-end">
     <button type="button" class="btn" data-close>Отмена</button>
     <button type="button" class="btn primary" id="pk-ok">Выбрать</button>

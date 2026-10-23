@@ -21,4 +21,14 @@ To reach it from another machine without -open, forward the port over SSH:
 
 Open the torrent port (51413, TCP and UDP by default) in your firewall and router for incoming connections.
 
+Packages (.deb for Debian/Ubuntu, .rpm for Fedora/openSUSE) install the same program as a systemd service
+that runs as the user "equinox" and keeps its state in /var/lib/equinox (downloads: /var/lib/equinox/downloads):
+
+    sudo apt install ./Equinox-server-linux-amd64.deb      (or: sudo dnf install ./Equinox-server-linux-amd64.rpm)
+    sudo systemctl enable --now equinox-server
+    sudo cat /var/lib/equinox/ui-url                            the link with the access key
+
+Extra options go to /etc/default/equinox-server, then "sudo systemctl restart equinox-server". Removing the
+package keeps /var/lib/equinox.
+
 Project page: https://github.com/Ozzvin/equinox

@@ -7,7 +7,7 @@ services:
       APP_PORT: 8080
 
   server:
-    image: ghcr.io/ozzvin/equinox:1.1.0
+    image: ghcr.io/ozzvin/equinox:1.1.0-rc18
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 1m

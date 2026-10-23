@@ -1,0 +1,23 @@
+# The files of a release by platform: "<platform> <file>". The release job checks the set it publishes against this
+# list and carries over from the previous release the files of a platform that was not rebuilt.
+windows Equinox-Setup.exe
+windows Equinox-pc.zip
+windows Equinox-server.zip
+windows Equinox-Setup-arm64.exe
+windows Equinox-pc-arm64.zip
+windows Equinox-server-arm64.zip
+linux Equinox-server-linux-amd64.tar.gz
+linux Equinox-server-linux-arm64.tar.gz
+linux Equinox-server-linux-amd64.deb
+linux Equinox-server-linux-arm64.deb
+linux Equinox-server-linux-amd64.rpm
+linux Equinox-server-linux-arm64.rpm
+linux Equinox-server-linux-amd64.pkg.tar.zst
+linux Equinox-linux-amd64.deb
+linux Equinox-linux-arm64.deb
+linux Equinox-linux-amd64.rpm
+linux Equinox-linux-arm64.rpm
+linux Equinox-linux-amd64.pkg.tar.zst
+linux Equinox-linux-amd64.AppImage
+linux Equinox-linux-arm64.AppImage
+linux Equinox-linux-amd64.flatpak

@@ -6,8 +6,11 @@ package changelog
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Ozzvin/equinox/internal/buildinfo"
 )
@@ -133,6 +136,64 @@ func filter(body, platform string) string {
 	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
+// Sections are the headings of a version's lists ("### Новое"), the part of a release's description the update window shows.
+var Sections = []string{"Новое", "Исправлено"}
+
+// proseTags are the words a release's description writes in place of a tag, since the copies before 1.1.1 show the
+// description as it is and would show the brackets: "- Только для Docker и Umbrel: …" is "- [umbrel] …".
+var proseTags = []struct{ prefix, tag string }{
+	{"Только для Docker и Umbrel: ", "umbrel"},
+	{"Только для Umbrel: ", "umbrel"},
+	{"Только для Windows: ", "windows"},
+	{"Только для Linux: ", "linux"},
+}
+
+// ReleaseNotes is what the update window shows of a release's description from GitHub: the items of its Sections
+// that concern the platform, without their tags. The rest of the page (the introduction, what runs where, the
+// downloads, a note after the lists) is for the release's page. A description with none of the Sections (an
+// unexpected shape) is only filtered by tags, so that the window still says something.
+func ReleaseNotes(body, platform string) string {
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	for i, line := range lines {
+		for _, p := range proseTags {
+			if rest, ok := strings.CutPrefix(line, "- "+p.prefix); ok {
+				r, size := utf8.DecodeRuneInString(rest)
+				lines[i] = "- [" + p.tag + "] " + string(unicode.ToUpper(r)) + rest[size:]
+				break
+			}
+		}
+	}
+	var kept []string
+	in, found, item := false, false, false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") {
+			in = strings.HasPrefix(line, "### ") && slices.Contains(Sections, strings.TrimSpace(line[4:]))
+			found, item = found || in, false
+			if in {
+				kept = append(kept, line)
+			}
+			continue
+		}
+		switch {
+		case !in:
+			continue
+		case strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* "):
+			item = true
+		case strings.TrimSpace(line) == "", strings.HasPrefix(line, " "), strings.HasPrefix(line, "\t"):
+			// a blank line, or the item going on
+		default:
+			item = false // a paragraph after the list
+		}
+		if item || strings.TrimSpace(line) == "" {
+			kept = append(kept, line)
+		}
+	}
+	if !found {
+		kept = lines
+	}
+	return filter(strings.Join(kept, "\n"), platform)
+}
+
 func hasText(lines []string) bool {
 	for _, l := range lines {
 		if t := strings.TrimSpace(l); t != "" && !strings.HasPrefix(t, "#") {
@@ -142,7 +203,8 @@ func hasText(lines []string) bool {
 	return false
 }
 
-// Base is the version a build belongs to in the changelog: "1.1.0" for "1.1.0-rc17", "1.0.48" for "beta-1.0.48".
+// Base is the version a build belongs to in the changelog: "1.1.0" for "1.1.0-rc17", "1.1.1" for the GitHub beta
+// "1.1.1-beta.2", "1.0.48" for the local test build "beta-1.0.48".
 func Base(version string) string {
 	v := strings.TrimPrefix(version, buildinfo.BetaPrefix)
 	if i := strings.IndexByte(v, '-'); i >= 0 {
