@@ -138,9 +138,12 @@ func (l *fsListing) measure() {
 		total, free uint64
 	}
 	done := make(chan result, len(jobs))
+	// read here, not in the goroutines: one that is late (or never answers) must not touch the variable after the listing
+	// is over, when a test puts the real function back
+	usage := diskUsage
 	for i, j := range jobs {
 		go func() {
-			total, free, err := diskUsage(j.path)
+			total, free, err := usage(j.path)
 			if err != nil || total == 0 { // a file system that does not know its size: no bar
 				total = 0
 			}
