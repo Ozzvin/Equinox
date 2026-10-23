@@ -29,22 +29,18 @@ Equinox is a BitTorrent client for Windows. The engine is written in Go ([anacro
 [![x64 PACMAN](https://img.shields.io/badge/x64-PACMAN-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.pkg.tar.zst)
 [![x64 APPIMAGE](https://img.shields.io/badge/x64-APPIMAGE-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.AppImage)
 [![x64 FLATPAK](https://img.shields.io/badge/x64-FLATPAK-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.flatpak)
+[![Server TAR.GZ](https://img.shields.io/badge/Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-amd64.tar.gz)
 
 [![ARM64 DEB](https://img.shields.io/badge/ARM64-DEB-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.deb)
 [![ARM64 RPM](https://img.shields.io/badge/ARM64-RPM-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.rpm)
 [![ARM64 APPIMAGE](https://img.shields.io/badge/ARM64-APPIMAGE-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.AppImage)
-
-**Linux, server archive**
-
-[![x64 Server TAR.GZ](https://img.shields.io/badge/x64_Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-amd64.tar.gz)
-[![ARM64 Server TAR.GZ](https://img.shields.io/badge/ARM64_Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-arm64.tar.gz)
+[![Server TAR.GZ](https://img.shields.io/badge/Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-arm64.tar.gz)
 
 **Docker**
 
 [![Docker GHCR.IO](https://img.shields.io/badge/Docker-GHCR.IO-4c1?style=flat&logo=docker&logoColor=white)](https://github.com/Ozzvin/Equinox/pkgs/container/equinox)
 
 Linux and Windows ARM64 are beta: the files are built and install-checked in the build, but have not yet been tried on live systems. The Linux server packages (.deb, .rpm, pacman) and the checksums are in the file list of the [latest release](https://github.com/Ozzvin/equinox/releases/latest).
-
 
 ## What it looks like
 
