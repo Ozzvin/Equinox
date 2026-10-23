@@ -8,6 +8,8 @@
 
 [Website](https://equinoxtorrent.com/en/) · [Русская версия](README.md)
 
+Equinox is a BitTorrent client for Windows. The engine is written in Go ([anacrolix/torrent](https://github.com/anacrolix/torrent)), the web interface is built into the program, and it comes with a window and a tray icon. It works like an ordinary application: download it, run it, no keys or server settings needed. The interface is available in Russian and English (Settings → Interface → Language; by default it follows the system language).
+
 ## Download
 
 **Windows 10/11**
@@ -43,7 +45,6 @@
 
 Linux and Windows ARM64 are beta: the files are built and install-checked in the build, but have not yet been tried on live systems. The Linux server packages (.deb, .rpm, pacman) and the checksums are in the file list of the [latest release](https://github.com/Ozzvin/equinox/releases/latest).
 
-Equinox is a BitTorrent client for Windows. The engine is written in Go ([anacrolix/torrent](https://github.com/anacrolix/torrent)), the web interface is built into the program, and it comes with a window and a tray icon. It works like an ordinary application: download it, run it, no keys or server settings needed. The interface is available in Russian and English (Settings → Interface → Language; by default it follows the system language).
 
 ## What it looks like
 
