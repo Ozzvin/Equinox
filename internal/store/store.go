@@ -269,8 +269,49 @@ type torrentStore struct {
 
 var errClosed = errors.New("torrent storage is closed")
 
-// acquire returns an open handle for path; create allows creating it (writes only).
-func (t *torrentStore) acquire(path string, create bool) (*handle, error) {
+// busyWaits are the pauses between the tries at a file another program holds (see busyFile), about half a minute in
+// all: an antivirus lets a file it scans go within seconds. Only then does the engine hear of the failure, which
+// stops the torrent. A variable so tests can wait less.
+var busyWaits = []time.Duration{
+	100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond,
+	time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 8 * time.Second, 8 * time.Second,
+}
+
+// whileBusy runs op until it does not fail for a file held by another program, waiting busyWaits between the tries;
+// it gives up early when the torrent is closed. A failure of another kind is returned at once.
+func (t *torrentStore) whileBusy(path string, op func() error) error {
+	err := op()
+	if err == nil || !busyFile(err) {
+		return err
+	}
+	start := time.Now()
+	for _, d := range busyWaits {
+		select {
+		case <-time.After(d):
+		case <-t.stop:
+			return err
+		}
+		if err = op(); err == nil || !busyFile(err) {
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "%s was in use by another program, got it after %v\n", path, time.Since(start).Round(100*time.Millisecond))
+			}
+			return err
+		}
+	}
+	return err
+}
+
+// acquire returns an open handle for path; create allows creating it (writes only). A file another program holds for
+// a moment is tried again (see whileBusy), without holding up the other files of the torrent meanwhile.
+func (t *torrentStore) acquire(path string, create bool) (h *handle, err error) {
+	err = t.whileBusy(path, func() error {
+		h, err = t.tryAcquire(path, create)
+		return err
+	})
+	return h, err
+}
+
+func (t *torrentStore) tryAcquire(path string, create bool) (*handle, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {
@@ -457,11 +498,14 @@ func (t *torrentStore) io(b []byte, off int64, write bool) (n int, err error) {
 			return n, err
 		}
 		var m int
-		if write {
-			m, err = h.f.WriteAt(b[:chunk], off-f.offset)
-		} else {
-			m, err = h.f.ReadAt(b[:chunk], off-f.offset)
-		}
+		err = t.whileBusy(f.path, func() (err error) { // a range another program locked
+			if write {
+				m, err = h.f.WriteAt(b[:chunk], off-f.offset)
+			} else {
+				m, err = h.f.ReadAt(b[:chunk], off-f.offset)
+			}
+			return err
+		})
 		t.release(f.path, h)
 		n += m
 		if err != nil {

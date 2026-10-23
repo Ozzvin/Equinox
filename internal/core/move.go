@@ -30,7 +30,9 @@ type moveJob struct {
 	queued    bool   // waiting for a free slot (MaxConcurrentMoves); the torrent is untouched meanwhile
 	reqDir    string // the folder asked for, used to start the move once queued runs its turn
 	running   bool
-	err       string    // last failure, kept until the next move of this torrent
+	err       string // last failure, kept until the next move of this torrent
+	errCode   string // its code and arguments (see Coder), "" if it has none
+	errArgs   []string
 	warning   string    // the move worked but something was left behind
 	updatedAt time.Time // when the job last changed state
 }
@@ -295,6 +297,10 @@ func (m *Manager) runMove(hash string, t *torrent.Torrent, src, dst, target, old
 	job.updatedAt = time.Now()
 	if moveErr != nil {
 		job.err = moveErr.Error()
+		var c Coder
+		if errors.As(moveErr, &c) {
+			job.errCode, job.errArgs = c.ErrCode()
+		}
 	} else {
 		job.err = ""
 		delete(m.moves, hash) // success: nothing to show
@@ -359,7 +365,7 @@ func (m *Manager) moveTree(ctx context.Context, src, dst string, job *moveJob, c
 		return err, nil
 	}
 	if free, err := freeSpace(filepath.Dir(dst)); err == nil && uint64(need) > free {
-		return fmt.Errorf("%w: moving needs %d bytes, %d free in the target folder", ErrNoDiskSpace, need, free), nil
+		return noSpace(CodeNoSpaceMove, uint64(need), 0, free), nil
 	}
 	m.mu.Lock()
 	job.copySize = need

@@ -121,6 +121,21 @@
     let i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
     return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + " " + units[i];
   }
+  // "Not enough disk space" (core.noSpace): the server gives the byte counts and the sizes are written here, in the
+  // units of the list and with the Russian decimal comma. Any other code goes to the dictionary as before.
+  const sizeText = (n) => (EN ? bytes(n) : bytes(n).replace(".", ","));
+  function noSpaceText(code, args) {
+    if (code !== "disk.no_space" && code !== "disk.no_space_others" && code !== "move.no_space") return "";
+    const [a, b, c] = (args || []).map(Number), others = code === "disk.no_space_others";
+    const need = others ? a + b : a, free = others ? c : b;
+    if (!(need >= 0 && free >= 0)) return "";
+    const head = `На диске не хватает ${sizeText(Math.max(0, need - free))} (нужно ${sizeText(need)}, `;
+    if (code === "move.no_space") return head + `свободно в целевой папке ${sizeText(free)})`;
+    return head + `свободно ${sizeText(free)})` + (others ? `, считая ${sizeText(b)} для других активных раздач на этом диске` : "");
+  }
+  const trCodeOf = window.__trCode;
+  window.__trCode = (code, args, message) => noSpaceText(code, args) || trCodeOf(code, args, message);
+  const lowerFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s); // a sentence after "«…»: " in a toast
   // Speeds are shown in bytes per second (binary prefixes, as sizes) or, by the setting, in bits per second
   // (decimal prefixes, as networks count them).
   const bitsMode = () => !!(typeof settings !== "undefined" && settings && settings.speedUnit === "bits");
@@ -967,7 +982,7 @@
   function ago(iso) {
     if (!iso || iso.startsWith("0001")) return "—";
     const sec = (Date.now() - new Date(iso).getTime()) / 1000;
-    return sec < 2 ? "сейчас" : fmtDur(sec) + " назад";
+    return sec < 30 ? "сейчас" : fmtDur(sec) + " назад"; // half a minute of "now": a seed still there does not count up seconds
   }
   async function renderStatus(t, same) {
     let x = { activeSeconds: 0, lastTransfer: -1, availability: 0 };
@@ -1029,6 +1044,57 @@
     $("op-path").textContent = d.savePath || "—";
     $("op-path").title = d.savePath || "";
     $("op-move").disabled = !!t.moving;
+    fillLimits([d], focused);
+  }
+  // "Остановить раздачу при рейтинге" and "… после, часов": the torrent's own limit; unticked (0 on the daemon) it
+  // goes by the settings, which the empty field says. Saved as soon as it changes, as the rest of the tab; several
+  // torrents whose box is half ticked (they differ) are left alone until it is ticked, cleared or a number typed.
+  const LIMITS = [
+    { on: "op-ratio-on", field: "op-ratio", path: "ratio-limit", own: (d) => d.ratioLimit || 0,
+      global: () => (settings && settings.ratioLimit) || 0, body: (v) => ({ limit: v }) },
+    { on: "op-seedtime-on", field: "op-seedtime", path: "seed-time-limit", own: (d) => (d.seedTimeLimit || 0) / 60,
+      global: () => ((settings && settings.seedTimeLimitMinutes) || 0) / 60, body: (v) => ({ minutes: Math.round(v * 60) }) },
+  ];
+  function fillLimits(ds, focused) {
+    if (optDirty || focused) return;
+    for (const l of LIMITS) {
+      const on = $(l.on), f = $(l.field), vals = ds.map(l.own), g = l.global();
+      setTri(on, vals.map((v) => v > 0));
+      f.value = mixedOf(vals) || !(vals[0] > 0) ? "" : +vals[0].toFixed(2);
+      f.placeholder = mixedOf(vals) ? "у раздач разные значения" : g > 0 ? `как в настройках: ${+g.toFixed(2)}` : "в настройках не задано";
+      f.disabled = !on.checked && !on.indeterminate;
+      f.dataset.had = vals.some((v) => v > 0) ? "1" : "";
+    }
+  }
+  const limitSent = {};
+  async function saveLimit(l) {
+    const on = $(l.on), list = chosen();
+    if (!list.length || on.indeterminate) return;
+    const v = on.checked ? Number($(l.field).value) : 0;
+    if (on.checked && !(v > 0)) return; // ticked: only with a number
+    const key = list.map((t) => t.hash).sort().join(",") + "|" + v;
+    if (limitSent[l.path] === key) return;
+    limitSent[l.path] = key; optDirty = false; optMultiAt = 0;
+    await each(list, (t) => post(t, l.path, l.body(v)), list.length > 1 ? `Применено к раздачам: ${list.length}` : "Параметры раздачи сохранены");
+    renderDetails();
+  }
+  for (const l of LIMITS) {
+    const on = $(l.on), f = $(l.field);
+    f.addEventListener("input", () => { optDirty = true; limitSent[l.path] = ""; });
+    f.addEventListener("change", () => { if (on.indeterminate) { on.indeterminate = false; on.checked = true; } saveLimit(l); });
+    f.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); f.dispatchEvent(new Event("change")); } });
+    // ticked and left without a number: nothing was saved, so the box goes back
+    f.addEventListener("blur", () => {
+      if (!on.checked || Number(f.value) > 0) return;
+      on.checked = false; f.value = ""; f.disabled = true; optDirty = false;
+      if (f.dataset.had) saveLimit(l); // it had a limit of its own: emptied, it goes by the settings again
+    });
+    on.addEventListener("change", () => {
+      f.disabled = !on.checked; limitSent[l.path] = "";
+      if (!on.checked) f.value = "";
+      if (on.checked && !f.value) { optDirty = true; f.focus(); } // the number comes first
+      else saveLimit(l);
+    });
   }
   // Where a finished torrent goes when its own field is empty: its label's folder when finished torrents are moved and
   // the label has one, else the general folder for finished torrents.
@@ -1122,6 +1188,7 @@
     $("op-path").textContent = !saves.length ? "—" : mixedOf(saves) ? "у раздач разные папки" : saves[0];
     $("op-path").title = mixedOf(saves) ? "" : saves[0] || "";
     $("op-move").disabled = list.some((t) => t.moving);
+    fillLimits(ds, focused);
   }
 
   async function renderDetails() {
@@ -1776,14 +1843,15 @@
   function reportErrors() {
     for (const t of torrents) {
       const key = t.error || "";
-      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? "не хватает места на диске. Освободите место и нажмите «Продолжить»" : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
+      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? (noSpaceText(t.errorCode, t.errorArgs) ? lowerFirst(errText(t)) + ". Освободите место и нажмите «Продолжить»" : "не хватает места на диске. Освободите место и нажмите «Продолжить»") : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
       shownErrors[t.hash] = key;
     }
   }
   const shownMoveMsg = {};
   function reportMoves() {
     for (const t of torrents) {
-      const msg = t.moveError ? `Не удалось переместить «${t.name}»: ${t.moveError}` : t.moveNote ? `«${t.name}»: ${t.moveNote}` : "";
+      const why = t.moveErrorCode ? lowerFirst(window.__trCode(t.moveErrorCode, t.moveErrorArgs, t.moveError)) : t.moveError;
+      const msg = t.moveError ? `Не удалось переместить «${t.name}»: ${why}` : t.moveNote ? `«${t.name}»: ${t.moveNote}` : "";
       if (msg && shownMoveMsg[t.hash] !== msg) toast(msg, !!t.moveError);
       shownMoveMsg[t.hash] = msg;
     }
@@ -3069,6 +3137,14 @@
     $("pk-path").value = pk.torrents ? "" : d.path; // choosing a .torrent: a folder is only the way to it
     renderPicker();
   }
+  // How full a disk is, for the bar under a place: the share used, the caption, and the colour (yellow under a tenth
+  // free, red under 2% or 1 GB). null when the server could not tell (a network folder): then there is no bar.
+  function diskBar(total, free) {
+    if (!(total > 0) || !(free >= 0)) return null;
+    const share = free / total;
+    return { used: Math.min(100, Math.round((1 - share) * 1000) / 10), text: `Свободно ${sizeText(free)} из ${sizeText(total)}`,
+      cls: share < 0.02 || free < 2 ** 30 ? "bad" : share < 0.1 ? "warn" : "" };
+  }
   const pkDate = (s) => { const t = Date.parse(s); return t > 31536000000 ? new Date(t).toLocaleDateString(LOCALE) + " " + new Date(t).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) : ""; };
   function renderPicker() {
     const d = pk.data; if (!d) return;
@@ -3084,7 +3160,9 @@
     $("pk-places").innerHTML = d.places.map((p) => {
       const sep = last && last !== p.kind && (p.kind === "drive") ? '<div class="sp"></div>' : "";
       last = p.kind;
-      return sep + `<button type="button" data-go="${esc(p.path)}" title="${esc(p.path)}"${curPlace === p ? ' aria-current="true"' : ""}><svg class="i"><use href="#i-folder"/></svg><span>${esc(p.name)}</span></button>`;
+      const bar = diskBar(p.totalBytes, p.freeBytes);
+      const label = bar ? `<span class="pl"><span>${esc(p.name)}</span><span class="dbar ${bar.cls}"><i style="width:${bar.used}%"></i></span><span class="cap">${bar.text}</span></span>` : `<span>${esc(p.name)}</span>`;
+      return sep + `<button type="button" data-go="${esc(p.path)}" title="${esc(p.path)}"${bar ? ' class="disk"' : ""}${curPlace === p ? ' aria-current="true"' : ""}><svg class="i"><use href="#i-folder"/></svg>${label}</button>`;
     }).join("");
     const rows = d.entries.map((e, i) => e.dir ?
       `<div class="pk-row dir" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-folder"/></svg><span>${esc(e.name)}</span></span><span class="r dt"></span><span class="dt">${pkDate(e.modified)}</span></div>` :
@@ -3094,6 +3172,7 @@
       (!d.error && d.entries.length === 0 ? `<div class="pk-msg">${pk.torrents ? "Здесь пусто." : "Здесь пусто. Можно выбрать эту папку или создать в ней новую."}</div>` : "") +
       (d.truncated ? '<div class="pk-msg">Показаны первые записи, остальные скрыты.</div>' : "");
     $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
+    $("pk-free").textContent = !pk.torrents && d.freeBytes != null ? "Свободно " + sizeText(d.freeBytes) : "";
   }
   const PK_ROWS = ".pk-row.dir, .pk-row.file.pick";
   const pkFiles = () => [...$("pk-list").querySelectorAll(".pk-row.file.pick")].map((r) => r.dataset.path);

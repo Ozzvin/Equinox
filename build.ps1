@@ -13,7 +13,11 @@ $Version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot VERSION) -Raw).Tri
 
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
-$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+# On a GitHub runner the PATH is already right (setup-go puts its Go first): the machine's own, with the Go the image
+# came with, would take it over, and setup-go 6 forbids a toolchain download (GOTOOLCHAIN=local).
+if (-not $env:GITHUB_ACTIONS) {
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+}
 # Pure Go, always: on a machine with a C compiler in PATH, `go build` silently enables cgo and
 # links against MinGW's runtime DLLs, which a plain Windows install does not have (v1.0.9 shipped
 # broken this way when built on a GitHub Actions runner, which has one; explicit beats implicit).

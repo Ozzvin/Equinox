@@ -1,8 +1,11 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/anacrolix/torrent"
 )
@@ -93,4 +96,54 @@ func (e *CodedError) ErrCode() (string, []string) { return e.Code, e.Args }
 // errInvalid builds an ErrInvalidInput error with a message.
 func errInvalid(format string, a ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{ErrInvalidInput}, a...)...)
+}
+
+// Codes of "not enough disk space" (ErrNoDiskSpace). Their arguments are byte counts, so the page writes the sizes in
+// its own units and language.
+const (
+	CodeNoSpace       = "disk.no_space"        // need, free
+	CodeNoSpaceOthers = "disk.no_space_others" // need, others, free: the other active torrents on the disk still need others
+	CodeNoSpaceMove   = "move.no_space"        // need, free in the target folder
+)
+
+// noSpace is ErrNoDiskSpace with its numbers: "На диске не хватает 2,4 ГБ (нужно 3,2 ГБ, свободно 0,8 ГБ)".
+func noSpace(code string, need, others, free uint64) error {
+	total := need + others
+	short := total - min(free, total)
+	args := []string{strconv.FormatUint(need, 10), strconv.FormatUint(free, 10)}
+	msg := fmt.Sprintf("На диске не хватает %s (нужно %s, свободно %s)", sizeRu(short), sizeRu(total), sizeRu(free))
+	switch code {
+	case CodeNoSpaceOthers:
+		args = []string{args[0], strconv.FormatUint(others, 10), args[1]}
+		msg += fmt.Sprintf(", считая %s для других активных раздач на этом диске", sizeRu(others))
+	case CodeNoSpaceMove:
+		msg = fmt.Sprintf("На диске не хватает %s (нужно %s, свободно в целевой папке %s)", sizeRu(short), sizeRu(total), sizeRu(free))
+	}
+	return &CodedError{Code: code, Args: args, Msg: msg, Err: ErrNoDiskSpace}
+}
+
+// sizeRu writes a size as the list of torrents does (app.js bytes()), with the Russian decimal comma.
+func sizeRu(n uint64) string {
+	units := []string{"Б", "КБ", "МБ", "ГБ", "ТБ"}
+	v, i := float64(n), 0
+	for v >= 1024 && i < len(units)-1 {
+		v /= 1024
+		i++
+	}
+	if v >= 100 || i == 0 {
+		return fmt.Sprintf("%.0f %s", v, units[i])
+	}
+	return strings.Replace(fmt.Sprintf("%.1f %s", v, units[i]), ".", ",", 1)
+}
+
+// setErrorOf is setError for an error that may carry a code (see Coder), which goes to the page with it.
+func (m *Manager) setErrorOf(hash, kind string, err error) {
+	e := torrentError{kind: kind, msg: err.Error()}
+	var c Coder
+	if errors.As(err, &c) {
+		e.code, e.args = c.ErrCode()
+	}
+	m.mu.Lock()
+	m.errs[hash] = e
+	m.mu.Unlock()
 }
