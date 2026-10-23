@@ -14,27 +14,15 @@ Equinox is a BitTorrent client for Windows. The engine is written in Go ([anacro
 
 **Windows 10/11**
 
-[![x64 Installer EXE](https://img.shields.io/badge/x64_Installer-EXE-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-Setup.exe)
-[![x64 Portable ZIP](https://img.shields.io/badge/x64_Portable-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-pc.zip)
-[![x64 Server ZIP](https://img.shields.io/badge/x64_Server-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server.zip)
+[![x64 Installer EXE](https://img.shields.io/badge/x64_Installer-EXE-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-Setup.exe) [![x64 Portable ZIP](https://img.shields.io/badge/x64_Portable-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-pc.zip) [![x64 Server ZIP](https://img.shields.io/badge/x64_Server-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server.zip)
 
-[![ARM64 Installer EXE](https://img.shields.io/badge/ARM64_Installer-EXE-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-Setup-arm64.exe)
-[![ARM64 Portable ZIP](https://img.shields.io/badge/ARM64_Portable-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-pc-arm64.zip)
-[![ARM64 Server ZIP](https://img.shields.io/badge/ARM64_Server-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-arm64.zip)
+[![ARM64 Installer EXE](https://img.shields.io/badge/ARM64_Installer-EXE-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-Setup-arm64.exe) [![ARM64 Portable ZIP](https://img.shields.io/badge/ARM64_Portable-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-pc-arm64.zip) [![ARM64 Server ZIP](https://img.shields.io/badge/ARM64_Server-ZIP-4c1?style=flat)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-arm64.zip)
 
 **Linux (beta)**
 
-[![x64 DEB](https://img.shields.io/badge/x64-DEB-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.deb)
-[![x64 RPM](https://img.shields.io/badge/x64-RPM-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.rpm)
-[![x64 PACMAN](https://img.shields.io/badge/x64-PACMAN-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.pkg.tar.zst)
-[![x64 APPIMAGE](https://img.shields.io/badge/x64-APPIMAGE-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.AppImage)
-[![x64 FLATPAK](https://img.shields.io/badge/x64-FLATPAK-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.flatpak)
-[![Server TAR.GZ](https://img.shields.io/badge/Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-amd64.tar.gz)
+[![x64 DEB](https://img.shields.io/badge/x64-DEB-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.deb) [![x64 RPM](https://img.shields.io/badge/x64-RPM-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.rpm) [![x64 PACMAN](https://img.shields.io/badge/x64-PACMAN-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.pkg.tar.zst) [![x64 APPIMAGE](https://img.shields.io/badge/x64-APPIMAGE-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.AppImage) [![x64 FLATPAK](https://img.shields.io/badge/x64-FLATPAK-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-amd64.flatpak) [![Server TAR.GZ](https://img.shields.io/badge/Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-amd64.tar.gz)
 
-[![ARM64 DEB](https://img.shields.io/badge/ARM64-DEB-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.deb)
-[![ARM64 RPM](https://img.shields.io/badge/ARM64-RPM-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.rpm)
-[![ARM64 APPIMAGE](https://img.shields.io/badge/ARM64-APPIMAGE-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.AppImage)
-[![Server TAR.GZ](https://img.shields.io/badge/Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-arm64.tar.gz)
+[![ARM64 DEB](https://img.shields.io/badge/ARM64-DEB-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.deb) [![ARM64 RPM](https://img.shields.io/badge/ARM64-RPM-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.rpm) [![ARM64 APPIMAGE](https://img.shields.io/badge/ARM64-APPIMAGE-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-linux-arm64.AppImage) [![Server TAR.GZ](https://img.shields.io/badge/Server-TAR.GZ-4c1?style=flat&logo=linux&logoColor=white)](https://github.com/Ozzvin/equinox/releases/latest/download/Equinox-server-linux-arm64.tar.gz)
 
 **Docker**
 
