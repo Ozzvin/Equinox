@@ -573,7 +573,7 @@ func (m *Manager) begin(t *torrent.Torrent, hash string) {
 		if errors.Is(err, ErrNoDiskSpace) {
 			kind = ErrKindDiskFull
 		}
-		m.setError(hash, kind, err.Error())
+		m.setErrorOf(hash, kind, err)
 		m.setPaused(t, hash, true) // do not download into a disk that cannot hold it
 		return
 	}
@@ -889,7 +889,10 @@ func (m *Manager) preallocate(t *torrent.Torrent, prios []int8) error {
 	}
 	total := uint64(need) + uint64(m.otherNeededBytes(hash, base))
 	if free, err := diskFree(base); err == nil && total > free {
-		return fmt.Errorf("%w: need %d bytes (%d more for other active torrents on the same disk), %d free", ErrNoDiskSpace, need, total-uint64(need), free)
+		if others := total - uint64(need); others > 0 {
+			return noSpace(CodeNoSpaceOthers, uint64(need), others, free)
+		}
+		return noSpace(CodeNoSpace, uint64(need), 0, free)
 	}
 	for _, j := range jobs {
 		// A torrent removed meanwhile (with its data) must not get its files back.

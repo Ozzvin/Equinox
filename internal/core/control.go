@@ -45,14 +45,16 @@ type Status struct {
 	ErrorKind     string    `json:"errorKind"`           // disk_full | write | missing | other
 	ErrorCode     string    `json:"errorCode,omitempty"` // the error's code for a client in another language (see Coder)
 	ErrorArgs     []string  `json:"errorArgs,omitempty"`
-	Checking      bool      `json:"checking"`      // files are being checked against their hashes
-	CheckProgress float64   `json:"checkProgress"` // 0..1 while Checking
-	CheckQueued   int       `json:"checkQueued"`   // 0 = not waiting; N = place in the line for a check of local files (1 = next)
-	Moving        float64   `json:"moving"`        // nonzero while a move is happening or queued: > 0 fraction copied, -1 a plain rename, -2 waiting in line for a free slot
-	MoveError     string    `json:"moveError"`     // last failed move, "" if none
-	MoveNote      string    `json:"moveNote"`      // a move that worked but left something behind
-	Queued        int       `json:"queued"`        // 0 = not waiting; N = position in the wait line (1 = next)
-	SeedQueued    int       `json:"seedQueued"`    // 0 = shares (or is not finished); N = place in the line for a place to share (1 = next)
+	Checking      bool      `json:"checking"`                // files are being checked against their hashes
+	CheckProgress float64   `json:"checkProgress"`           // 0..1 while Checking
+	CheckQueued   int       `json:"checkQueued"`             // 0 = not waiting; N = place in the line for a check of local files (1 = next)
+	Moving        float64   `json:"moving"`                  // nonzero while a move is happening or queued: > 0 fraction copied, -1 a plain rename, -2 waiting in line for a free slot
+	MoveError     string    `json:"moveError"`               // last failed move, "" if none
+	MoveErrorCode string    `json:"moveErrorCode,omitempty"` // its code for a client in another language (see Coder)
+	MoveErrorArgs []string  `json:"moveErrorArgs,omitempty"`
+	MoveNote      string    `json:"moveNote"`   // a move that worked but left something behind
+	Queued        int       `json:"queued"`     // 0 = not waiting; N = position in the wait line (1 = next)
+	SeedQueued    int       `json:"seedQueued"` // 0 = shares (or is not finished); N = place in the line for a place to share (1 = next)
 	Sequential    bool      `json:"sequential"`
 	HasMeta       bool      `json:"hasMetadata"`
 	CopyPath      string    `json:"copyPath,omitempty"`
@@ -548,6 +550,8 @@ func (m *Manager) List() []Status {
 		queued    bool
 		frac      float64
 		err, note string
+		errCode   string
+		errArgs   []string
 	}
 	errs := map[string]torrentError{}
 	for h, e := range m.errs {
@@ -567,7 +571,7 @@ func (m *Manager) List() []Status {
 	}
 	moves := map[string]moveView{}
 	for h, j := range m.moves {
-		v := moveView{name: j.name, sel: j.selSize, running: j.running, queued: j.queued, frac: j.fraction(), err: j.err, note: j.warning}
+		v := moveView{name: j.name, sel: j.selSize, running: j.running, queued: j.queued, frac: j.fraction(), err: j.err, errCode: j.errCode, errArgs: j.errArgs, note: j.warning}
 		switch {
 		case j.running && j.copySize == 0:
 			v.frac = -1 // rename in progress: no meaningful percentage
@@ -626,7 +630,7 @@ func (m *Manager) List() []Status {
 		e := errs[st.Hash]
 		st.Error, st.ErrorKind, st.ErrorCode, st.ErrorArgs = e.msg, e.kind, e.code, e.args
 		if v, ok := moves[st.Hash]; ok {
-			st.MoveError, st.MoveNote = v.err, v.note
+			st.MoveError, st.MoveErrorCode, st.MoveErrorArgs, st.MoveNote = v.err, v.errCode, v.errArgs, v.note
 			if v.running || v.queued {
 				st.Moving = v.frac
 			}

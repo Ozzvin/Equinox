@@ -121,6 +121,21 @@
     let i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
     return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + " " + units[i];
   }
+  // "Not enough disk space" (core.noSpace): the server gives the byte counts and the sizes are written here, in the
+  // units of the list and with the Russian decimal comma. Any other code goes to the dictionary as before.
+  const sizeText = (n) => (EN ? bytes(n) : bytes(n).replace(".", ","));
+  function noSpaceText(code, args) {
+    if (code !== "disk.no_space" && code !== "disk.no_space_others" && code !== "move.no_space") return "";
+    const [a, b, c] = (args || []).map(Number), others = code === "disk.no_space_others";
+    const need = others ? a + b : a, free = others ? c : b;
+    if (!(need >= 0 && free >= 0)) return "";
+    const head = `На диске не хватает ${sizeText(Math.max(0, need - free))} (нужно ${sizeText(need)}, `;
+    if (code === "move.no_space") return head + `свободно в целевой папке ${sizeText(free)})`;
+    return head + `свободно ${sizeText(free)})` + (others ? `, считая ${sizeText(b)} для других активных раздач на этом диске` : "");
+  }
+  const trCodeOf = window.__trCode;
+  window.__trCode = (code, args, message) => noSpaceText(code, args) || trCodeOf(code, args, message);
+  const lowerFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s); // a sentence after "«…»: " in a toast
   // Speeds are shown in bytes per second (binary prefixes, as sizes) or, by the setting, in bits per second
   // (decimal prefixes, as networks count them).
   const bitsMode = () => !!(typeof settings !== "undefined" && settings && settings.speedUnit === "bits");
@@ -1828,14 +1843,15 @@
   function reportErrors() {
     for (const t of torrents) {
       const key = t.error || "";
-      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? "не хватает места на диске. Освободите место и нажмите «Продолжить»" : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
+      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? (noSpaceText(t.errorCode, t.errorArgs) ? lowerFirst(errText(t)) + ". Освободите место и нажмите «Продолжить»" : "не хватает места на диске. Освободите место и нажмите «Продолжить»") : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
       shownErrors[t.hash] = key;
     }
   }
   const shownMoveMsg = {};
   function reportMoves() {
     for (const t of torrents) {
-      const msg = t.moveError ? `Не удалось переместить «${t.name}»: ${t.moveError}` : t.moveNote ? `«${t.name}»: ${t.moveNote}` : "";
+      const why = t.moveErrorCode ? lowerFirst(window.__trCode(t.moveErrorCode, t.moveErrorArgs, t.moveError)) : t.moveError;
+      const msg = t.moveError ? `Не удалось переместить «${t.name}»: ${why}` : t.moveNote ? `«${t.name}»: ${t.moveNote}` : "";
       if (msg && shownMoveMsg[t.hash] !== msg) toast(msg, !!t.moveError);
       shownMoveMsg[t.hash] = msg;
     }
