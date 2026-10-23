@@ -32,7 +32,15 @@ type fsEntry struct {
 type fsPlace struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
-	Kind string `json:"kind"` // data | home | desktop | documents | downloads | music | pictures | videos | drive
+	Kind string `json:"kind"` // data | home | desktop | documents | downloads | music | pictures | videos | drive | place
+	diskSpace
+}
+
+// diskSpace is the size of the disk a folder is on and what is free there, for the bar under a place; both are
+// left out when the system does not say (a network folder, a drive that did not answer in time).
+type diskSpace struct {
+	TotalBytes *uint64 `json:"totalBytes,omitempty"`
+	FreeBytes  *uint64 `json:"freeBytes,omitempty"`
 }
 
 type fsListing struct {
@@ -44,6 +52,7 @@ type fsListing struct {
 	Error     string    `json:"error,omitempty"`     // why the folder could not be read
 	ErrorCode string    `json:"errorCode,omitempty"` // the same as a code (see core.Coder), when there is one
 	Truncated bool      `json:"truncated,omitempty"`
+	diskSpace           // of the disk Path is on: "Свободно 360 ГБ" under the chosen folder
 }
 
 // Place is a folder the server is given by the system around it, under the name that system shows it by (see
@@ -70,33 +79,86 @@ func (s *Server) placeOf(p string) (Place, bool) {
 const rootsMark = "@"
 
 func (s *Server) fsList(w http.ResponseWriter, r *http.Request) {
-	want := strings.TrimSpace(r.URL.Query().Get("path"))
-	out := fsListing{Places: s.fsPlaces(), Entries: []fsEntry{}, Crumbs: []fsPlace{}}
+	out := s.listing(strings.TrimSpace(r.URL.Query().Get("path")))
+	out.measure()
+	writeJSON(w, http.StatusOK, out)
+}
 
+func (s *Server) listing(want string) fsListing {
+	out := fsListing{Places: s.fsPlaces(), Entries: []fsEntry{}, Crumbs: []fsPlace{}}
 	if want == rootsMark && runtime.GOOS == "windows" {
 		out.showDrives()
-		writeJSON(w, http.StatusOK, out)
-		return
+		return out
 	}
 	if want == "" || want == rootsMark {
 		want = s.cfg.Get().DataDir
 	}
 	if len(s.places) > 0 {
 		s.placeListing(&out, filepath.Clean(want))
-		writeJSON(w, http.StatusOK, out)
-		return
+		return out
 	}
 	p, ok := nearestFolder(filepath.Clean(want))
 	if !ok {
 		if runtime.GOOS == "windows" {
 			out.showDrives()
 		}
-		writeJSON(w, http.StatusOK, out)
-		return
+		return out
 	}
 	out.Path = p
 	out.readInto(p)
-	writeJSON(w, http.StatusOK, out)
+	return out
+}
+
+// diskUsage is core.DiskUsage; tests replace it.
+var diskUsage = core.DiskUsage
+
+// spaceWait is how long a listing waits for the disks to say how full they are: a sleeping external drive or a
+// network one that does not answer goes without its bar rather than holding up the window.
+var spaceWait = 2 * time.Second
+
+// measure fills in the disk space of the drives and given places in the side list (not of the usual folders, which
+// are all on the system drive) and of the folder shown, all at once and once per listing: the window asks again
+// when it opens and when the folder changes, never on its own.
+func (l *fsListing) measure() {
+	type job struct {
+		path string
+		to   *diskSpace
+	}
+	var jobs []job
+	for i := range l.Places {
+		if k := l.Places[i].Kind; k == "drive" || k == "place" || k == "data" {
+			jobs = append(jobs, job{l.Places[i].Path, &l.Places[i].diskSpace})
+		}
+	}
+	if l.Path != "" {
+		jobs = append(jobs, job{l.Path, &l.diskSpace})
+	}
+	type result struct {
+		i           int
+		total, free uint64
+	}
+	done := make(chan result, len(jobs))
+	for i, j := range jobs {
+		go func() {
+			total, free, err := diskUsage(j.path)
+			if err != nil || total == 0 { // a file system that does not know its size: no bar
+				total = 0
+			}
+			done <- result{i, total, free}
+		}()
+	}
+	timeout := time.After(spaceWait)
+	for range jobs {
+		select {
+		case r := <-done:
+			if r.total > 0 {
+				total, free := r.total, min(r.free, r.total)
+				*jobs[r.i].to = diskSpace{TotalBytes: &total, FreeBytes: &free}
+			}
+		case <-timeout:
+			return
+		}
+	}
 }
 
 // nearestFolder walks up from p until it finds a folder that exists (a typed path may not).

@@ -3137,6 +3137,14 @@
     $("pk-path").value = pk.torrents ? "" : d.path; // choosing a .torrent: a folder is only the way to it
     renderPicker();
   }
+  // How full a disk is, for the bar under a place: the share used, the caption, and the colour (yellow under a tenth
+  // free, red under 2% or 1 GB). null when the server could not tell (a network folder): then there is no bar.
+  function diskBar(total, free) {
+    if (!(total > 0) || !(free >= 0)) return null;
+    const share = free / total;
+    return { used: Math.min(100, Math.round((1 - share) * 1000) / 10), text: `Свободно ${sizeText(free)} из ${sizeText(total)}`,
+      cls: share < 0.02 || free < 2 ** 30 ? "bad" : share < 0.1 ? "warn" : "" };
+  }
   const pkDate = (s) => { const t = Date.parse(s); return t > 31536000000 ? new Date(t).toLocaleDateString(LOCALE) + " " + new Date(t).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) : ""; };
   function renderPicker() {
     const d = pk.data; if (!d) return;
@@ -3152,7 +3160,9 @@
     $("pk-places").innerHTML = d.places.map((p) => {
       const sep = last && last !== p.kind && (p.kind === "drive") ? '<div class="sp"></div>' : "";
       last = p.kind;
-      return sep + `<button type="button" data-go="${esc(p.path)}" title="${esc(p.path)}"${curPlace === p ? ' aria-current="true"' : ""}><svg class="i"><use href="#i-folder"/></svg><span>${esc(p.name)}</span></button>`;
+      const bar = diskBar(p.totalBytes, p.freeBytes);
+      const label = bar ? `<span class="pl"><span>${esc(p.name)}</span><span class="dbar ${bar.cls}"><i style="width:${bar.used}%"></i></span><span class="cap">${bar.text}</span></span>` : `<span>${esc(p.name)}</span>`;
+      return sep + `<button type="button" data-go="${esc(p.path)}" title="${esc(p.path)}"${bar ? ' class="disk"' : ""}${curPlace === p ? ' aria-current="true"' : ""}><svg class="i"><use href="#i-folder"/></svg>${label}</button>`;
     }).join("");
     const rows = d.entries.map((e, i) => e.dir ?
       `<div class="pk-row dir" role="option" data-i="${i}" data-path="${esc(e.path)}"><span class="nm"><svg class="i"><use href="#i-folder"/></svg><span>${esc(e.name)}</span></span><span class="r dt"></span><span class="dt">${pkDate(e.modified)}</span></div>` :
@@ -3162,6 +3172,7 @@
       (!d.error && d.entries.length === 0 ? `<div class="pk-msg">${pk.torrents ? "Здесь пусто." : "Здесь пусто. Можно выбрать эту папку или создать в ней новую."}</div>` : "") +
       (d.truncated ? '<div class="pk-msg">Показаны первые записи, остальные скрыты.</div>' : "");
     $("pk-ok").disabled = !pkCanChoose($("pk-path").value.trim());
+    $("pk-free").textContent = !pk.torrents && d.freeBytes != null ? "Свободно " + sizeText(d.freeBytes) : "";
   }
   const PK_ROWS = ".pk-row.dir, .pk-row.file.pick";
   const pkFiles = () => [...$("pk-list").querySelectorAll(".pk-row.file.pick")].map((r) => r.dataset.path);

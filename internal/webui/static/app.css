@@ -381,6 +381,18 @@ th.c-qn, td.c-qn { padding-left: 6px; padding-right: 6px; overflow: visible; tex
 .pk-places button[aria-current="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .pk-places button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-places .sp { height: 1px; background: var(--line); margin: 5px 4px; }
+/* a place with its disk measured: the name, a bar of the space used and "Свободно 360 ГБ из 468 ГБ", like Explorer's drives */
+.pk-places button.disk { flex: none; height: auto; min-height: 32px; padding: 6px 10px; align-items: flex-start; }
+.pk-places button.disk .i { margin-top: 1px; }
+.pk-places .pl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pk-places .pl > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-places .dbar { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.pk-places .dbar i { display: block; height: 100%; background: var(--accent); }
+.pk-places .dbar.warn i { background: var(--warn); }
+.pk-places .dbar.bad i { background: var(--bad); }
+.pk-places span.pl, .pk-places span.cap { overflow: visible; white-space: normal; }
+.pk-places .cap { font-size: 11.5px; line-height: 1.3; font-weight: 400; color: var(--muted); }
+.pk-free { margin-left: 6px; font-size: 12px; font-weight: 400; color: var(--muted); }
 .pk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .pk-head, .pk-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 130px; gap: 10px; align-items: center; padding: 0 12px; }
 .pk-head { flex: none; height: 30px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--muted); }
@@ -664,6 +676,8 @@ html[data-density="compact"] #dlg-picker.picker { width: min(680px, calc(100vw -
 html[data-density="compact"] .pk-body { height: min(300px, 52vh); }
 html[data-density="compact"] .pk-places { width: 150px; }
 html[data-density="compact"] .pk-places button, html[data-density="compact"] .pk-row { height: 24px; }
+html .pk-places button.disk { height: auto; flex: none; } /* a measured place keeps room for its bar and caption in every density */
+html .pk-places:has(button.disk) { width: 224px; } /* "Свободно 333 ГБ из 930 ГБ" on one line */
 html[data-density="compact"] .pk-head { height: 22px; }
 html[data-density="compact"] dialog.wizard { min-height: 280px; }
 html[data-density="compact"] .wz-body { min-height: 170px; }

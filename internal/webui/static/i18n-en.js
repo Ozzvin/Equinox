@@ -580,6 +580,8 @@ window.__i18nEn = [
   ["Выбрано раздач: {}. Подробности показываются, когда выбрана одна.", "Torrents selected: {}. The details are shown when one is selected."],
   // ---- status tab, details, trackers
   ["{} из {}", "{} of {}"],
+  ["Свободно {} из {}", "{} free of {}"],
+  ["Свободно {}", "{} free"],
   ["Скачано за всё время, вместе с проверенными повторно частями", "Downloaded over all time, together with the pieces that were checked again"],
   ["Подключённые сиды", "Connected seeds"],
   ["Все подключённые пиры", "All connected peers"],
