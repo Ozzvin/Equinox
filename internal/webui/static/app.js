@@ -2307,13 +2307,42 @@
   }
   const treeIdx = (n) => [...n.files.map((f) => f.i), ...[...n.dirs.values()].flatMap(treeIdx)];
 
-  function renderAdFiles() {
+  // Selection changes keep the tree DOM (and its scroll position and focused checkbox).
+  function updateAdFileSelection() {
+    const box = $("addw-files"), e = adCur();
+    if (!e || e.kind !== "file") return;
+    const dirs = new Map();
+    function count(n) {
+      let total = n.files.length, picked = 0;
+      for (const f of n.files) if (e.sel[f.i]) picked++;
+      for (const d of n.dirs.values()) {
+        const c = count(d); total += c.total; picked += c.picked;
+      }
+      const result = { total, picked };
+      dirs.set(n.path, result);
+      return result;
+    }
+    const all = count(fileTree(e));
+    for (const c of box.querySelectorAll("input[data-file]")) c.checked = !!e.sel[Number(c.dataset.file)];
+    for (const c of box.querySelectorAll("input[data-dir]")) {
+      const d = dirs.get(c.dataset.dir);
+      if (!d) continue;
+      c.checked = d.total > 0 && d.picked === d.total;
+      c.indeterminate = d.picked > 0 && d.picked < d.total;
+      c.dataset.state = c.indeterminate ? "some" : c.checked ? "all" : "none";
+    }
+    const pickedSize = e.files.reduce((a, f, i) => a + (e.sel[i] && !f.pad ? f.size : 0), 0);
+    box.querySelector(".tree-tools .muted").textContent = `Выбрано ${all.picked} из ${all.total} · ${bytes(pickedSize)}`;
+  }
+
+  function renderAdFiles(keepScroll = false) {
     const box = $("addw-files"), e = adCur();
     if (!e) { box.innerHTML = '<p class="note">Выберите раздачу из списка.</p>'; return; }
     if (e.kind !== "file") {
       box.innerHTML = '<p class="note">Список файлов появится после получения метаданных. Чтобы выбрать файлы до начала загрузки, отметьте справа «Добавить в паузе» и выберите файлы в панели подробностей.</p>';
       return;
     }
+    const scrollTop = keepScroll ? (box.querySelector(".tree")?.scrollTop || 0) : 0;
     const root = fileTree(e);
     if (e.open === null) { // expand everything unless the tree is huge
       e.open = new Set([""]);
@@ -2336,11 +2365,10 @@
         <input type="checkbox" data-file="${f.i}" ${e.sel[f.i] ? "checked" : ""} aria-label="${esc(f.name)}"><span class="nm" title="${esc(f.name)}">${esc(f.name)}</span><span class="sz">${bytes(f.size)}</span></div>`);
     };
     draw(root, 0);
-    const shown = e.files.filter((f) => !f.pad).length;
-    const picked = e.sel.filter((s, i) => s && !e.files[i].pad).length, pickedSize = e.files.reduce((a, f, i) => a + (e.sel[i] && !f.pad ? f.size : 0), 0);
     box.innerHTML = `<div class="tree-tools"><button type="button" class="btn small" id="tr-all">Все</button><button type="button" class="btn small" id="tr-none">Ничего</button>
-      <span class="muted small">Выбрано ${picked} из ${shown} · ${bytes(pickedSize)}</span></div><div class="tree">${rows.join("")}</div>`;
-    box.querySelectorAll("input[data-state=some]").forEach((c) => (c.indeterminate = true));
+      <span class="muted small"></span></div><div class="tree">${rows.join("")}</div>`;
+    updateAdFileSelection();
+    box.querySelector(".tree").scrollTop = scrollTop;
   }
 
   // -- options tab
@@ -2482,8 +2510,8 @@
   $("addw-files").addEventListener("click", (ev) => {
     const e = adCur(); if (!e) return;
     const fold = ev.target.closest("[data-fold]");
-    if (fold) { const p = fold.dataset.fold; e.open.has(p) ? e.open.delete(p) : e.open.add(p); renderAdFiles(); return; }
-    if (ev.target.id === "tr-all" || ev.target.id === "tr-none") { e.sel.fill(ev.target.id === "tr-all"); renderAdFiles(); }
+    if (fold) { const p = fold.dataset.fold; e.open.has(p) ? e.open.delete(p) : e.open.add(p); renderAdFiles(true); return; }
+    if (ev.target.id === "tr-all" || ev.target.id === "tr-none") { e.sel.fill(ev.target.id === "tr-all"); updateAdFileSelection(); }
   });
   $("addw-files").addEventListener("change", (ev) => {
     const e = adCur(); if (!e) return;
@@ -2493,7 +2521,7 @@
       const idx = treeIdx((function find(n) { if (n.path === d.dataset.dir) return n; for (const c of n.dirs.values()) { const r = find(c); if (r) return r; } return null; })(fileTree(e)) || { files: [], dirs: new Map() });
       idx.forEach((i) => (e.sel[i] = d.checked));
     }
-    renderAdFiles();
+    updateAdFileSelection();
   });
   $("dlg-add").addEventListener("cancel", (ev) => { if (adBusy) ev.preventDefault(); });
   $("dlg-add").addEventListener("close", () => { // in the window made for adding, closing the dialog is closing the window
