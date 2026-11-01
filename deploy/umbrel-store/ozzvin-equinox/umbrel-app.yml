@@ -14,7 +14,7 @@ permissions:
   - STORAGE_DOWNLOADS
 category: files
 name: Equinox
-version: "1.1.1"
+version: "1.1.2"
 tagline: A fast, tidy BitTorrent client
 icon: https://cdn.jsdelivr.net/gh/Ozzvin/umbrel-community-app-store@main/ozzvin-equinox/icon.svg
 description: >-
@@ -47,8 +47,7 @@ path: ""
 defaultUsername: ""
 defaultPassword: ""
 releaseNotes: >-
-  The folder picker shows how full each disk is. "Not enough disk space" now says how much is needed and how much is free.
-  The Options tab sets a torrent's own limits for stopping seeding again.
+  Selecting files or folders in the add-torrent window no longer resets the file list's scroll position.
   Other changes: see https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md
 submitter: Ozzvin
 submission: ""
