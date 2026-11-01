@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Writes the description of a release draft to $1: only the lists "### Новое" and "### Исправлено" of the entry of
-# $VERSION in CHANGELOG.md, as in the releases up to 1.0.46 (decision of 2026-10-23: the update window of copies up to
-# 1.1.0 shows the description as it is, and the files are in the list of the release's assets anyway). The template,
-# .github/release/body.md, holds the placeholder {{CHANGES}} alone. The platform tags of the changelog become words
-# ("[umbrel]" -> "Только для Docker и Umbrel:"): those copies would show the tag itself.
+# Release notes: the version's Новое/Исправлено lists from CHANGELOG, followed by download buttons from body.md.
+# The download block stays under a separate heading so clients 1.1.1+ omit it in the update window.
+# Platform tags become words for older clients that display the entire body.
 # Environment: VERSION.
 set -euo pipefail
 out=$1
