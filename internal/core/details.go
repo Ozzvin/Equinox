@@ -259,7 +259,7 @@ func (m *Manager) RecheckFiles(hash string, files []int) error {
 	// take them for still missing
 	m.store.Restat(t.InfoHash())
 	m.mu.Lock()
-	if e, ok := m.errs[hash]; ok && e.kind == ErrKindMissing {
+	if e, ok := m.errs[hash]; ok && recoverableStorage(e.kind) {
 		e.recheck = true // when it ends, the torrent goes on if the files are all back (see missingChecked)
 		m.errs[hash] = e
 	}

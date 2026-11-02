@@ -488,7 +488,7 @@
 
   function stateOf(t) {
     // files that were missing and came back are being checked: the check shows, not the error that is about to go
-    if (t.error && !(t.errorKind === "missing" && (t.checking || t.checkQueued))) return { cls: "bad", title: errText(t), text: t.errorKind === "disk_full" ? "Нет места на диске" : t.errorKind === "write" ? "Ошибка записи на диск" : t.errorKind === "missing" ? "Файлы не найдены" : "Ошибка" };
+    if (t.error && !((t.errorKind === "missing" || t.errorKind === "storage_unavailable") && (t.checking || t.checkQueued))) return { cls: "bad", title: errText(t), text: t.errorKind === "disk_full" ? "Нет места на диске" : t.errorKind === "write" ? "Ошибка записи на диск" : t.errorKind === "missing" ? "Файлы не найдены" : t.errorKind === "storage_unavailable" ? "Диск или папка недоступны" : "Ошибка" };
     if (t.checking) return { cls: "wait", text: t.checkProgress > 0 ? `Проверка файлов ${Math.floor(t.checkProgress * 100)}%` : "Проверка файлов…" };
     if (t.moving) return { cls: "wait", text: t.moving > 0 ? `Перемещение ${Math.round(t.moving * 100)}%` : t.moving === -2 ? "Ждёт переноса" : "Перемещение…", title: t.moving === -2 ? "Стоит в очереди на перенос: одновременно переносится не больше заданного числа раздач" : undefined };
     if (t.checkQueued > 0) return { cls: "wait", text: "Ждёт проверки", title: `Стоит в очереди на проверку локальных файлов: №${t.checkQueued}` };
@@ -1843,7 +1843,7 @@
   function reportErrors() {
     for (const t of torrents) {
       const key = t.error || "";
-      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? (noSpaceText(t.errorCode, t.errorArgs) ? lowerFirst(errText(t)) + ". Освободите место и нажмите «Продолжить»" : "не хватает места на диске. Освободите место и нажмите «Продолжить»") : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : t.error}`, true);
+      if (key && shownErrors[t.hash] !== key) toast(`«${t.name}»: ${t.errorKind === "disk_full" ? (noSpaceText(t.errorCode, t.errorArgs) ? lowerFirst(errText(t)) + ". Освободите место и нажмите «Продолжить»" : "не хватает места на диске. Освободите место и нажмите «Продолжить»") : t.errorKind === "write" ? "не удалось записать данные на диск, раздача остановлена" : t.errorKind === "missing" ? "файлы не найдены, раздача остановлена. Верните их на место — она проверит их и продолжит сама, или нажмите «Продолжить», чтобы скачать их заново" : errText(t)}`, true);
       shownErrors[t.hash] = key;
     }
   }

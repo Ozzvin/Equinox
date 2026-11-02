@@ -45,6 +45,7 @@ var (
 //	m.mu -> cfg.mu                cfg.Get() is read under m.mu in a few places
 //	state.mu -> cfg.mu            likewise inside state.with/touch/view callbacks
 //	lowMu, evMu, peerMu, manualMu, self.mu, iconMu  leaves: nothing else is taken while one of them is held
+//	diskWatch.mu                  leaf: protects only storage-failure observations
 //
 // m.mu and state.mu are never nested: no state.with/touch/view callback takes m.mu, and nothing calls into
 // the state store while holding m.mu. The state store writes the file under its own lock, so a callback must
@@ -58,6 +59,7 @@ type Manager struct {
 	iconMu       sync.Mutex      // guards iconFetching only (see TrackerIcon); the fetch itself runs outside it
 	iconFetching map[string]bool // sites whose icon a background goroutine is already fetching
 	store        *store.Storage  // the engine's file storage; kept to be told which files to trust
+	diskWatch    *diskWatcher    // confirms storage failures before stopping a torrent
 	startNet     config.Network  // connection settings the engine was started with
 	wantedPort   int             // the port asked for at start; the engine may have had to use another
 	cl           *torrent.Client
@@ -154,6 +156,7 @@ func New(cfg *config.Store, stateDir string) (*Manager, error) {
 		cfg:        cfg,
 		state:      st,
 		stateDir:   stateDir,
+		diskWatch:  newDiskWatcher(),
 		startNet:   s.Network,
 		comp:       comp,
 		upLim:      rate.NewLimiter(rate.Inf, 256<<10),

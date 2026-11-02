@@ -93,26 +93,59 @@ func (m *Manager) lookForMissing(t *torrent.Torrent, hash string, r record) int 
 	m.mu.Lock()
 	e, failed := m.errs[hash]
 	busy := m.filesBusy(hash)
+	watch := m.diskWatch
 	m.mu.Unlock()
-	if busy || (failed && (e.kind != ErrKindMissing || e.recheck)) {
+	if busy || (failed && (!recoverableStorage(e.kind) || e.recheck)) {
 		return 0 // stopped for another reason, or the files that came back are being checked
 	}
 	paths, err := store.Paths(m.saveDir(hash), info)
 	if err != nil {
 		return 0
 	}
+	writeFailed := watch.recentWriteFailure(hash)
+	kept := m.store.InParts(t.InfoHash())
+	var had []int
+	for i, f := range t.Files() {
+		if i < len(kept) && kept[i] {
+			continue
+		}
+		if f.Length() > 0 && !padFile(f) && prioAt(r.FilePrios, i) != PrioSkip && (f.BytesCompleted() > 0 || writeFailed) {
+			had = append(had, i)
+		}
+	}
+	if failed {
+		had = e.files
+	}
+	if len(had) > 0 {
+		if err := watch.dir(m.saveDir(hash)); err != nil {
+			if watch.failed(hash) {
+				m.diskUnavailable(t, hash, m.saveDir(hash), r, had)
+			}
+			return len(had)
+		}
+	}
+	if writeFailed {
+		if !failed && watch.confirmed(hash) {
+			m.diskUnavailable(t, hash, m.saveDir(hash), r, had)
+		}
+		return len(had)
+	}
 	if failed { // waiting for the files to come back
 		for _, i := range e.files {
-			if !onDisk(paths[i]) {
+			fi, err := watch.stat(paths[i])
+			if e.kind == ErrKindUnavailable && errors.Is(err, fs.ErrNotExist) {
+				continue // the disk returned, but this file may never have been created
+			}
+			if err != nil || !fi.Mode().IsRegular() {
 				return len(e.files)
 			}
 		}
+		watch.healthy(hash)
 		if err := m.RecheckFiles(hash, e.files); err != nil && !errors.Is(err, ErrBusy) {
 			fmt.Fprintf(os.Stderr, "checking the files of %s that came back: %v\n", t.Name(), err)
 		}
 		return len(e.files)
 	}
-	kept := m.store.InParts(t.InfoHash()) // skipped files whose bytes are in the part file only
 	var gone []int
 	n := 0
 	for i, f := range t.Files() {
@@ -123,10 +156,16 @@ func (m *Manager) lookForMissing(t *torrent.Torrent, hash string, r record) int 
 			continue // nothing of it was had yet: it is not on the disk because it was never written
 		}
 		n++
-		if _, err := os.Stat(paths[i]); errors.Is(err, fs.ErrNotExist) {
+		if _, err := watch.stat(paths[i]); errors.Is(err, fs.ErrNotExist) {
 			gone = append(gone, i)
+		} else if err != nil {
+			if watch.failed(hash) {
+				m.diskUnavailable(t, hash, paths[i], r, had)
+			}
+			return n
 		}
 	}
+	watch.healthy(hash)
 	if len(gone) > 0 {
 		m.filesMissing(t, hash, r, gone, paths)
 	}
@@ -173,8 +212,9 @@ func missingText(paths []string, gone []int) (msg, code string, args []string) {
 // files all back it goes on as it was before they went missing, otherwise it waits for them again.
 func (m *Manager) missingChecked(t *torrent.Torrent, hash string) {
 	m.mu.Lock()
+	watch := m.diskWatch
 	e, ok := m.errs[hash]
-	if !ok || e.kind != ErrKindMissing || !e.recheck {
+	if !ok || !recoverableStorage(e.kind) || !e.recheck {
 		m.mu.Unlock()
 		return
 	}
@@ -185,11 +225,24 @@ func (m *Manager) missingChecked(t *torrent.Torrent, hash string) {
 	if info == nil {
 		return
 	}
+	if e.kind == ErrKindUnavailable && watch.dir(m.saveDir(hash)) != nil {
+		return
+	}
 	paths, err := store.Paths(m.saveDir(hash), info)
 	if err != nil {
 		return
 	}
 	for _, i := range e.files {
+		if e.kind == ErrKindUnavailable {
+			fi, err := watch.stat(paths[i])
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil || !fi.Mode().IsRegular() {
+				return
+			}
+			continue
+		}
 		if !onDisk(paths[i]) {
 			return
 		}
@@ -205,7 +258,7 @@ func (m *Manager) missingChecked(t *torrent.Torrent, hash string) {
 func (m *Manager) takeMissing(hash string) []int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if e, ok := m.errs[hash]; ok && e.kind == ErrKindMissing {
+	if e, ok := m.errs[hash]; ok && recoverableStorage(e.kind) {
 		return e.files
 	}
 	return nil

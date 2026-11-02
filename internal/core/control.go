@@ -150,8 +150,13 @@ func (m *Manager) SetPaused(hash string, paused bool) error {
 	}
 	var gone []int
 	if !paused {
+		if err := m.storageResumeError(hash); err != nil {
+			return err
+		}
 		gone = m.takeMissing(hash)
 		m.clearError(hash) // resuming is the user's retry: forget the old failure
+	} else {
+		m.rememberUserPause(hash)
 	}
 	m.setPaused(t, hash, paused)
 	m.recheckGone(hash, gone)
@@ -176,6 +181,12 @@ func (m *Manager) SetAllPaused(paused bool) int {
 	})
 	var change []string
 	for _, h := range hashes {
+		if paused {
+			m.rememberUserPause(h)
+		}
+		if !paused && m.storageResumeError(h) != nil {
+			continue
+		}
 		if was, ok := recs[h]; ok && was != paused {
 			change = append(change, h)
 		}

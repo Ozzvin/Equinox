@@ -12,17 +12,18 @@ import (
 
 // Kinds of failure that stop a torrent.
 const (
-	ErrKindDiskFull = "disk_full"
-	ErrKindWrite    = "write"
-	ErrKindMissing  = "missing" // files that were on the disk are not there any more (see missing.go)
-	ErrKindOther    = "other"
+	ErrKindDiskFull    = "disk_full"
+	ErrKindWrite       = "write"
+	ErrKindMissing     = "missing" // files that were on the disk are not there any more (see missing.go)
+	ErrKindOther       = "other"
+	ErrKindUnavailable = "storage_unavailable"
 )
 
 type torrentError struct {
 	kind, msg string
 	code      string   // for a client in another language (see Coder), "" if the message has none
 	args      []string // the code's arguments
-	// ErrKindMissing only: the files not found, whether the torrent was paused already when they went missing, and
+	// Recoverable storage failures: the affected files, whether the torrent was paused before the failure, and
 	// whether a check of the files that came back is under way
 	files   []int
 	paused  bool
@@ -50,7 +51,7 @@ func (m *Manager) clearError(hash string) {
 // while it is still preparing the disk; a finished preparation must not wipe that report.
 func (m *Manager) clearSetupError(hash string) {
 	m.mu.Lock()
-	if e, ok := m.errs[hash]; ok && e.kind != ErrKindWrite {
+	if e, ok := m.errs[hash]; ok && e.kind != ErrKindWrite && !recoverableStorage(e.kind) {
 		delete(m.errs, hash)
 	}
 	m.mu.Unlock()
@@ -65,9 +66,15 @@ func (m *Manager) watchWrites(t *torrent.Torrent, hash string) {
 func (m *Manager) onWriteError(t *torrent.Torrent, hash string, err error) {
 	m.mu.Lock()
 	_, already := m.errs[hash]
+	watch := m.diskWatch
 	m.mu.Unlock()
 	if already {
 		return // one report per failure; the engine may call this for every chunk
+	}
+	if storageIOError(err) {
+		watch.noteWrite(hash)
+		m.noteMissing(t.InfoHash())
+		return // confirm on the management loop, without pausing for a transient fault
 	}
 	fmt.Fprintf(os.Stderr, "write error in %s: %v\n", t.Name(), err)
 	m.setError(hash, ErrKindWrite, err.Error())
