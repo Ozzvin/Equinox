@@ -155,7 +155,13 @@ func Paths(base string, info *metainfo.Info) ([]string, error) {
 	files := info.UpvertedFiles()
 	out := make([]string, len(files))
 	name := RootName(info)
-	inside := func(p string) bool { return strings.HasPrefix(p, root+string(filepath.Separator)) }
+	// A volume root already ends in a separator (F:\ or /). Adding another
+	// would reject every child of that root as an unsafe path.
+	prefix := root
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+	inside := func(p string) bool { return p != root && strings.HasPrefix(p, prefix) }
 	for i, f := range files {
 		raw, parts := []string{root}, []string{root}
 		if name != "" {

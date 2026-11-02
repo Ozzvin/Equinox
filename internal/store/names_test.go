@@ -3,10 +3,44 @@ package store
 import (
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/anacrolix/torrent/metainfo"
 )
+
+// Only construct paths: never create test files in the owner's drive root.
+func TestPathsAtFilesystemRoot(t *testing.T) {
+	bases := []string{string(filepath.Separator)}
+	if runtime.GOOS == "windows" {
+		bases = []string{`F:\`, `C:\`, `\\server\share\`}
+	}
+	for _, base := range bases {
+		for _, multi := range []bool{false, true} {
+			info := &metainfo.Info{Name: "movie.mkv", Length: 10}
+			want := []string{filepath.Join(base, "movie.mkv")}
+			if multi {
+				info = multiFileInfo()
+				want = []string{filepath.Join(base, "album", "a.bin"), filepath.Join(base, "album", "sub", "b.bin")}
+			}
+			got, err := Paths(base, info)
+			if err != nil || !slices.Equal(got, want) {
+				t.Fatalf("base %q multi %v: %v, %v; want %v", base, multi, got, err, want)
+			}
+		}
+	}
+}
+
+func TestPathsStillRejectEscapesAndDestinationItself(t *testing.T) {
+	base := t.TempDir()
+	for _, path := range [][]string{{"..", "..", "escape.bin"}, {"..", "..", filepath.Base(base) + "-other", "escape.bin"}, {".."}} {
+		info := multiFileInfo()
+		info.Files[0].Path = path
+		if got, err := Paths(base, info); err == nil {
+			t.Fatalf("unsafe path %v accepted: %v", path, got)
+		}
+	}
+}
 
 // Names Windows cannot have are mended the way qBittorrent does it.
 func TestWindowsName(t *testing.T) {
