@@ -42,6 +42,23 @@ func TestPathsStillRejectEscapesAndDestinationItself(t *testing.T) {
 	}
 }
 
+func TestSingleFileHybridDoesNotRepeatName(t *testing.T) {
+	info := &metainfo.Info{Name: "movie.mkv", Length: 10, Pieces: make([]byte, 20), MetaVersion: 2, PieceLength: 16384,
+		FileTree: metainfo.FileTree{Dir: map[string]metainfo.FileTree{
+			"movie.mkv": {File: metainfo.FileTreeFile{Length: 10}},
+		}}}
+	bases := []string{t.TempDir()}
+	if runtime.GOOS == "windows" {
+		bases = append(bases, `F:\`)
+	}
+	for _, base := range bases {
+		got, err := Paths(base, info)
+		if err != nil || !slices.Equal(got, []string{filepath.Join(base, "movie.mkv")}) {
+			t.Fatalf("base %q: %v, %v", base, got, err)
+		}
+	}
+}
+
 // Names Windows cannot have are mended the way qBittorrent does it.
 func TestWindowsName(t *testing.T) {
 	for in, want := range map[string]string{

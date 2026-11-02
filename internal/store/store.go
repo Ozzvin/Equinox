@@ -167,7 +167,13 @@ func Paths(base string, info *metainfo.Info) ([]string, error) {
 		if name != "" {
 			raw, parts = append(raw, info.BestName()), append(parts, name)
 		}
-		for _, c := range f.BestPath() {
+		path := f.BestPath()
+		// A single-file hybrid has no v1 file path, but its v2 tree contains
+		// the filename. It is already present as the torrent's root name.
+		if info.HasV1() && info.HasV2() && len(info.Files) == 0 && len(path) == 1 && path[0] == info.BestName() {
+			path = nil
+		}
+		for _, c := range path {
 			raw, parts = append(raw, c), append(parts, safeName(c))
 		}
 		// the path as the torrent gives it must stay inside too: a ".." mended into "_" is still a torrent that tries

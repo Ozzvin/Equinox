@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/anacrolix/torrent/bencode"
@@ -15,6 +19,45 @@ import (
 
 	"github.com/Ozzvin/equinox/internal/config"
 )
+
+// Keep real tracker dispatch enabled: tracker-free hybrid tests do not exercise
+// the engine's second-infohash lookup that used to panic during AddTorrentSpec.
+func TestHybridWithTrackerAddsAndRestores(t *testing.T) {
+	dir := t.TempDir()
+	var announced sync.Map
+	tracker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		announced.Store(r.URL.Query().Get("info_hash"), true)
+		_, _ = w.Write([]byte("d8:intervali60e5:peers0:e"))
+	}))
+	defer tracker.Close()
+	mi, _ := hybridTorrent(t, dir)
+	v1, v2 := mi.HashInfoBytes(), sha256.Sum256(mi.InfoBytes)
+	mi.Announce = tracker.URL + "/announce"
+	m := newManager(t, dir, nil)
+	hash, err := m.AddMetaInfo(mi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.get(hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.cl.Torrent(metainfo.Hash(v2[:20])); !ok {
+		t.Fatal("v2 alias is missing")
+	}
+	waitFor(t, func() bool {
+		_, a := announced.Load(string(v1[:]))
+		_, b := announced.Load(string(v2[:20]))
+		return a && b
+	})
+	m.Close()
+	m2 := newManager(t, dir, nil)
+	if _, err := m2.get(hash); err != nil {
+		t.Fatal("restore:", err)
+	}
+	if _, ok := m2.cl.Torrent(metainfo.Hash(v2[:20])); !ok {
+		t.Fatal("restored v2 alias is missing")
+	}
+}
 
 // hybridTorrent makes a hybrid (v1 + v2, BEP 52) torrent of three files whose sizes are not multiples of the piece:
 // in v2 every file starts on a piece boundary, and the v1 part has padding files (BEP 47) to the same layout. The

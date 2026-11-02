@@ -510,6 +510,13 @@ func (m *Manager) track(spec *torrent.TorrentSpec, rec *record) error {
 
 // cleanSpec takes from a torrent's spec the trackers the engine cannot use (see usableTrackers).
 func cleanSpec(spec *torrent.TorrentSpec) *torrent.TorrentSpec {
+	// In v1.61 AddTorrentOpt registers only InfoHash. Supplying both hashes
+	// prevents hashInfoBytes from registering the v2 alias, so announcing to
+	// trackers for that alias panics. Let the engine derive and register it
+	// from the verified metadata instead (also when gate delays the metadata).
+	if spec.InfoHash != (metainfo.Hash{}) && spec.InfoHashV2.Ok {
+		spec.InfoHashV2.SetNone()
+	}
 	spec.Trackers = usableTrackers(spec.Trackers)
 	return spec
 }
