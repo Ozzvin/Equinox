@@ -28,6 +28,9 @@ func TestWriteIOFailureIsConfirmedAndRecovers(t *testing.T) {
 	m := newManager(t, dir, nil)
 	hash := makeAndAdd(t, m, dir)
 	tt, _ := m.get(hash)
+	// AddFile can return before onMetadata starts the initial check phase.
+	// Wait for that phase to start and finish before injecting disk errors.
+	waitFor(t, func() bool { m.mu.Lock(); defer m.mu.Unlock(); return m.phase[hash] != nil })
 	waitFor(t, func() bool { m.mu.Lock(); defer m.mu.Unlock(); return !m.filesBusy(hash) })
 	w := newDiskWatcher()
 	var seconds atomic.Int64
