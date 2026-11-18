@@ -14,7 +14,7 @@ permissions:
   - STORAGE_DOWNLOADS
 category: files
 name: Equinox
-version: "1.1.2"
+version: "1.1.3"
 tagline: A fast, tidy BitTorrent client
 icon: https://cdn.jsdelivr.net/gh/Ozzvin/umbrel-community-app-store@main/ozzvin-equinox/icon.svg
 description: >-
@@ -47,7 +47,7 @@ path: ""
 defaultUsername: ""
 defaultPassword: ""
 releaseNotes: >-
-  Selecting files or folders in the add-torrent window no longer resets the file list's scroll position.
+  Fixed saving torrents at the root of a drive and a crash with hybrid v1/v2 torrent trackers. Fixed duplicate filenames in single-file hybrid torrent paths. Equinox now reports unavailable storage separately and rechecks files when access returns.
   Other changes: see https://github.com/Ozzvin/equinox/blob/main/CHANGELOG.md
 submitter: Ozzvin
 submission: ""
