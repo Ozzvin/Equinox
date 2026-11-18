@@ -384,6 +384,7 @@ jobs:
       - name: Build the Flatpak
         if: matrix.format == 'Flatpak'
         run: |
+          sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
