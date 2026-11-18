@@ -31,8 +31,9 @@ import (
 
 // heldInfo is the info of a torrent that waits for a check slot.
 type heldInfo struct {
-	info []byte
-	size int64 // total size, so the list can show it while the torrent waits
+	info        []byte
+	pieceLayers map[string]string // v2 hashes require the file list from info
+	size        int64             // total size, so the list can show it while the torrent waits
 }
 
 // holdBack decides whether a torrent waits for a check slot. When it does, the spec to give to the
@@ -63,10 +64,13 @@ func (m *Manager) holdBack(spec *torrent.TorrentSpec) *torrent.TorrentSpec {
 		size = info.TotalLength()
 	}
 	m.mu.Lock()
-	m.held[hash] = &heldInfo{info: spec.InfoBytes, size: size}
+	m.held[hash] = &heldInfo{info: spec.InfoBytes, pieceLayers: spec.PieceLayers, size: size}
 	m.mu.Unlock()
 	cp := *spec
 	cp.InfoBytes = nil
+	// v1.61 dereferences its file list when layers are non-nil, even an empty
+	// map. Keep them with the info until the engine has that file list.
+	cp.PieceLayers = nil
 	return &cp
 }
 
@@ -174,7 +178,10 @@ func (m *Manager) runGate() {
 			m.dropHeld(hash)
 			continue
 		}
-		if err := t.SetInfoBytes(info); err != nil {
+		if err := t.MergeSpec(&torrent.TorrentSpec{
+			AddTorrentOpts: torrent.AddTorrentOpts{InfoBytes: info.info},
+			PieceLayers:    info.pieceLayers,
+		}); err != nil {
 			m.dropHeld(hash)
 			continue
 		}
@@ -190,7 +197,7 @@ func (m *Manager) runGate() {
 }
 
 // nextHeld takes the first waiting torrent in queue order if a slot is free (no limit: any).
-func (m *Manager) nextHeld() (hash string, info []byte, ok bool) {
+func (m *Manager) nextHeld() (hash string, info *heldInfo, ok bool) {
 	limit := m.cfg.Get().MaxConcurrentChecks
 	m.mu.Lock()
 	full := (limit > 0 && len(m.gateActive)+len(m.rechecking) >= limit) || len(m.held) == 0
@@ -211,7 +218,7 @@ func (m *Manager) nextHeld() (hash string, info []byte, ok bool) {
 	}
 	delete(m.held, hash)
 	m.gateActive[hash] = true
-	return hash, h.info, true
+	return hash, h, true
 }
 
 // acquireRecheck waits for a slot for a check the user asked for; the returned function frees it.

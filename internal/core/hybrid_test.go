@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +20,79 @@ import (
 
 	"github.com/Ozzvin/equinox/internal/config"
 )
+
+// A full check queue must defer v2 piece layers together with the info. Giving
+// layers to v1.61 without info panics in addPieceLayersLocked (t.files is nil).
+func TestHybridWaitsForCheckSlot(t *testing.T) {
+	dir := t.TempDir()
+	mi, _ := hybridTorrent(t, dir)
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
+	// Keep the slot occupied independently of the background control loop.
+	m.mu.Lock()
+	m.rechecking["occupied"] = true
+	m.mu.Unlock()
+	hash, err := m.AddMetaInfo(mi, WithSavePath(filepath.Join(dir, "src")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tor, err := m.get(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tor.Info() != nil {
+		t.Fatal("metadata must wait for a free check slot")
+	}
+	m.mu.Lock()
+	delete(m.rechecking, "occupied")
+	m.mu.Unlock()
+	waitFor(t, func() bool {
+		s, ok := statusOf(m, hash)
+		return ok && s.HasMeta && s.CheckQueued == 0 && !s.Checking && s.Progress == 1
+	})
+	if !maps.Equal(tor.Metainfo().PieceLayers, mi.PieceLayers) {
+		t.Fatal("piece layers were lost while waiting for a check slot")
+	}
+}
+
+func TestHybridRestoresWithFullCheckQueue(t *testing.T) {
+	dir := t.TempDir()
+	m := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 0 })
+	metadata := map[string]*metainfo.MetaInfo{}
+	for _, name := range []string{"first", "second"} {
+		src := filepath.Join(dir, name)
+		mi, _ := hybridTorrent(t, src)
+		hash, err := m.AddMetaInfo(mi, WithSavePath(filepath.Join(src, "src")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		metadata[hash] = mi
+		waitFor(t, func() bool {
+			s, ok := statusOf(m, hash)
+			return ok && !s.Checking && s.Progress == 1
+		})
+	}
+	m.Close()
+	// Startup restores both before starting the control loop: the first takes
+	// the only slot, so the second always enters through the held-info path.
+	m2 := newManager(t, dir, func(s *config.Settings) { s.MaxConcurrentChecks = 1 })
+	for hash, mi := range metadata {
+		waitFor(t, func() bool {
+			s, ok := statusOf(m2, hash)
+			return ok && s.HasMeta && s.CheckQueued == 0 && !s.Checking && s.Progress == 1
+		})
+		tor, err := m2.get(hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !maps.Equal(tor.Metainfo().PieceLayers, mi.PieceLayers) {
+			t.Fatal("restoring a queued torrent lost piece layers")
+		}
+		v2 := sha256.Sum256(mi.InfoBytes)
+		if _, ok := m2.cl.Torrent(metainfo.Hash(v2[:20])); !ok {
+			t.Fatal("restoring a queued torrent lost its v2 alias")
+		}
+	}
+}
 
 // Keep real tracker dispatch enabled: tracker-free hybrid tests do not exercise
 // the engine's second-infohash lookup that used to panic during AddTorrentSpec.
